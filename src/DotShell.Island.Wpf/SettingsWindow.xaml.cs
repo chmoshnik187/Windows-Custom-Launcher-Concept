@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using DotShell.Core;
 using DotShell.Core.Settings;
+using DotShell.Island.Wpf.Desktop;
 
 /// <summary>
 /// Окно настроек. Раньше всё это жило во вкладке СИСТЕМА, и там уже не помещалось:
@@ -171,6 +172,46 @@ public partial class SettingsWindow : Window
         new UpdateWindow(info, _ => { }).Show();
     }
 
+    /// <summary>
+    /// Перекраска иконок рабочего стола. Работа тяжёлая (каждый ярлык — извлечение
+    /// иконки и запись .ico), поэтому в фоне, иначе окно замирает на пару секунд.
+    /// </summary>
+    private async void OnDesktopIconsToggled(object sender, RoutedEventArgs e)
+    {
+        bool want = DesktopIconsCheck.IsChecked == true;
+        StatusText.Text = want ? "перекрашиваю иконки…" : "возвращаю иконки…";
+
+        var accent = ColorPalette.Accent;
+        var (done, total) = await Task.Run(() =>
+        {
+            if (want)
+            {
+                var links = DesktopIcons.Shortcuts();
+                int ok = DesktopIcons.MakeMonochrome(links, accent, out _);
+                return (ok, links.Count);
+            }
+
+            int restored = DesktopIcons.Restore(out _);
+            return (restored, restored);
+        });
+
+        DesktopIconsCheck.IsChecked = DesktopIcons.CountManaged() > 0;
+        StatusText.Text = want
+            ? $"иконки в монохроме: {done} из {total}"
+            : $"иконки вернули прежний вид: {done}";
+    }
+
+    private async void OnRestoreIcons(object sender, RoutedEventArgs e)
+    {
+        StatusText.Text = "возвращаю иконки…";
+
+        int restored = await Task.Run(() => DesktopIcons.Restore(out _));
+
+        DesktopIconsCheck.IsChecked = false;
+        StatusText.Text = restored > 0
+            ? $"иконки вернули прежний вид: {restored}"
+            : "возвращать нечего — иконки не менялись";
+    }
     private void OnOpenFolder(object sender, RoutedEventArgs e)
     {
         try { Process.Start(new ProcessStartInfo(AppSettings.SettingsDirectory) { UseShellExecute = true }); }

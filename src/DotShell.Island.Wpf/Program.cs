@@ -1,5 +1,7 @@
 namespace DotShell.Island.Wpf;
 
+using DotShell.Island.Wpf.Desktop;
+
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
@@ -35,6 +37,37 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        // Иконки рабочего стола: --icons-apply / --icons-restore
+        // (необязательный --icons-dir=PATH — работать с папкой вместо рабочего стола).
+        bool iconsApply = args.Any(a => a.Equals("--icons-apply", StringComparison.OrdinalIgnoreCase));
+        bool iconsRestore = args.Any(a => a.Equals("--icons-restore", StringComparison.OrdinalIgnoreCase));
+
+        if (iconsApply || iconsRestore)
+        {
+            string? dir = null;
+            foreach (var arg in args)
+            {
+                if (!arg.StartsWith("--icons-dir=", StringComparison.OrdinalIgnoreCase)) continue;
+                dir = arg["--icons-dir=".Length..].Trim('"');
+            }
+
+            var links = DesktopIcons.Shortcuts(dir);
+
+            if (iconsRestore)
+            {
+                int restored = DesktopIcons.Restore(out var failedRestore);
+                Log.Info($"icons: вернул {restored}, не удалось {failedRestore.Count}");
+                Console.WriteLine($"restored={restored} failed={failedRestore.Count}");
+            }
+            else
+            {
+                int done = DesktopIcons.MakeMonochrome(links, DotShell.Island.Wpf.ColorPalette.Accent, out var failed);
+                Log.Info($"icons: перекрасил {done} из {links.Count}, не удалось {failed.Count}");
+                Console.WriteLine($"done={done} total={links.Count} failed={failed.Count}");
+            }
+
+            return 0;
+        }
         // Проверка механизма подмены exe: копируем себя в папку обновления и
         // прогоняем полный цикл (переименование, копирование, перезапуск).
         if (args.Any(a => a.Equals("--self-update-test", StringComparison.OrdinalIgnoreCase)))
@@ -255,5 +288,4 @@ public static class Log
         catch { }
     }
 }
-
 

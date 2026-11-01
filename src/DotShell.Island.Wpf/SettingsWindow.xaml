@@ -212,6 +212,14 @@
                                       Content="Скрыть иконки рабочего стола"
                                       IsChecked="{Binding HideDesktopIcons}" />
 
+                            <TextBlock Style="{StaticResource Section}" Text="РАБОЧИЙ СТОЛ" />
+                            <CheckBox x:Name="DesktopIconsCheck" Style="{StaticResource DsToggle}"
+                                      Content="Иконки рабочего стола в монохром"
+                                      Click="OnDesktopIconsToggled"
+                                      ToolTip="Перекрашивает иконки ярлыков в цвет акцента, сохраняя силуэт. Сами ярлыки не меняются — только картинка. Обратимо: кнопка «Вернуть иконки» ниже" />
+                            <Button Style="{StaticResource DsButton}" Content="ВЕРНУТЬ ИКОНКИ"
+                                    HorizontalAlignment="Left" Margin="0,6,0,0" Click="OnRestoreIcons"
+                                    ToolTip="Вернуть ярлыкам их прежние иконки" />
                             <TextBlock Style="{StaticResource Section}" Text="ПРИМЕНИТЬ ПОЛНОСТЬЮ" />
                             <Button Style="{StaticResource DsButton}" Content="ПЕРЕЗАПУСТИТЬ ПРОВОДНИК"
                                     HorizontalAlignment="Left" Click="OnRestartExplorer"
