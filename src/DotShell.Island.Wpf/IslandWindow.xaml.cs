@@ -209,6 +209,10 @@ public partial class IslandWindow : Window
         // по номерам строк четыре раза ломали XAML, и это уже не смешно.
         if (Pill.Parent is Grid rootLayer)
         {
+            // Обрезка текста идёт по фактической ширине капсулы: анимация ширины
+            // меняет её каждый кадр, и буквы проступают ровно по краю.
+            Pill.SizeChanged += (_, _) => _notice?.SetVisibleWidth(Pill.ActualWidth);
+
             // Кладём уведомление НАД капсулой, а не внутрь: у пилюли ClipToBounds,
             // и «пасть», которая должна выходить за края, иначе обрежется.
             _notice = new IslandNotification
@@ -948,6 +952,7 @@ public partial class IslandWindow : Window
 
             CollapsedRow.Visibility = Visibility.Collapsed;
             _notice.Prepare(title, text);
+            _notice.SetVisibleWidth(UnitOnlyWidth);
 
             _ = PlayNoticeAsync(target);
 

@@ -50,10 +50,13 @@ public sealed class Units : FrameworkElement
             if (_reading == value) return;
             _reading = value;
             _readPhase = 0;
+            SetReadingLoop(value);
         }
     }
 
     private bool _reading;
+    private EventHandler? _readingFrame;
+
     private double _readPhase;
 
     private static readonly int[,] Body =
@@ -72,9 +75,20 @@ public sealed class Units : FrameworkElement
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(70) };
         _timer.Tick += (_, _) =>
         {
-            TrackCursor();
-            UpdateMood();
-            InvalidateVisual();
+            // Тик у контрола, который ещё не подключён к окну, падал на
+            // PointToScreen («Visual не подсоединён к PresentationSource»),
+            // и после исключения таймер замолкал навсегда — из-за этого
+            // не было видно анимации чтения.
+            try
+            {
+                TrackCursor();
+                UpdateMood();
+                InvalidateVisual();
+            }
+            catch (InvalidOperationException)
+            {
+                // окно ещё не показано — ждём следующего тика
+            }
         };
 
         Loaded += (_, _) => { if (!_paused) _timer.Start(); };
@@ -104,13 +118,19 @@ public sealed class Units : FrameworkElement
     {
         if (_reading)
         {
-            // Взгляд едет по строке: плавно вправо, затем короткий возврат влево.
-            _readPhase += 0.045;
-            if (_readPhase > 1.25) _readPhase = 0;
 
-            double t = Math.Min(_readPhase, 1.0);
-            _dirX = -0.85 + 1.7 * t;
-            _dirY = 0.32;
+            // Взгляд едет по строке: плавно вправо, затем короткий возврат влево.
+            _readPhase += 0.035;
+            if (_readPhase >= 1) _readPhase = 0;
+
+            // Читаем строку слева направо, затем быстрый возврат — как глаз
+            // перескакивает на начало следующей строки.
+            double t = _readPhase < 0.82
+                ? _readPhase / 0.82
+                : 1 - (_readPhase - 0.82) / 0.18;
+
+            _dirX = -1.0 + 2.0 * t;
+            _dirY = 0.45;
 
             _leanX += (_dirX - _leanX) * 0.25;
             _leanY += (_dirY - _leanY) * 0.25;
@@ -119,6 +139,9 @@ public sealed class Units : FrameworkElement
         }
 
         if (!Win32.GetCursorPos(out var cursor)) return;
+
+        // Без PresentationSource PointToScreen бросает исключение.
+        if (PresentationSource.FromVisual(this) is null) return;
 
         var center = PointToScreen(new Point(ActualWidth / 2, ActualHeight / 2));
         double dx = cursor.X - center.X;
@@ -136,6 +159,49 @@ public sealed class Units : FrameworkElement
         if (len < 320 && Interactive) _lastAttention = DateTime.Now;
     }
 
+
+    /// <summary>
+    /// Кадровый цикл чтения. Почему не DispatcherTimer: у контрола, который был
+    /// создан скрытым, таймер числится включённым, но Tick не приходит — чтение
+    /// из-за этого вообще не рисовалось. CompositionTarget.Rendering идёт с
+    /// частотой монитора и не зависит от состояния видимости.
+    /// </summary>
+    private void SetReadingLoop(bool on)
+    {
+        if (on)
+        {
+            if (_readingFrame is not null) return;
+            _readingFrame = (_, _) =>
+            {
+                StepReading();
+                InvalidateVisual();
+            };
+            CompositionTarget.Rendering += _readingFrame;
+        }
+        else if (_readingFrame is not null)
+        {
+            CompositionTarget.Rendering -= _readingFrame;
+            _readingFrame = null;
+        }
+    }
+
+    /// <summary>Один шаг взгляда: вправо по строке, затем быстрый возврат.</summary>
+    private void StepReading()
+    {
+        _readPhase += 0.006;
+        if (_readPhase >= 1) _readPhase = 0;
+
+        double t = _readPhase < 0.82
+            ? _readPhase / 0.82
+            : 1 - (_readPhase - 0.82) / 0.18;
+
+        _dirX = -1.0 + 2.0 * t;
+        _dirY = 0.45;
+
+        _leanX += (_dirX - _leanX) * 0.16;
+        _leanY += (_dirY - _leanY) * 0.16;
+        _lastAttention = DateTime.Now;
+    }
     private void UpdateMood()
     {
         if (DateTime.Now < _reactionUntil) return;
@@ -160,8 +226,15 @@ public sealed class Units : FrameworkElement
         body.Freeze();
         eye.Freeze();
 
-        bool blinking = DateTimeOffset.Now.ToUnixTimeMilliseconds() % 3600 < 150;
+        bool blinking = Reading
+            ? DateTime.UtcNow.Millisecond % 1700 < 130
+            : DateTimeOffset.Now.ToUnixTimeMilliseconds() % 3600 < 150;
+
         double bounce = _mood == Mood.Crying ? Math.Sin(_tearPhase) * 0.8 : 0;
+
+        // Чтение: лёгкое покачивание корпуса, чтобы движение было заметно
+        // боковым зрением, а не только по зрачкам.
+        if (Reading) bounce += Math.Sin(_readPhase * Math.PI * 2) * 0.9;
 
         DrawUnit(dc, body, eye, new Point(ActualWidth * 0.27, ActualHeight / 2 + bounce), blinking);
         DrawUnit(dc, body, eye, new Point(ActualWidth * 0.73, ActualHeight / 2 + bounce), blinking);
@@ -185,8 +258,10 @@ public sealed class Units : FrameworkElement
                 dc.DrawEllipse(body, null, new Point(ox + c * pitch, oy + r * pitch), dot, dot);
             }
 
-        double ex = _dirX * 1.9;
-        double ey = _dirY * 1.9;
+        // При чтении зрачки ходят шире: 1.9 px на теле 26 px не читается глазом.
+        double eyeScale = Reading ? 3.4 : 1.9;
+        double ex = _dirX * eyeScale;
+        double ey = _dirY * eyeScale;
         double baseX = center.X - _leanX * lean;
         double baseY = center.Y - 1.5 - _leanY * lean;
         var left = new Point(baseX - 3.2 + ex, baseY + ey);
