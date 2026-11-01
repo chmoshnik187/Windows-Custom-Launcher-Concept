@@ -977,13 +977,13 @@ public partial class IslandWindow : Window
     {
         try
         {
-            await AnimateWidthAsync(UnitOnlyWidth, 180);
-            await Task.Delay(70);
+            await AnimateWidthAsync(UnitOnlyWidth, 300);
+            await Task.Delay(140);
 
             _notice?.StartReading();
-            await Task.Delay(120);
+            await Task.Delay(200);
 
-            await AnimateWidthAsync(target, 260);
+            await AnimateWidthAsync(target, 460);
         }
         catch (Exception ex)
         {
@@ -1017,11 +1017,11 @@ public partial class IslandWindow : Window
             // Обратный ход: текст гаснет, пасть закрывается, капсула снова сжимается
             // к юниту и только потом возвращается обычное содержимое.
             _notice.HideText();
-            await Task.Delay(140);
+            await Task.Delay(180);
 
             _notice.StopReading();
-            await AnimateWidthAsync(UnitOnlyWidth, 180);
-            await Task.Delay(60);
+            await AnimateWidthAsync(UnitOnlyWidth, 260);
+            await Task.Delay(100);
 
             _notice.Hide();
 
