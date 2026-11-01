@@ -59,7 +59,13 @@ public static class Toast
     /// <summary>Показать тост. Возвращает false, если Windows отказала (тогда — пузырь).</summary>
     public static bool Show(string title, string message, string? tag = null)
     {
-        if (_broken || !Enabled) return false;
+        if (!Enabled) return false;
+
+        // Сначала своё окно: оно в стиле острова и не зависит от разрешений на
+        // уведомления Windows. Системный тост — запасной путь, если хаб выключен.
+        if (NotificationHub.Enabled && NotificationHub.Show(title, message)) return true;
+
+        if (_broken) return false;
         EnsureRegistered();
 
         try
