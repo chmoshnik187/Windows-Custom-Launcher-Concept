@@ -31,7 +31,7 @@ public sealed class GroupWindow : Window
     private readonly System.Windows.Shapes.Ellipse? _none;
 
     /// <summary>Точки «программа работает»: пересчитываются таймером.</summary>
-    private readonly List<(System.Windows.Shapes.Ellipse Dot, PinnedApp App)> _runDots = new();
+    private readonly List<(System.Windows.Controls.Border Mark, PinnedApp App)> _runDots = new();
 
     public GroupWindow(PinnedGroup group)
     {
@@ -199,14 +199,40 @@ public sealed class GroupWindow : Window
 
         return new ControlTemplate(typeof(Button)) { VisualTree = border };
     }
+    /// <summary>
+    /// Индикатор под иконкой: точка — программа запущена, полоска — её окно сейчас
+    /// на переднем плане. Раньше состояние было одно («запущено»), и по нему нельзя
+    /// было понять, куда переключаться.
+    /// </summary>
     private void RefreshRunDots()
     {
-        foreach (var (dot, app) in _runDots)
+        foreach (var (mark, app) in _runDots)
         {
-            if (dot.Parent is not UIElement) continue;
-            dot.Visibility = DotShell.Core.Launcher.ProcessProbe.IsRunning(app)
-                ? Visibility.Visible
-                : Visibility.Collapsed;
+            if (mark.Parent is not UIElement) continue;
+
+            bool running = DotShell.Core.Launcher.ProcessProbe.IsRunning(app);
+            bool active = running && DotShell.Core.Launcher.ProcessProbe.IsForeground(app.Target);
+
+            if (!running)
+            {
+                mark.Visibility = Visibility.Collapsed;
+                continue;
+            }
+
+            mark.Visibility = Visibility.Visible;
+
+            if (active)
+            {
+                mark.Width = 16;
+                mark.Height = 3;
+                mark.CornerRadius = new CornerRadius(1.5);
+            }
+            else
+            {
+                mark.Width = 5;
+                mark.Height = 5;
+                mark.CornerRadius = new CornerRadius(2.5);
+            }
         }
     }
 
@@ -313,15 +339,18 @@ public sealed class GroupWindow : Window
         label.SetResourceReference(TextBlock.ForegroundProperty, "DsText");
         stack.Children.Add(label);
 
-        var dot = new System.Windows.Shapes.Ellipse
+        // Маркер: точка, когда программа запущена, полоска — когда её окно активно.
+        // Одна фигура с меняющимися размерами, чтобы не плодить элементы в плитке.
+        var dot = new System.Windows.Controls.Border
         {
             Width = 5,
             Height = 5,
+            CornerRadius = new CornerRadius(2.5),
             Margin = new Thickness(0, 4, 0, 0),
             HorizontalAlignment = HorizontalAlignment.Center,
             Visibility = DotShell.Core.Launcher.ProcessProbe.IsRunning(app) ? Visibility.Visible : Visibility.Collapsed,
         };
-        dot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "DsAccent");
+        dot.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "DsAccent");
         stack.Children.Add(dot);
         _runDots.Add((dot, app));
 

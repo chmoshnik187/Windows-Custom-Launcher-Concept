@@ -20,6 +20,43 @@ public static class ProcessProbe
     private const int CacheMs = 2000;
 
     /// <summary>Работает ли программа, на которую указывает плитка.</summary>
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+
+    /// <summary>
+    /// Путь процесса, чьё окно сейчас на переднем плане. null — если не вышло
+    /// (системные окна, защищённые процессы).
+    /// </summary>
+    public static string? ForegroundTarget()
+    {
+        try
+        {
+            var window = GetForegroundWindow();
+            if (window == IntPtr.Zero) return null;
+
+            GetWindowThreadProcessId(window, out uint pid);
+            if (pid == 0) return null;
+
+            using var process = System.Diagnostics.Process.GetProcessById((int)pid);
+            return process.MainModule?.FileName;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>Совпадает ли цель ярлыка с процессом на переднем плане.</summary>
+    public static bool IsForeground(string target)
+    {
+        var active = ForegroundTarget();
+        if (string.IsNullOrEmpty(active) || string.IsNullOrEmpty(target)) return false;
+
+        return string.Equals(
+            System.IO.Path.GetFullPath(active),
+            System.IO.Path.GetFullPath(target),
+            StringComparison.OrdinalIgnoreCase);
+    }
     public static bool IsRunning(PinnedApp app) => IsRunning(app.Target);
 
     public static bool IsRunning(string target)
