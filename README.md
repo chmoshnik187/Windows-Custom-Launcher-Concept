@@ -12,6 +12,8 @@
 [![License](https://img.shields.io/github/license/chmoshnik187/Windows-Custom-Launcher-Concept?style=flat-square&color=2b2b2b)](LICENSE)
 [![Код написан ИИ](https://img.shields.io/badge/код%20написан-Qwen%20%2B%20DeepSeek-d71920?style=flat-square)](#честно-о-том-кто-это-написал)
 
+<img src="images/banner-version.png" width="240" alt="Версия">
+
 [**⬇ Скачать**](../../releases/latest) · [**🐛 Идеи и баги**](../../issues) · [**📜 История версий**](CHANGELOG.md) · [**🗺 План**](ROADMAP.md)
 
 </div>
@@ -68,6 +70,12 @@ Wallpaper Engine — берётся из превью текущих обоев 
 | 0.60 | smoke-тест сборки и вес: exe 75.4 → 69.9 МБ |
 | 0.59 | иконки рабочего стола в монохром, с откатом |
 | 0.50–0.57 | окно настроек с категориями, режим «не мешать», выбор устройства эквалайзера, скины вкладок, тема в настройках и виджетах, терминал |
+
+<div align="center">
+
+![Возможности](images/banner-features.png)
+
+</div>
 
 ## Что уже работает
 
@@ -239,6 +247,12 @@ build.bat installer  :: publish + установщик (нужен Inno Setup 6)
 В IDE: открыть `DotShell.sln`, startup-проект **DotShell.Island.Wpf**, платформа **x64**, F5.
 Если не собирается — [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
+<div align="center">
+
+![Сделано с ИИ](images/banner-ai.png)
+
+</div>
+
 ## Честно о том, кто это написал
 
 **Код написан не мной, а искусственным интеллектом — [Qwen](https://chat.qwen.ai/) и
@@ -259,9 +273,16 @@ build.bat installer  :: publish + установщик (нужен Inno Setup 6)
 - 🎨 Особенно интересны замечания по стилю: где получилось похоже на Nothing/CMF,
   а где режет глаз.
 
+<div align="center">
+
+![MIT License](images/banner-license.png)
+
+</div>
+
 ## Лицензия и благодарности
 
-- Код — [MIT](LICENSE).
+- Код — [MIT](LICENSE). © chmoshnik187, Qwen и DeepSeek (ИИ-соавторы).
+- Баннеры в этом README — точечная матрица, нарисованная нашим же генератором: `python tools/make_banner.py "ТЕКСТ" out.png`.
 - Визуальный язык вдохновлён **Nothing OS / CMF by Nothing** (проект не аффилирован
   с Nothing Technology; фирменный шрифт NDot не используется — точки рисует свой движок).
 - Медиа — через системный SMTC Windows; системный EQ планируется поверх
