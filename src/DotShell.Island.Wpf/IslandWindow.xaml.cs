@@ -204,6 +204,25 @@ public partial class IslandWindow : Window
 
         Loaded += OnWindowLoaded;
         Loaded += (_, _) => { if (Program.OpenSettingsOnStart) OpenSettings(); };
+
+        // Слой уведомлений добавляем в капсулу из кода: правки разметки острова
+        // по номерам строк четыре раза ломали XAML, и это уже не смешно.
+        if (Pill.Parent is Grid rootLayer)
+        {
+            // Кладём уведомление НАД капсулой, а не внутрь: у пилюли ClipToBounds,
+            // и «пасть», которая должна выходить за края, иначе обрежется.
+            _notice = new IslandNotification
+            {
+                Visibility = Visibility.Collapsed,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 10, 0, 0),
+                Height = CollapsedHeight,
+            };
+            rootLayer.Children.Add(_notice);
+        }
+
+        Current = this;
         Loaded += (_, _) => { if (LauncherHost.OpenOnce) Dispatcher.BeginInvoke(LauncherHost.Toggle); };
 
         // Первая отрисовка переписки: прокрутка в конец, иначе чат открывается
@@ -887,6 +906,93 @@ public partial class IslandWindow : Window
     /// сжимаемся в тонкую полоску. Проверка дешёвая (одно окно + прямоугольник),
     /// поэтому её можно делать каждый тик.
     /// </summary>
+    private IslandNotification? _notice;
+    private System.Windows.Threading.DispatcherTimer? _noticeTimer;
+    private double _noticeSavedLeft;
+    private double _noticeSavedWidth;
+
+    /// <summary>Живой остров: уведомления показываем в нём, если он на виду.</summary>
+    public static IslandWindow? Current { get; private set; }
+
+    /// <summary>
+    /// Показать уведомление внутри капсулы.
+    ///
+    /// Возвращает false, если сейчас неудобно (остров раскрыт, утоплен или скрыт
+    /// полноэкранным окном) — тогда вызывающий код покажет обычную карточку.
+    ///
+    /// Ширина: окно расширяем сразу (оно прозрачное, лишнее не видно), а капсула
+    /// анимируется внутри. Так текст не дёргается, пока едет ширина.
+    /// </summary>
+    public bool ShowNotification(string title, string text)
+    {
+        if (_isExpanded || _hiddenByFullscreen || _docked || _quiet) return false;
+        if (_notice is null) return false;
+
+        try
+        {
+            _noticeTimer?.Stop();
+
+            double needed = _notice.MeasureWidth(title, text);
+            double target = Math.Clamp(needed + 120, CollapsedWidth, 1100);
+
+            // Запоминаем геометрию: после показа капсула обязана вернуться на место,
+            // иначе уведомление утаскивает остров в сторону (проверено).
+            _noticeSavedLeft = Left;
+            _noticeSavedWidth = Width;
+
+            // Окно — сразу по нужной ширине, чтобы капсуле было куда расти.
+            Width = target + 40;
+            Left = (SystemParameters.WorkArea.Width - Width) / 2;
+
+            CollapsedRow.Visibility = Visibility.Collapsed;
+            _notice.Visibility = Visibility.Visible;
+
+            var grow = new DoubleAnimation(target, TimeSpan.FromMilliseconds(220))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            };
+            Pill.BeginAnimation(FrameworkElement.WidthProperty, grow);
+
+            _notice.Present(title, text);
+
+            _noticeTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(5.5),
+            };
+            _noticeTimer.Tick += (_, _) => HideNotification();
+            _noticeTimer.Start();
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // Что-то не сложилось: возвращаем капсулу как была, чтобы не оставить
+            // пустую растянутую полосу, и отдаём показ обычной карточке.
+            try { HideNotification(); } catch { }
+            Log.Info($"island notification failed: {ex}");
+            return false;
+        }
+    }
+
+    private void HideNotification()
+    {
+        _noticeTimer?.Stop();
+        _noticeTimer = null;
+
+        if (_notice is null) return;
+
+        _notice.Dismiss(() =>
+        {
+            // Возвращаем капсулу к обычной ширине и показываем прежнее содержимое.
+            Pill.BeginAnimation(FrameworkElement.WidthProperty, null);
+            Pill.Width = CollapsedWidth;
+            CollapsedRow.Visibility = Visibility.Visible;
+
+            // Возвращаем окно штатным путём: он сам центрирует капсулу и знает про
+            // рабочую область. Ручные Width/Left давали уезд вправо на 600 px.
+            ResizeWindowTo(CollapsedWidth, CollapsedHeight);
+        });
+    }
     private void UpdateQuietMode()
     {
         if (!_services.Settings.Current.QuietOnMaximized)

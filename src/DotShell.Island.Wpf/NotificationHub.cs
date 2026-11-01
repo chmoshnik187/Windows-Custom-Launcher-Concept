@@ -38,6 +38,13 @@ public static class NotificationHub
     {
         if (!Enabled) return false;
 
+        var island = IslandWindow.Current;
+        if (island is not null)
+        {
+            try { if (island.ShowNotification(title, message)) return true; }
+            catch { }
+        }
+
         try
         {
             var dispatcher = Application.Current?.Dispatcher;
