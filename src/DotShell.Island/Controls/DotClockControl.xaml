@@ -1,0 +1,44 @@
+<UserControl
+    x:Class="DotShell.Island.Controls.DotClockControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:DotShell.Island.Controls">
+
+    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+
+        <!-- Часы. FixedColumns=10 — ровно две цифры по 5 ячеек, иначе "11" прыгает относительно "08" -->
+        <controls:DotTextBlock x:Name="HoursDots"
+                               FixedColumns="10"
+                               CellSize="4"
+                               Gap="2"
+                               SourceFontSize="26"
+                               DotColor="#ECECEE"
+                               GhostColor="#14FFFFFF"
+                               VerticalAlignment="Center" />
+
+        <!--
+          Двоеточие не из шрифта, а двумя настоящими кружками: так оно гарантированно
+          попадает в ту же сетку, что и цифры, и мигает ровно в ритм секундам.
+        -->
+        <Grid x:Name="Separator" Width="6" VerticalAlignment="Center" RowSpacing="6">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Ellipse x:Name="SepTop" Grid.Row="0" Width="4" Height="4"
+                     Fill="{ThemeResource DsAccent}" />
+            <Ellipse x:Name="SepBottom" Grid.Row="1" Width="4" Height="4"
+                     Fill="{ThemeResource DsAccent}" />
+        </Grid>
+
+        <!-- Минуты. Красятся акцентом — это фирменная деталь: белое + одна цветная часть -->
+        <controls:DotTextBlock x:Name="MinutesDots"
+                               FixedColumns="10"
+                               CellSize="4"
+                               Gap="2"
+                               SourceFontSize="26"
+                               DotColor="{ThemeResource DsAccent}"
+                               GhostColor="#14FFFFFF"
+                               VerticalAlignment="Center" />
+    </StackPanel>
+</UserControl>

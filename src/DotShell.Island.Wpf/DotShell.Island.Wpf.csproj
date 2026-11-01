@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.22621.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>DotShell.Island.Wpf</RootNamespace>
+    <AssemblyName>DotShell</AssemblyName>
+    <UseWPF>true</UseWPF>
+    <!-- WinForms нужен только ради NotifyIcon: своя иконка в трее без COM-танцев. -->
+    <UseWindowsForms>true</UseWindowsForms>
+
+    <!--
+      Почему WPF, а не WinUI 3.
+
+      WinUI 3 красивее и современнее, но его НЕЛЬЗЯ собрать без Visual Studio:
+      компилятор XAML и упаковка ресурсов (MRT/PRI) тянут инструменты VS.
+      WPF же входит в обычный .NET SDK, поэтому:
+        • программу можно собрать одной командой dotnet publish где угодно;
+        • self-contained exe запускается на любой Windows 10/11 x64 без установки .NET;
+        • для "оверлея поверх всего" WPF подходит не хуже: AllowsTransparency
+          даёт попиксельную прозрачность, а клики по прозрачным пикселям
+          проходят сквозь окно САМИ — никаких WS_EX_TRANSPARENT и опроса курсора.
+
+      Ядро (DotShell.Core) от выбора UI-фреймворка не зависит, поэтому если
+      позже захочется WinUI — переписывается только эта папка.
+
+      Побочный плюс: в WPF-версии не нужен "умный hit-test" из WinUI-версии,
+      потому что прозрачность работает на уровне пикселей, а не прямоугольника окна.
+    -->
+
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\DotShell.Island\Assets\dotshell.ico</ApplicationIcon>
+    <NoWarn>$(NoWarn);CS1591;CS1570;CS1573</NoWarn>
+
+    <!-- Свои App.xaml/MainWindow.xaml не нужны — точка входа написана руками. -->
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DotShell.Core\DotShell.Core.csproj" />
+  </ItemGroup>
+
+</Project>

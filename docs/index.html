@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOTSHELL — прототип интерфейса</title>
+<style>
+  :root{
+    --dot: 4px;               /* размер точки сетки */
+    --gap: 3px;               /* зазор между точками */
+    --acc: #d71920;           /* акцент (меняется темой) */
+    --bg0: #0b0b0c;
+    --bg1: #121214;
+    --bg2: #17171a;
+    --ln:  #26262b;
+    --tx:  #ececee;
+    --tx2: #8a8a93;
+    --r:   14px;
+    --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+    --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:
+      radial-gradient(1200px 600px at 50% -10%, color-mix(in srgb, var(--acc) 12%, transparent), transparent 70%),
+      var(--bg0);
+    color:var(--tx); font-family:var(--sans); overflow:hidden;
+    transition: background .6s ease;
+  }
+
+  /* ---------- «рабочий стол» ---------- */
+  .desktop{position:fixed; inset:0;}
+  .wallpaper{
+    position:absolute; inset:0; opacity:.5;
+    background:
+      radial-gradient(circle at 20% 30%, color-mix(in srgb, var(--acc) 35%, transparent), transparent 45%),
+      radial-gradient(circle at 80% 70%, color-mix(in srgb, var(--acc) 22%, transparent), transparent 50%),
+      linear-gradient(160deg, #0d0d10, #101014 60%, #0a0a0c);
+    filter: blur(0px);
+  }
+  .wallpaper.dots::after{
+    content:""; position:absolute; inset:0;
+    background-image: radial-gradient(currentColor 1px, transparent 1.2px);
+    background-size: 12px 12px;
+    color: color-mix(in srgb, var(--acc) 45%, #fff);
+    opacity:.10;
+  }
+  /* имитация «заплывания» обоев на окна: слой поверх окон, с дырками под окна */
+  .bleed{
+    position:absolute; inset:0; pointer-events:none; opacity:0;
+    background:
+      radial-gradient(circle at 20% 30%, color-mix(in srgb, var(--acc) 30%, transparent), transparent 45%),
+      radial-gradient(circle at 80% 70%, color-mix(in srgb, var(--acc) 18%, transparent), transparent 50%);
+    mix-blend-mode: screen; transition:opacity .5s ease;
+    -webkit-mask-image: none;
+  }
+  body.bleed-on .bleed{opacity:.35}
+
+  .fake-window{
+    position:absolute; left:50%; top:56%; transform:translate(-50%,-50%);
+    width:min(720px, 80vw); height:300px; border-radius:var(--r);
+    background:color-mix(in srgb, var(--bg1) 88%, transparent);
+    border:1px solid var(--ln);
+    box-shadow:0 30px 80px rgba(0,0,0,.6);
+    backdrop-filter: blur(18px);
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  .fake-window .tb{height:34px; border-bottom:1px solid var(--ln); display:flex; align-items:center; gap:8px; padding:0 12px; font:600 11px/1 var(--mono); color:var(--tx2); letter-spacing:.12em; text-transform:uppercase}
+  .fake-window .tb i{width:9px;height:9px;border-radius:50%;background:var(--ln);display:block}
+  .fake-window .bd{flex:1; padding:18px; font:12px/1.7 var(--mono); color:var(--tx2)}
+  .fake-window .bd b{color:var(--tx)}
+
+  /* ---------- ОСТРОВ ---------- */
+  .island-wrap{position:fixed; top:10px; left:50%; transform:translateX(-50%); z-index:50; display:flex; flex-direction:column; align-items:center}
+  .island{
+    position:relative; display:flex; align-items:center; gap:14px;
+    height:46px; padding:0 16px; border-radius:999px;
+    background:#000; border:1px solid color-mix(in srgb, var(--acc) 30%, #2a2a2e);
+    box-shadow:0 8px 30px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.03) inset;
+    transition: width .45s cubic-bezier(.2,.9,.2,1), height .45s cubic-bezier(.2,.9,.2,1), border-radius .45s ease, padding .3s ease;
+    overflow:hidden; cursor:pointer; white-space:nowrap;
+  }
+  .island:hover{border-color:color-mix(in srgb, var(--acc) 60%, #2a2a2e)}
+  .island.open{height:var(--oh, 210px); border-radius:26px; padding:14px 16px; cursor:default}
+  .isl-collapsed{display:flex; align-items:center; gap:14px; transition:opacity .2s}
+  .island.open .isl-collapsed{display:none}
+  .island.open .isl-expanded{display:flex}
+  .isl-expanded{display:none; width:100%; height:100%; flex-direction:column; gap:12px}
+
+  .clock{display:flex; gap:var(--gap); align-items:center}
+  .clock canvas{display:block}
+  .sep{display:flex; flex-direction:column; gap:6px}
+  .sep span{width:var(--dot);height:var(--dot);border-radius:50%;background:var(--acc);display:block;animation:blink 1s steps(1,end) infinite}
+  @keyframes blink{50%{opacity:.2}}
+
+  .pill{font:600 11px/1 var(--mono); letter-spacing:.1em; color:var(--tx2); text-transform:uppercase}
+  .chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:999px;border:1px solid var(--ln);background:var(--bg2);font:600 10px/1 var(--mono);letter-spacing:.1em;color:var(--tx2);text-transform:uppercase}
+  .chip b{color:var(--acc)}
+  .dot-live{width:6px;height:6px;border-radius:50%;background:var(--acc);box-shadow:0 0 10px var(--acc);animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.35;transform:scale(.8)}}
+
+  /* плеер внутри острова */
+  .player{display:flex; gap:12px; align-items:center; flex:1; min-width:0}
+  .cover{width:64px;height:64px;border-radius:12px;flex:none;position:relative;overflow:hidden;background:var(--bg2);border:1px solid var(--ln)}
+  .cover canvas{position:absolute;inset:0;width:100%;height:100%}
+  .meta{min-width:0;flex:1}
+  .meta .t{font:600 13px/1.3 var(--sans); color:var(--tx); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .meta .a{font:11px/1.4 var(--mono); color:var(--tx2); letter-spacing:.06em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .bar{height:3px;border-radius:2px;background:var(--ln);margin-top:8px;overflow:hidden}
+  .bar i{display:block;height:100%;width:38%;background:var(--acc);border-radius:2px}
+  .ctrls{display:flex;gap:8px;align-items:center}
+  .btn{width:34px;height:34px;border-radius:50%;border:1px solid var(--ln);background:var(--bg2);color:var(--tx);display:grid;place-items:center;cursor:pointer;transition:.15s}
+  .btn:hover{border-color:var(--acc);color:var(--acc)}
+  .btn svg{width:14px;height:14px;fill:currentColor}
+  .btn.main{width:40px;height:40px;background:var(--acc);border-color:var(--acc);color:#000}
+  .btn.main:hover{filter:brightness(1.12);color:#000}
+
+  .tabs{display:flex;gap:6px;border-top:1px solid var(--ln);padding-top:10px}
+  .tab{flex:1;height:30px;border-radius:9px;border:1px solid var(--ln);background:transparent;color:var(--tx2);font:600 10px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;cursor:pointer;transition:.15s}
+  .tab:hover{color:var(--tx);border-color:color-mix(in srgb,var(--acc) 40%, var(--ln))}
+  .tab.on{background:var(--acc);border-color:var(--acc);color:#000}
+
+  /* ---------- ПАНЕЛИ (виджеты) ---------- */
+  .panel{
+    position:fixed; z-index:40; width:min(420px,92vw);
+    background:color-mix(in srgb, var(--bg1) 92%, transparent);
+    border:1px solid var(--ln); border-radius:20px;
+    box-shadow:0 40px 100px rgba(0,0,0,.65);
+    backdrop-filter: blur(24px);
+    padding:16px; opacity:0; transform:translateY(-12px) scale(.98); pointer-events:none;
+    transition:.28s cubic-bezier(.2,.9,.2,1);
+  }
+  .panel.show{opacity:1; transform:none; pointer-events:auto}
+  .p-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .p-head h3{margin:0;font:600 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--tx2)}
+  .x{background:none;border:0;color:var(--tx2);cursor:pointer;font:16px/1 var(--mono)}
+  .x:hover{color:var(--acc)}
+
+  .item{display:flex;gap:10px;align-items:center;padding:9px 10px;border-radius:12px;border:1px solid transparent;cursor:pointer}
+  .item:hover{background:var(--bg2);border-color:var(--ln)}
+  .item .ic{width:30px;height:30px;border-radius:9px;background:var(--bg2);border:1px solid var(--ln);display:grid;place-items:center;flex:none;font:700 11px/1 var(--mono);color:var(--acc)}
+  .item .tx{min-width:0}
+  .item .tx b{display:block;font:500 13px/1.3 var(--sans);color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .item .tx span{display:block;font:10px/1.4 var(--mono);color:var(--tx2);letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .kbd{margin-left:auto;font:10px/1 var(--mono);color:var(--tx2);border:1px solid var(--ln);border-radius:6px;padding:4px 6px;background:var(--bg2)}
+
+  .search{display:flex;gap:10px;align-items:center;border:1px solid var(--ln);background:var(--bg2);border-radius:14px;padding:10px 12px;margin-bottom:10px}
+  .search input{flex:1;background:none;border:0;outline:0;color:var(--tx);font:14px/1 var(--sans)}
+  .search input::placeholder{color:var(--tx2)}
+
+  .note{border:1px dashed var(--ln);border-radius:14px;padding:12px;font:12px/1.7 var(--mono);color:var(--tx);min-height:96px;outline:0;background:var(--bg2)}
+  .note:empty:before{content:"// пусто — начни печатать";color:var(--tx2)}
+
+  .row{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px 2px;border-bottom:1px dashed var(--ln);font:11px/1.4 var(--mono);color:var(--tx2);letter-spacing:.06em}
+  .row:last-child{border-bottom:0}
+  .sw{width:38px;height:22px;border-radius:999px;background:var(--bg2);border:1px solid var(--ln);position:relative;cursor:pointer;flex:none;transition:.2s}
+  .sw i{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--tx2);transition:.2s}
+  .sw.on{background:color-mix(in srgb,var(--acc) 30%, var(--bg2));border-color:var(--acc)}
+  .sw.on i{left:18px;background:var(--acc)}
+
+  /* ---------- ЛАУНЧЕР ---------- */
+  .launcher{position:fixed;inset:0;z-index:60;display:none;place-items:start center;padding-top:14vh;background:rgba(5,5,6,.55);backdrop-filter:blur(10px)}
+  .launcher.show{display:grid;animation:fade .18s ease}
+  @keyframes fade{from{opacity:0}}
+  .lbox{width:min(620px,92vw);background:color-mix(in srgb,var(--bg1) 94%, transparent);border:1px solid var(--ln);border-radius:22px;box-shadow:0 40px 120px rgba(0,0,0,.7);padding:14px;backdrop-filter:blur(28px)}
+  .lbig{display:flex;gap:12px;align-items:center;border:1px solid var(--ln);background:var(--bg2);border-radius:16px;padding:14px}
+  .lbig input{flex:1;background:none;border:0;outline:0;color:var(--tx);font:20px/1 var(--sans);letter-spacing:.01em}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin-top:12px}
+  .app{border:1px solid var(--ln);border-radius:14px;padding:12px 8px;text-align:center;cursor:pointer;background:var(--bg2);transition:.15s}
+  .app:hover{border-color:var(--acc);transform:translateY(-2px)}
+  .app .glyph{height:34px;display:grid;place-items:center;margin-bottom:8px}
+  .app .glyph canvas{display:block}
+  .app .nm{font:10px/1.3 var(--mono);letter-spacing:.08em;color:var(--tx2);text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* ---------- НИЖНЯЯ ПАНЕЛЬ УПРАВЛЕНИЯ ПРОТОТИПОМ ---------- */
+  .dock{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:80;display:flex;gap:6px;padding:6px;border-radius:999px;background:color-mix(in srgb,var(--bg1) 90%, transparent);border:1px solid var(--ln);backdrop-filter:blur(20px);box-shadow:0 20px 50px rgba(0,0,0,.6)}
+  .dock button{height:32px;padding:0 12px;border-radius:999px;border:0;background:transparent;color:var(--tx2);font:600 10px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;cursor:pointer;transition:.15s;white-space:nowrap}
+  .dock button:hover{color:var(--tx);background:var(--bg2)}
+  .dock button.on{background:var(--acc);color:#000}
+  .hint{position:fixed;left:14px;bottom:16px;z-index:80;font:10px/1.6 var(--mono);color:var(--tx2);letter-spacing:.06em;max-width:230px}
+  .hint b{color:var(--acc)}
+  kbd{font:10px/1 var(--mono);border:1px solid var(--ln);border-radius:5px;padding:3px 5px;background:var(--bg2);color:var(--tx)}
+</style>
+</head>
+<body>
+<div style="position:fixed;top:0;left:0;right:0;z-index:99999;background:#D71920;color:#fff;font:600 12px/1.6 Consolas,monospace;text-align:center;padding:4px 10px">
+  Это интерактивный КОНЦЕПТ интерфейса (HTML-макет), а не сама программа. Настоящий DotShell.exe — <a href="https://github.com/chmoshnik187/Windows-Custom-Launcher-Concept/releases" style="color:#fff;text-decoration:underline">в релизах на GitHub</a>.
+</div>
+
+<div class="desktop">
+  <div class="wallpaper dots" id="wp"></div>
+  <div class="fake-window">
+    <div class="tb"><i></i><i></i><i></i> &nbsp;chrome.exe — обычное окно (тут твои окна)</div>
+    <div class="bd">
+      <b>// демо-слой</b><br>
+      Это имитация окна сторонней программы.<br>
+      В реальной сборке «заплывание» обоев делается так: рендер-слой кладётся
+      <b>поверх</b> окна WorkerW, в нём через DwmGetWindowAttribute вырезаются
+      «дырки» по прямоугольникам окон, а в fullscreen/играх слой полностью гаснет.<br><br>
+      <b>ESC</b> — закрыть всё &nbsp; <b>Ctrl+Space</b> — лаунчер &nbsp; <b>Ctrl+Shift+V</b> — буфер
+    </div>
+  </div>
+  <div class="bleed" id="bleed"></div>
+</div>
+
+<!-- ======= ОСТРОВ ======= -->
+<div class="island-wrap">
+  <div class="island" id="island" style="--oh:212px">
+    <!-- свёрнутое состояние -->
+    <div class="isl-collapsed">
+      <div class="clock"><canvas id="cH" width="0" height="0"></canvas></div>
+      <div class="sep"><span></span><span></span></div>
+      <div class="clock"><canvas id="cM" width="0" height="0"></canvas></div>
+      <span class="dot-live" title="сейчас играет"></span>
+      <span class="pill" id="islTitle">NIGHTCORE — LOFI MIX</span>
+      <span class="chip">CPU <b id="cpu">7%</b></span>
+      <span class="chip">BAT <b id="bat">82%</b></span>
+    </div>
+    <!-- раскрытое состояние -->
+    <div class="isl-expanded">
+      <div class="player">
+        <div class="cover"><canvas id="cArt" width="128" height="128"></canvas></div>
+        <div class="meta">
+          <div class="t">Lofi Girl — night drive</div>
+          <div class="a">Spotify · 1:24 / 3:41 · -6.2 dB</div>
+          <div class="bar"><i></i></div>
+        </div>
+        <div class="ctrls">
+          <div class="btn"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></div>
+          <div class="btn main" id="play"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+          <div class="btn"><svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg></div>
+        </div>
+      </div>
+      <div class="tabs">
+        <button class="tab on" data-p="p-notes">Заметки</button>
+        <button class="tab" data-p="p-clip">Буфер</button>
+        <button class="tab" data-p="p-eq">Эквалайзер</button>
+        <button class="tab" data-p="p-sys">Система</button>
+        <button class="tab" data-p="p-themes">Тема</button>
+      </div>
+      <div id="tabbody" style="flex:1;min-height:0;overflow:auto"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ======= ПАНЕЛИ ======= -->
+<div class="panel" id="p-clip" style="top:70px;right:16px">
+  <div class="p-head"><h3>Буфер обмена · сессия</h3><button class="x" data-close>✕</button></div>
+  <div id="clipList"></div>
+</div>
+
+<div class="panel" id="p-notes" style="top:70px;right:16px">
+  <div class="p-head"><h3>Заметки · автосохранение</h3><button class="x" data-close>✕</button></div>
+  <div class="note" contenteditable="true" id="note">идея: тема = один .zip файл (цвета + сетка точек + шрифты + кривые анимаций). кидаешь другу — у него всё то же самое.</div>
+  <div style="display:flex;gap:8px;margin-top:10px">
+    <span class="chip">MD</span><span class="chip">3 записи</span><span class="chip">SQLite</span>
+  </div>
+</div>
+
+<div class="panel" id="p-eq" style="top:70px;right:16px">
+  <div class="p-head"><h3>Эквалайзер · Nothing-style skin</h3><button class="x" data-close>✕</button></div>
+  <canvas id="cEq" width="380" height="90" style="width:100%;height:90px;display:block"></canvas>
+  <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+    <span class="chip">Flat</span><span class="chip"><b>Bass</b></span><span class="chip">Vocal</span><span class="chip">Night</span>
+  </div>
+  <div class="row" style="margin-top:10px"><span>Движок: Equalizer APO (системный APO)</span><span class="sw on"><i></i></span></div>
+  <div class="row"><span>DRM-стримы (Spotify HiFi и т.п.) — не обрабатываются</span><span class="kbd">лимит ОС</span></div>
+</div>
+
+<div class="panel" id="p-sys" style="top:70px;right:16px">
+  <div class="p-head"><h3>Производительность</h3><button class="x" data-close>✕</button></div>
+  <div class="row"><span>Обои: пауза, когда не видно рабочий стол</span><span class="sw on"><i></i></span></div>
+  <div class="row"><span>Обои: стоп в fullscreen / в играх</span><span class="sw on"><i></i></span></div>
+  <div class="row"><span>«Заплывание» обоев на окна</span><span class="sw" id="swBleed"><i></i></span></div>
+  <div class="row"><span>Лимит FPS обоев</span><span class="kbd">30</span></div>
+  <div class="row"><span>Рендер обоев</span><span class="kbd">GPU / DirectX</span></div>
+  <div class="row"><span>Белый список окон для эффекта</span><span class="kbd">+ добавить</span></div>
+</div>
+
+<div class="panel" id="p-themes" style="top:70px;right:16px">
+  <div class="p-head"><h3>Тема · авто-цвет из обоев</h3><button class="x" data-close>✕</button></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap" id="themeRow"></div>
+  <div class="row" style="margin-top:12px"><span>Плотность точек</span><span class="kbd">4 px</span></div>
+  <div class="row"><span>Скругления</span><span class="kbd">14 px</span></div>
+  <div class="row"><span>Шрифт</span><span class="kbd">DOT-MATRIX / SANS</span></div>
+  <div class="row"><span>Импорт темы (.zip / .json)</span><span class="kbd">⌘ + T</span></div>
+</div>
+
+<!-- ======= ЛАУНЧЕР ======= -->
+<div class="launcher" id="launcher">
+  <div class="lbox">
+    <div class="lbig">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8a8a93" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="lq" placeholder="приложение, файл, команда, перевод…" autocomplete="off">
+      <span class="kbd">ESC</span>
+    </div>
+    <div class="grid" id="apps"></div>
+    <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap">
+      <span class="chip">fuzzy-поиск</span><span class="chip">плагины</span><span class="chip">калькулятор</span><span class="chip">поиск по файлам</span><span class="chip">ярлыки команд</span>
+    </div>
+  </div>
+</div>
+
+<div class="hint">
+  <b>ПРОТОТИП UI</b><br>
+  Клик по острову — раскрыть.<br>
+  <kbd>Ctrl</kbd>+<kbd>Space</kbd> лаунчер · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> буфер · <kbd>Esc</kbd> закрыть
+</div>
+
+<div class="dock">
+  <button data-p="p-notes">Заметки</button>
+  <button data-p="p-clip">Буфер</button>
+  <button data-p="p-eq">EQ</button>
+  <button data-p="p-sys">Перф</button>
+  <button data-p="p-themes">Тема</button>
+  <button id="dLaunch">Лаунчер</button>
+  <button id="dPin">Закрепить остров</button>
+</div>
+
+<script>
+/* ================= ТОЧЕЧНЫЙ РЕНДЕР (ядро всей эстетики) =================
+   В реальной программе это SkiaSharp/Win2D или шейдер: текст растеризуется,
+   затем сэмплируется по сетке, и каждая «живая» ячейка рисуется кружком.
+   Здесь — canvas, тот же алгоритм. */
+const GLYPHS = { /* 5x7 */
+ '0':'01110 10001 10011 10101 11001 10001 01110','1':'00100 01100 00100 00100 00100 00100 01110',
+ '2':'01110 10001 00001 00010 00100 01000 11111','3':'11111 00010 00100 00010 00001 10001 01110',
+ '4':'00010 00110 01010 10010 11111 00010 00010','5':'11111 10000 11110 00001 00001 10001 01110',
+ '6':'00110 01000 10000 11110 10001 10001 01110','7':'11111 00001 00010 00100 01000 01000 01000',
+ '8':'01110 10001 10001 01110 10001 10001 01110','9':'01110 10001 10001 01111 00001 00010 01100',
+ ':':'00000 00100 00000 00000 00100 00000 00000',' ':'00000 00000 00000 00000 00000 00000 00000'
+};
+const ICONS = {
+  spotify:'01110 10001 10111 10001 11101 10001 01110', chrome:'01110 10001 10111 11111 10101 10001 01110',
+  code:'11111 10000 10000 11110 10000 10000 11111', figma:'01110 10001 10000 01110 10000 10001 01110',
+  steam:'11111 10000 11110 10001 10001 10001 11111', obs:'01110 10001 10000 10000 10000 10001 01110',
+  tg:'01110 10001 00100 00100 00100 01010 10001', term:'00010 00100 01000 11111 01000 00100 00010'
+};
+function drawDots(cv, str, opt={}){
+  const cell = opt.cell ?? 4, gap = opt.gap ?? 2, on = opt.on ?? '#ececee', off = opt.off ?? null,
+        pad = opt.pad ?? 0, round = opt.round ?? 0.5;
+  const rows = str.trim().split(/\s+/);
+  const w = rows[0].length, h = rows.length;
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = (w*(cell+gap)+pad*2)*dpr; cv.height = (h*(cell+gap)+pad*2)*dpr;
+  cv.style.width = (w*(cell+gap)+pad*2)+'px'; cv.style.height = (h*(cell+gap)+pad*2)+'px';
+  const g = cv.getContext('2d'); g.scale(dpr,dpr); g.clearRect(0,0,cv.width,cv.height);
+  rows.forEach((r,y)=>[...r].forEach((c,x)=>{
+    const cx = pad + x*(cell+gap) + cell/2, cy = pad + y*(cell+gap) + cell/2;
+    if(c==='1'){ g.fillStyle = (typeof on==='function') ? on(x,y) : on;
+      g.beginPath(); g.arc(cx,cy,cell*round,0,7); g.fill(); }
+    else if(off){ g.fillStyle=off; g.beginPath(); g.arc(cx,cy,cell*round*0.55,0,7); g.fill(); }
+  }));
+}
+function textToStr(t){ return [...t.toUpperCase()].map(ch=>GLYPHS[ch] ?? GLYPHS[' ']).join(' '); }
+
+/* ---------- часы ---------- */
+function tickClock(){
+  const d = new Date(), hh = String(d.getHours()).padStart(2,'0'), mm = String(d.getMinutes()).padStart(2,'0');
+  const acc = getComputedStyle(document.body).getPropertyValue('--acc').trim();
+  drawDots(document.getElementById('cH'), textToStr(hh), {cell:3.4,gap:2.2,on:'#ececee',off:'rgba(255,255,255,.09)'});
+  drawDots(document.getElementById('cM'), textToStr(mm), {cell:3.4,gap:2.2,on:acc,off:'rgba(255,255,255,.09)'});
+}
+tickClock(); setInterval(tickClock, 1000);
+
+/* ---------- «обложка» альбома из точек (в реале — пикселизация арта из SMTC) ---------- */
+function drawArt(){
+  const cv = document.getElementById('cArt'), g = cv.getContext('2d');
+  const acc = getComputedStyle(document.body).getPropertyValue('--acc').trim();
+  const N = 16, S = 128/N;
+  g.clearRect(0,0,128,128);
+  for(let y=0;y<N;y++) for(let x=0;x<N;x++){
+    const d = Math.hypot(x-7.5,y-7.5)/10.6;
+    const v = Math.max(0, 1-d) * (0.55 + 0.45*Math.sin((x*0.9+y*1.3)+Date.now()/900));
+    if(v<=0.06) continue;
+    g.globalAlpha = 0.15 + v*0.85;
+    g.fillStyle = v>0.55 ? acc : '#ffffff';
+    g.beginPath(); g.arc(x*S+S/2, y*S+S/2, S*0.42*(0.4+v*0.6), 0, 7); g.fill();
+  }
+  g.globalAlpha = 1;
+}
+setInterval(drawArt, 90); drawArt();
+
+/* ---------- эквалайзер ---------- */
+const bands = Array.from({length:16},()=>Math.random());
+function drawEq(){
+  const cv=document.getElementById('cEq'); if(!cv.offsetParent) return;
+  const g=cv.getContext('2d'), W=cv.width, H=cv.height, acc=getComputedStyle(document.body).getPropertyValue('--acc').trim();
+  g.clearRect(0,0,W,H);
+  const n=bands.length, bw=W/n;
+  bands.forEach((v,i)=>{
+    bands[i] += (Math.random()-0.5)*0.22; bands[i]=Math.max(.06,Math.min(1,bands[i]));
+    const h = bands[i]*(H-10);
+    for(let y=0;y<h;y+=6){
+      g.fillStyle = i%4===0 ? acc : 'rgba(236,236,238,'+(0.25+bands[i]*0.7)+')';
+      g.globalAlpha = 0.25 + (y/h)*0.75;
+      g.beginPath(); g.arc(i*bw+bw/2, H-3-y, 1.9, 0, 7); g.fill();
+    }
+  });
+  g.globalAlpha=1;
+}
+setInterval(drawEq, 80);
+
+/* ---------- буфер ---------- */
+const CLIPS=[
+ {k:'текст',t:'git commit -m "island: media tab + dot clock"',s:'2 мин назад'},
+ {k:'ссылка',t:'https://github.com/rocktimsaikia/…  (workerw trick)',s:'8 мин назад'},
+ {k:'файл',t:'theme-nothing-red.zip  · 42 КБ',s:'14 мин назад'},
+ {k:'картинка',t:'Screenshot 2026-10-30 04:12.png  · 1920×1080',s:'31 мин назад'},
+ {k:'текст',t:'DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, …)',s:'1 ч назад'},
+];
+document.getElementById('clipList').innerHTML = CLIPS.map((c,i)=>`
+  <div class="item"><div class="ic">${c.k[0].toUpperCase()}</div>
+  <div class="tx"><b>${c.t}</b><span>${c.k} · ${c.s}</span></div>
+  ${i===0?'<span class="kbd">↵ вставить</span>':'<span class="kbd">PIN</span>'}</div>`).join('') +
+  `<div class="row" style="margin-top:8px"><span>Хранится в SQLite, живёт до перезагрузки</span><span class="kbd">очистить</span></div>`;
+
+/* ---------- лаунчер ---------- */
+const APPS=[['spotify','Spotify'],['chrome','Chrome'],['code','VS Code'],['figma','Figma'],['steam','Steam'],['obs','OBS'],['tg','Telegram'],['term','Terminal']];
+function renderApps(q=''){
+  const el=document.getElementById('apps');
+  const acc=getComputedStyle(document.body).getPropertyValue('--acc').trim();
+  el.innerHTML = APPS.filter(a=>a[1].toLowerCase().includes(q.toLowerCase())).map(([ic,nm])=>
+    `<div class="app"><div class="glyph"><canvas data-ic="${ic}"></canvas></div><div class="nm">${nm}</div></div>`).join('');
+  el.querySelectorAll('canvas').forEach(cv=>{
+    const k=cv.dataset.ic, rows=ICONS[k].split(' ');
+    const w=rows[0].length,h=rows.length,cell=4,gap=2,dpr=devicePixelRatio||1;
+    cv.width=w*(cell+gap)*dpr; cv.height=h*(cell+gap)*dpr;
+    cv.style.width=w*(cell+gap)+'px'; cv.style.height=h*(cell+gap)+'px';
+    const g=cv.getContext('2d'); g.scale(dpr,dpr);
+    rows.forEach((r,y)=>[...r].forEach((c,x)=>{
+      if(c!=='1')return; g.fillStyle = (x+y)%5===0 ? acc : '#ececee'; g.globalAlpha=.85;
+      g.beginPath(); g.arc(x*(cell+gap)+cell/2, y*(cell+gap)+cell/2, cell*0.48, 0, 7); g.fill();
+    }));
+    g.globalAlpha=1;
+  });
+}
+renderApps();
+document.getElementById('lq').addEventListener('input',e=>renderApps(e.target.value));
+
+/* ---------- темы ---------- */
+const THEMES=[
+  {n:'Nothing Red', a:'#d71920'}, {n:'Amber', a:'#ff9f1c'}, {n:'Toxic', a:'#b8ff2e'},
+  {n:'Ice', a:'#4cc9f0'}, {n:'Violet', a:'#9b5cff'}, {n:'Mono', a:'#e8e8ea'}
+];
+const tr=document.getElementById('themeRow');
+tr.innerHTML = THEMES.map((t,i)=>`<button class="chip" data-a="${t.a}" style="${i===0?'border-color:'+t.a:''};cursor:pointer;padding:8px 12px">${t.n}</button>`).join('');
+tr.addEventListener('click',e=>{
+  const b=e.target.closest('[data-a]'); if(!b)return;
+  document.documentElement.style.setProperty('--acc', b.dataset.a);
+  [...tr.children].forEach(c=>c.style.borderColor='var(--ln)');
+  b.style.borderColor=b.dataset.a; tickClock(); drawArt();
+});
+
+/* ---------- логика острова / панелей ---------- */
+const island=document.getElementById('island');
+let pinned=false, open=false;
+function setOpen(v){ open=v; island.classList.toggle('open',v); }
+island.addEventListener('click',e=>{ if(pinned||e.target.closest('.tab,.btn,input,button'))return; setOpen(!open); });
+document.getElementById('dPin').addEventListener('click',function(){ pinned=!pinned; this.classList.toggle('on',pinned); setOpen(pinned||open); });
+document.getElementById('play').addEventListener('click',e=>{e.stopPropagation();});
+
+const PANELS=[...document.querySelectorAll('.panel')];
+function showPanel(id){
+  PANELS.forEach(p=>p.classList.toggle('show', p.id===id && !p.classList.contains('show') ? true : p.id===id));
+  const target=document.getElementById(id);
+  const willShow=!target.classList.contains('show');
+  PANELS.forEach(p=>p.classList.remove('show'));
+  if(willShow) target.classList.add('show');
+  document.querySelectorAll('.dock button[data-p]').forEach(b=>b.classList.toggle('on', willShow && b.dataset.p===id));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', willShow && t.dataset.p===id));
+}
+document.querySelectorAll('[data-p]').forEach(b=>b.addEventListener('click',()=>showPanel(b.dataset.p)));
+document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>{PANELS.forEach(p=>p.classList.remove('show'));document.querySelectorAll('.dock button,.tab').forEach(x=>x.classList.remove('on'));}));
+
+/* содержимое вкладок внутри острова (компактная версия панелей) */
+const TABHTML={
+ 'p-notes':'<div class="note" contenteditable="true" style="min-height:70px">купить кофе · допилить workerw · не забыть про DPI на втором мониторе</div>',
+ 'p-clip':'<div style="max-height:120px;overflow:auto">'+CLIPS.slice(0,4).map(c=>`<div class="item"><div class="ic">${c.k[0].toUpperCase()}</div><div class="tx"><b>${c.t}</b><span>${c.s}</span></div></div>`).join('')+'</div>',
+ 'p-eq':'<canvas id="cEq2" width="380" height="60" style="width:100%;height:60px"></canvas>',
+ 'p-sys':'<div class="row"><span>Пауза обоев вне видимости</span><span class="sw on"><i></i></span></div><div class="row"><span>Стоп в fullscreen/играх</span><span class="sw on"><i></i></span></div><div class="row"><span>Заплывание на окна</span><span class="sw"><i></i></span></div>',
+ 'p-themes':'<div style="display:flex;gap:6px;flex-wrap:wrap">'+THEMES.map((t,i)=>`<button class="chip" data-a2="${t.a}" style="cursor:pointer;${i===0?'border-color:'+t.a:''}">${t.n}</button>`).join('')+'</div>'
+};
+document.getElementById('tabbody').addEventListener('click',e=>{
+  const b=e.target.closest('[data-a2]'); if(!b)return;
+  document.documentElement.style.setProperty('--acc', b.dataset.a2); tickClock(); drawArt();
+});
+const sw=document.getElementById('swBleed');
+sw.addEventListener('click',()=>{ sw.classList.toggle('on'); document.body.classList.toggle('bleed-on', sw.classList.contains('on')); });
+document.querySelectorAll('.row .sw').forEach(s=>{ if(s!==sw) s.addEventListener('click',()=>s.classList.toggle('on')); });
+
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on')); t.classList.add('on');
+  document.getElementById('tabbody').innerHTML = TABHTML[t.dataset.p]||'';
+  setOpen(true);
+  if(t.dataset.p==='p-eq'){ const cv=document.getElementById('cEq2');
+    const id2=setInterval(()=>{ if(!document.body.contains(cv)){clearInterval(id2);return;}
+      const g=cv.getContext('2d'),W=cv.width,H=cv.height,acc=getComputedStyle(document.body).getPropertyValue('--acc').trim();
+      g.clearRect(0,0,W,H); const n=24,bw=W/n;
+      for(let i=0;i<n;i++){ const v=Math.abs(Math.sin(Date.now()/600+i*0.4))*0.9+0.08, h=v*(H-6);
+        for(let y=0;y<h;y+=5){ g.fillStyle=i%5===0?acc:'rgba(236,236,238,.7)'; g.globalAlpha=.25+(y/h)*.75;
+          g.beginPath(); g.arc(i*bw+bw/2,H-3-y,1.6,0,7); g.fill(); } } g.globalAlpha=1; },70); }
+}));
+document.getElementById('tabbody').innerHTML = TABHTML['p-notes'];
+
+/* лаунчер + хоткеи */
+const L=document.getElementById('launcher');
+function toggleL(v){ L.classList.toggle('show', v); if(v){ document.getElementById('lq').value=''; renderApps(); setTimeout(()=>document.getElementById('lq').focus(),30);} }
+document.getElementById('dLaunch').addEventListener('click',()=>toggleL(!L.classList.contains('show')));
+L.addEventListener('click',e=>{ if(e.target===L) toggleL(false); });
+addEventListener('keydown',e=>{
+  if(e.ctrlKey && e.code==='Space'){ e.preventDefault(); toggleL(!L.classList.contains('show')); }
+  else if(e.ctrlKey && e.shiftKey && e.code==='KeyV'){ e.preventDefault(); showPanel('p-clip'); }
+  else if(e.code==='Escape'){ toggleL(false); PANELS.forEach(p=>p.classList.remove('show')); document.querySelectorAll('.dock button,.tab').forEach(x=>x.classList.remove('on')); if(!pinned) setOpen(false); }
+});
+
+/* фейковая телеметрия */
+setInterval(()=>{ document.getElementById('cpu').textContent=(3+Math.floor(Math.random()*14))+'%';
+                 document.getElementById('bat').textContent=(78+Math.floor(Math.random()*8))+'%'; }, 2500);
+</script>
+</body>
+</html>

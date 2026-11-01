@@ -1,0 +1,1560 @@
+<Window x:Class="DotShell.Island.Wpf.IslandWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:DotShell.Island.Wpf.Controls"
+        Title="DotShell"
+        Width="700" Height="380"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        SnapsToDevicePixels="True"
+        UseLayoutRounding="True">
+
+    <Window.Resources>
+<!--
+          Контекстное меню острова и меню виджетов: WPF по умолчанию рисует их
+          системным светлым — на тёмном шелле это выглядит как чужая программа.
+          Здесь своя тёмная геометрия: жёсткие углы, акцентная подсветка пункта.
+        -->
+
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
+        <!-- Витринный шрифт: узкий индустриальный гротеск, есть в Windows 10/11.
+             Микрокопирайт и цифры — им, тело — Segoe UI. -->
+        <FontFamily x:Key="DsDisplay">Bahnschrift</FontFamily>
+
+        <!--
+          Вкладки сделаны RadioButton'ами, а не кнопками: тогда WPF сам следит,
+          какая из них "нажата", и нам не приходится вручную перекрашивать
+          активную вкладку в коде. Всё, что зависит от состояния, живёт в триггерах.
+        -->
+        <Style x:Key="DsTab" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{DynamicResource DsTextMuted}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DsBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontFamily" Value="{DynamicResource DsDisplay}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="0,7" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="2">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush"
+                                        Value="{DynamicResource DsAccentSoft}" />
+                                <Setter Property="Foreground" Value="{DynamicResource DsText}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background"
+                                        Value="{DynamicResource DsAccent}" />
+                                <Setter TargetName="Bd" Property="BorderBrush"
+                                        Value="{DynamicResource DsAccent}" />
+                                <Setter Property="Foreground" Value="{DynamicResource DsOnAccent}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Вкладка-иконка: девять вкладок текстом не умещаются, а глифы
+             в круглых таблетках читаются мгновенно и не съедают ширину. -->
+        <Style x:Key="DsTabIcon" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{DynamicResource DsTextMuted}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DsBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="2">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush"
+                                        Value="{DynamicResource DsAccentSoft}" />
+                                <Setter Property="Foreground" Value="{DynamicResource DsText}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background"
+                                        Value="{DynamicResource DsAccent}" />
+                                <Setter TargetName="Bd" Property="BorderBrush"
+                                        Value="{DynamicResource DsAccent}" />
+                                <Setter Property="Foreground" Value="{DynamicResource DsOnAccent}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Плоская маленькая кнопка -->
+        <Style x:Key="DsButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource DsTextMuted}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DsBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontFamily" Value="{DynamicResource DsDisplay}" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="2">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush"
+                                        Value="{DynamicResource DsAccent}" />
+                                <Setter Property="Foreground" Value="{DynamicResource DsText}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background"
+                                        Value="{DynamicResource DsAccentGhost}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Круглая кнопка управления плеером -->
+        <Style x:Key="DsRound" TargetType="Button" BasedOn="{StaticResource DsButton}">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="999">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush"
+                                        Value="{DynamicResource DsAccent}" />
+                                <Setter Property="Foreground" Value="{DynamicResource DsAccent}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Крупная круглая кнопка play/pause -->
+        <Style x:Key="DsRoundAccent" TargetType="Button" BasedOn="{StaticResource DsRound}">
+            <Setter Property="Width" Value="40" />
+            <Setter Property="Height" Value="40" />
+            <Setter Property="Background" Value="{DynamicResource DsAccent}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DsAccent}" />
+            <Setter Property="Foreground" Value="{DynamicResource DsOnAccent}" />
+        </Style>
+
+        <!-- Подпись-таблетка -->
+        <!-- Транспорт плеера: только знак, без кружка и рамки. -->
+        <Style x:Key="DsTransport" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource DsTextMuted}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Margin" Value="0,0,2,0" />
+            <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource DsText}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DsTransportPlay" TargetType="Button" BasedOn="{StaticResource DsTransport}">
+            <Setter Property="Foreground" Value="{DynamicResource DsAccent}" />
+            <Setter Property="Width" Value="40" />
+            <Setter Property="FontSize" Value="15" />
+        </Style>
+
+        <Style x:Key="DsChip" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource DsSurfaceAlt}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DsBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="999" />
+            <Setter Property="Padding" Value="9,4" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="DsChipText" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{DynamicResource DsDisplay}" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource DsTextMuted}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!-- Заголовок раздела во вкладках -->
+        <Style x:Key="DsLabel" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{DynamicResource DsDisplay}" />
+            <Setter Property="FontSize" Value="9" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource DsTextMuted}" />
+            <Setter Property="Margin" Value="0,0,0,5" />
+        </Style>
+
+        <Style x:Key="DsToggle" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{DynamicResource DsText}" />
+            <Setter Property="FontFamily" Value="{DynamicResource DsDisplay}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Margin" Value="0,4" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <StackPanel Orientation="Horizontal">
+                            <Border x:Name="Bx" Width="16" Height="16" CornerRadius="5"
+                                    Background="{DynamicResource DsSurfaceAlt}"
+                                    BorderBrush="{DynamicResource DsBorder}" BorderThickness="1">
+                                <Path x:Name="Ck" Data="M3.5,8.5 L6.5,11.5 L12.5,4.5"
+                                      Stroke="{DynamicResource DsOnAccent}" StrokeThickness="2"
+                                      Stretch="None" Visibility="Collapsed"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bx" Property="BorderBrush"
+                                        Value="{DynamicResource DsAccent}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bx" Property="Background"
+                                        Value="{DynamicResource DsAccent}" />
+                                <Setter TargetName="Bx" Property="BorderBrush"
+                                        Value="{DynamicResource DsAccent}" />
+                                <Setter TargetName="Ck" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Дорожка ползунка: тонкая полоса, без системных кнопок-стрелок -->
+        <Style x:Key="DsTrackBtn" TargetType="RepeatButton">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RepeatButton">
+                        <Border Height="2" Background="{TemplateBinding Background}" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DsThumb" TargetType="Thumb">
+            <Setter Property="Width" Value="10" />
+            <Setter Property="Height" Value="14" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Rectangle x:Name="El" Width="3" Height="14" Fill="{DynamicResource DsAccent}" />
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="El" Property="Stroke"
+                                        Value="{DynamicResource DsAccentSoft}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DsSlider" TargetType="Slider">
+            <Setter Property="Minimum" Value="2" />
+            <Setter Property="Maximum" Value="10" />
+            <Setter Property="IsSnapToTickEnabled" Value="True" />
+            <Setter Property="TickFrequency" Value="1" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Slider">
+                        <Track x:Name="PART_Track" VerticalAlignment="Center">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Command="Slider.DecreaseLarge"
+                                              Style="{StaticResource DsTrackBtn}"
+                                              Background="{DynamicResource DsAccent}" />
+                            </Track.DecreaseRepeatButton>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Command="Slider.IncreaseLarge"
+                                              Style="{StaticResource DsTrackBtn}"
+                                              Background="{DynamicResource DsBorder}" />
+                            </Track.IncreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb Style="{StaticResource DsThumb}" />
+                            </Track.Thumb>
+                        </Track>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Тонкий тёмный скроллбар вместо системного серого -->
+        <Style TargetType="ScrollBar">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Width" Value="8" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid Background="Transparent">
+                            <Track x:Name="PART_Track" IsDirectionReversed="True" Margin="1">
+                                <Track.Thumb>
+                                    <Thumb>
+                                        <Thumb.Style>
+                                            <Style TargetType="Thumb">
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="Thumb">
+                                                            <Border x:Name="Bd" CornerRadius="3"
+                                                                    Background="{DynamicResource DsBorder}" />
+                                                            <ControlTemplate.Triggers>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter TargetName="Bd" Property="Background"
+                                                                            Value="{DynamicResource DsAccent}" />
+                                                                </Trigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </Thumb.Style>
+                                    </Thumb>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Тёмный комбобокс: системный шаблон рисует белый popup, а текст у нас
+             светлый — получалось "белым по белому". Здесь всё своё. -->
+        <Style x:Key="DsCombo" TargetType="ComboBox">
+            <Setter Property="Foreground" Value="{DynamicResource DsText}" />
+            <Setter Property="Background" Value="{DynamicResource DsSurfaceAlt}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DsBorder}" />
+            <Setter Property="FontFamily" Value="Segoe UI" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ComboBoxItem">
+                        <Setter Property="Foreground" Value="{DynamicResource DsText}" />
+                        <Setter Property="Padding" Value="7,5" />
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ComboBoxItem">
+                                    <Border x:Name="Bd" Background="Transparent"
+                                            Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background"
+                                                    Value="{DynamicResource DsAccentGhost}" />
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Bd" Property="Background"
+                                                    Value="{DynamicResource DsAccentGhost}" />
+                                            <Setter Property="Foreground"
+                                                    Value="{DynamicResource DsAccent}" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton x:Name="Tg" Focusable="False" ClickMode="Press"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border Background="{DynamicResource DsSurfaceAlt}"
+                                                BorderBrush="{DynamicResource DsBorder}"
+                                                BorderThickness="1" CornerRadius="8">
+                                            <Path HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                  Margin="0,0,9,0" Data="M0,0 L4,4 L8,0"
+                                                  Stroke="{DynamicResource DsTextMuted}" StrokeThickness="1.5" />
+                                        </Border>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <ContentPresenter x:Name="ContentSite" IsHitTestVisible="False"
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              Margin="9,0,26,0" VerticalAlignment="Center"
+                                              HorizontalAlignment="Left" />
+                            <TextBox x:Name="PART_EditableTextBox"
+                                     HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                                     Margin="7,0,26,0" Focusable="True"
+                                     Background="Transparent" BorderThickness="0"
+                                     FontFamily="Segoe UI" FontSize="11"
+                                     Foreground="{DynamicResource DsText}"
+                                     CaretBrush="{DynamicResource DsAccent}"
+                                     Visibility="Collapsed" />
+                            <Popup x:Name="PART_Popup" Placement="Bottom"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   AllowsTransparency="True" Focusable="False">
+                                <Border Background="{DynamicResource DsSurface}"
+                                        BorderBrush="{DynamicResource DsBorder}"
+                                        BorderThickness="1" CornerRadius="8"
+                                        MinWidth="{TemplateBinding ActualWidth}"
+                                        MaxHeight="220" Margin="0,4,0,0">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <ItemsPresenter />
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEditable" Value="True">
+                                <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible" />
+                                <Setter TargetName="ContentSite" Property="Visibility" Value="Collapsed" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DsTextBox" TargetType="TextBox">
+            <Setter Property="Background" Value="{DynamicResource DsSurfaceAlt}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DsBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="{DynamicResource DsText}" />
+            <Setter Property="CaretBrush" Value="{DynamicResource DsAccent}" />
+            <Setter Property="SelectionBrush" Value="{DynamicResource DsAccent}" />
+            <Setter Property="FontFamily" Value="Segoe UI" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Padding" Value="8,6" />
+        </Style>
+
+        <Style x:Key="DsScroll" TargetType="ScrollViewer">
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+        </Style>
+    </Window.Resources>
+
+    <Grid x:Name="RootGrid" AllowDrop="True"
+          Drop="OnIslandDrop" DragOver="OnIslandDragOver">
+        <!--
+          Таблетка. Анимация меняет её Width/Height, а содержимое живёт
+          в слое фиксированного размера и просто обрезается краями таблетки.
+        -->
+        <Border x:Name="Pill"
+                HorizontalAlignment="Center" VerticalAlignment="Top"
+                Margin="0,10,0,0"
+                Width="440" Height="46"
+                CornerRadius="23"
+                Background="{DynamicResource DsBackground}"
+                BorderBrush="{DynamicResource DsAccentSoft}"
+                BorderThickness="1"
+                ClipToBounds="True"
+                Cursor="Hand"
+                MouseLeftButtonUp="OnPillClick"
+                MouseRightButtonUp="OnPillRightClick">
+
+            <Border.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="Раскрыть / свернуть" Click="OnMenuToggle" />
+                    <MenuItem Header="Буфер обмена" Click="OnMenuClipboard" />
+                    <MenuItem Header="Лаунчер (Ctrl+Shift+L)" Click="OnMenuLauncher" />
+                    <Separator />
+                    <MenuItem x:Name="MenuAutostart" Header="Запускать вместе с Windows"
+                              IsCheckable="True" Click="OnMenuAutostart" />
+                                    <MenuItem Header="Перезапустить проводник" Click="OnMenuRestartExplorer"
+                                              ToolTip="Перезапускает explorer.exe: нужен, чтобы применились цвета акцента. Панель задач исчезнет на секунду-две." />
+                                    <Separator />
+                                    <MenuItem Header="Настройки…" Click="OnMenuSettings" />
+                    <MenuItem Header="Открыть папку настроек" Click="OnMenuOpenFolder" />
+                    <Separator />
+                    <MenuItem Header="Выйти" Click="OnMenuExit" />
+                </ContextMenu>
+            </Border.ContextMenu>
+
+            <Grid>
+                <!-- В режиме «не мешать» остров сжимается в полоску; линия акцентом
+                     нужна, чтобы полоску вообще было видно на тёмных обоях. -->
+                <Border x:Name="QuietLine" Width="90" Height="2" CornerRadius="1"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Background="{DynamicResource DsAccent}" Visibility="Collapsed" />
+                <!-- «Материя» острова: тихий рисунок акцентом ПОД содержимым.
+                     Лежит первым, поэтому не перекрывает ни текст, ни кнопки,
+                     и не ловит мышь (IsHitTestVisible=false внутри контрола). -->
+                <controls:IslandBackdrop x:Name="Backdrop" />
+
+                <!-- ============ РАСКРЫТОЕ СОСТОЯНИЕ ============ -->
+                <!-- Слой всегда одного размера, поэтому не "прыгает" во время анимации -->
+                <Grid x:Name="ExpandedLayer"
+                      Width="620" Height="296"
+                      HorizontalAlignment="Center" VerticalAlignment="Top"
+                      Margin="0,10,0,0"
+                      Visibility="Collapsed" Opacity="0">
+
+                    <Border CornerRadius="22" ClipToBounds="True" Background="Transparent">
+                        <Grid Margin="16,12">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+<!-- == плеер == -->
+                            <controls:PlayerStrip x:Name="Player" Grid.Row="0" />
+
+                            <!-- == вкладки == -->
+                            <Grid x:Name="TabsRow" Grid.Row="1" Margin="0,12,0,10">
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <RadioButton Style="{StaticResource DsTabIcon}" Content="&#xE80F;"
+                                                 GroupName="tabs" IsChecked="True" Tag="home"
+                                                 Checked="OnTabChecked" ToolTip="Главная: громкость, инструменты, мои программы" />
+                                    <RadioButton Style="{StaticResource DsTabIcon}" Content="&#xE70F;"
+                                                 GroupName="tabs" Tag="notes"
+                                                 Checked="OnTabChecked" ToolTip="Заметки" />
+                                    <RadioButton Style="{StaticResource DsTabIcon}" Content="&#xE8C8;"
+                                                 GroupName="tabs" Tag="clipboard"
+                                                 Checked="OnTabChecked" ToolTip="Буфер обмена" />
+                                    <RadioButton Style="{StaticResource DsTabIcon}" Content="&#xE8B7;"
+                                                 GroupName="tabs" Tag="shelf"
+                                                 Checked="OnTabChecked" ToolTip="Полка файлов" />
+                                    <RadioButton Style="{StaticResource DsTabIcon}" Content="&#xE756;"
+                                                 GroupName="tabs" Tag="cmd"
+                                                 Checked="OnTabChecked" ToolTip="Командная строка" />
+                                    <RadioButton Style="{StaticResource DsTabIcon}" Content="&#xE713;"
+                                                 GroupName="tabs" Tag="system"
+                                                 Checked="OnTabChecked" ToolTip="Система" />
+                                    <RadioButton Style="{StaticResource DsTabIcon}" Content="&#xE790;"
+                                                 GroupName="tabs" Tag="theme"
+                                                 Checked="OnTabChecked" ToolTip="Тема" />
+                                    <RadioButton Style="{StaticResource DsTabIcon}" Content="&#xE8BD;"
+                                                 GroupName="tabs" Tag="chat" Margin="0"
+                                                 Checked="OnTabChecked" ToolTip="ИИ-чат" />
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- == содержимое вкладок == -->
+                            <Grid Grid.Row="2">
+
+                                <!-- ГЛАВНАЯ: громкость, инструменты, мои программы -->
+                                <Grid x:Name="TabHome">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
+
+<!-- 01 · ГРОМКОСТЬ. Подпись с индексом — как в технической документации:
+                                         сетка из номеров разделов держит вёрстку и читается как «система». -->
+                                    <StackPanel Grid.Row="0">
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                            <controls:TrackedText Text="01" FontSize="9" Tracking="0.1"
+                                                                  Brush="{DynamicResource DsAccent}" />
+                                            <controls:TrackedText Text="ГРОМКОСТЬ" FontSize="8" Tracking="0.26"
+                                                                  Margin="8,0,0,0"
+                                                                  Brush="{DynamicResource DsTextMuted}" />
+                                        </StackPanel>
+
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Button x:Name="VolMute" Style="{StaticResource DsTransport}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="13"
+                                                    Content="&#xE767;" Click="OnVolMute"
+                                                    ToolTip="Выключить / включить звук (системная громкость)" />
+                                            <Slider x:Name="VolSlider" Grid.Column="1"
+                                                    Style="{StaticResource DsSlider}"
+                                                    Minimum="0" Maximum="100" IsSnapToTickEnabled="False"
+                                                    Margin="12,0" ValueChanged="OnVolSlider"
+                                                    ToolTip="Громкость системы. Колесо мыши над свёрнутой пилюлей делает то же самое." />
+                                            <TextBlock x:Name="VolPercent" Grid.Column="2" Width="40"
+                                                       TextAlignment="Right" VerticalAlignment="Center"
+                                                       FontFamily="{DynamicResource DsDisplay}" FontSize="11" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource DsTextMuted}" />
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <!-- Инструменты: действия в один клик -->
+                                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,0,0">
+                                        <Button x:Name="ToolTheme" Style="{StaticResource DsButton}"
+                                                Click="OnToolTheme" ToolTip="Переключить тёмную/светлую тему Windows" />
+                                        <Button x:Name="ToolDesk" Style="{StaticResource DsButton}"
+                                                Margin="6,0,0,0" Click="OnToolDesk"
+                                                ToolTip="Спрятать или показать иконки рабочего стола" />
+                                        <Button x:Name="ToolFocus" Style="{StaticResource DsButton}"
+                                                Content="ФОКУС" Margin="6,0,0,0" Click="OnToolFocus"
+                                                ToolTip="Фокус-шторки: все мониторы, кроме активного, уходят под тёмную вуаль" />
+                                        <Button x:Name="ToolWidgets" Style="{StaticResource DsButton}"
+                                                Content="ВИДЖЕТЫ" Margin="6,0,0,0" Click="OnToolWidgets"
+                                                ToolTip="Виджеты на рабочем столе: часы, эквалайзер, плеер, система, юниты" />
+                                        <Button Style="{StaticResource DsButton}" Content="ЛОК"
+                                                Margin="6,0,0,0" Click="OnToolLock"
+                                                ToolTip="Заблокировать компьютер (как Win+L)" />
+                                        <Button Style="{StaticResource DsButton}" Content="СОН"
+                                                Margin="6,0,0,0" Click="OnToolSleep"
+                                                ToolTip="Усыпить компьютер" />
+                                    </StackPanel>
+
+<!-- 02 · ПРОГРАММЫ: номер, название и волосяная линия до подсказки.
+                                         Такой разделитель заменяет «карточку» с рамкой. -->
+                                    <Grid Grid.Row="2" Margin="0,16,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <controls:TrackedText Text="02" FontSize="9" Tracking="0.1"
+                                                              Brush="{DynamicResource DsAccent}" />
+                                        <controls:TrackedText Grid.Column="1" Text="МОИ ПРОГРАММЫ" FontSize="8"
+                                                              Tracking="0.26" Margin="8,0,0,0"
+                                                              Brush="{DynamicResource DsTextMuted}" />
+                                        <Border Grid.Column="2" Height="1" Margin="12,0"
+                                                Background="{DynamicResource DsBorder}"
+                                                VerticalAlignment="Center" />
+                                        <controls:TrackedText Grid.Column="3" Text="КЛИК · ПКМ · ПЛЮС" FontSize="7.5"
+                                                              Tracking="0.2" VerticalAlignment="Center"
+                                                              Brush="{DynamicResource DsTextMuted}" />
+                                    </Grid>
+
+                                    <ScrollViewer Grid.Row="3" Style="{StaticResource DsScroll}">
+                                        <WrapPanel x:Name="PinnedWrap" />
+                                    </ScrollViewer>
+
+                                    <!-- Выбор программы из индекса меню «Пуск»:
+                                         накрывает главную, пока не скажешь «готово» -->
+                                    <Grid x:Name="PickerPanel" Grid.RowSpan="4" Visibility="Collapsed"
+                                          Background="{DynamicResource DsBackground}">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <TextBox x:Name="PickerSearch" Grid.Row="0"
+                                                 Style="{StaticResource DsTextBox}"
+                                                 TextChanged="OnPickerSearch"
+                                                 ToolTip="Нечёткий поиск по индексу меню «Пуск»" />
+                                        <ListBox x:Name="PickerList" Grid.Row="1" Margin="0,8,0,0"
+                                                 ItemsSource="{Binding PickerResults}"
+                                                 Background="Transparent" BorderThickness="0"
+                                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                 MouseDoubleClick="OnPickerPin"
+                                                 KeyDown="OnPickerKeyDown">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="0,1">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="26" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <Image Grid.Column="0" Width="22" Height="22"
+                                                               Source="{Binding Icon}"
+                                                               RenderOptions.BitmapScalingMode="HighQuality"
+                                                               VerticalAlignment="Center" />
+                                                        <StackPanel Grid.Column="1" Margin="8,0,0,0"
+                                                                    VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Name}"
+                                                                       FontFamily="Segoe UI" FontSize="12"
+                                                                       Foreground="{DynamicResource DsText}"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                            <TextBlock Text="{Binding Target}"
+                                                                       FontFamily="Segoe UI" FontSize="8"
+                                                                       Foreground="{DynamicResource DsTextMuted}"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                        <Grid Grid.Row="2" Margin="0,8,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock FontFamily="Segoe UI" FontSize="9"
+                                                       Foreground="{DynamicResource DsTextMuted}"
+                                                       VerticalAlignment="Center" TextWrapping="Wrap"
+                                                       Text="двойной клик или Enter — закрепить программу плиткой на острове" />
+                                            <Button Grid.Column="1" Style="{StaticResource DsButton}"
+                                                    Content="ГОТОВО" Click="OnPickerDone" />
+                                        </Grid>
+                                    </Grid>
+                                </Grid>
+
+                                <!-- ЗАМЕТКИ + ЗАДАЧИ + ТАЙМЕР + НАПОМИНАНИЯ -->
+                                <Grid x:Name="TabNotes">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="16" />
+                                        <ColumnDefinition Width="270" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Слева заметка: без рамки, как лист бумаги -->
+                                    <Grid Grid.Column="0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                        </Grid.RowDefinitions>
+                                        <controls:TrackedText Grid.Row="0" Text="ЗАМЕТКА" FontSize="8"
+                                                              Tracking="0.28" Margin="2,0,0,6"
+                                                              Brush="{DynamicResource DsTextMuted}" />
+                                        <!-- Подсказка вместо пустого листа: пустая область без слов
+                                             выглядит как сломанное поле ввода. -->
+                                        <TextBlock Grid.Row="1" IsHitTestVisible="False" Margin="3,2,0,0"
+                                                   Text="пиши здесь — сохраняется само"
+                                                   FontFamily="Segoe UI" FontSize="11.5"
+                                                   Foreground="{DynamicResource DsTextMuted}"
+                                                   Visibility="{Binding NoteEmpty, Converter={StaticResource BoolToVis}}" />
+
+                                        <TextBox x:Name="NotesBox" Grid.Row="1"
+                                                 Style="{StaticResource DsTextBox}"
+                                                 Background="Transparent" BorderThickness="0"
+                                                 Padding="2,0,2,0" FontSize="12.5"
+                                                 Text="{Binding NoteText, UpdateSourceTrigger=PropertyChanged}"
+                                                 AcceptsReturn="True" AcceptsTab="True"
+                                                 TextWrapping="Wrap"
+                                                 VerticalScrollBarVisibility="Auto"
+                                                 ToolTip="Свободный текст. Сохраняется сам, вводить ничего не нужно." />
+                                    </Grid>
+
+                                    <!-- Справа: таймер, задачи, напоминания -->
+                                    <ScrollViewer x:Name="NotesScroll" Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,6,0" Style="{StaticResource DsScroll}">
+                                        <StackPanel x:Name="NotesColumn">
+                                        <!-- Таймер: циферблат из точек с бегущей «головой»,
+                                             цифры внутри. Круг читается боковым зрением. -->
+                                        <Grid Width="124" Height="124" HorizontalAlignment="Left">
+                                            <controls:DotDial Progress="{Binding TimerProgress}"
+                                                              Active="{Binding TimerActive}" DotCount="60" />
+                                            <TextBlock Text="{Binding TimerLabel}"
+                                                       FontFamily="{DynamicResource DsDisplay}"
+                                                       FontSize="20" FontWeight="SemiBold"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource DsAccent}" />
+                                        </Grid>
+
+                                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                            <TextBox x:Name="TimerInput" Style="{StaticResource DsTextBox}"
+                                                     Text="5" Width="46" ToolTip="Минуты" />
+                                            <Button Style="{StaticResource DsButton}" Content="СТАРТ"
+                                                    Margin="6,0,0,0" Click="OnTimerStart"
+                                                    ToolTip="Запустить таймер на указанное число минут" />
+                                            <Button Style="{StaticResource DsButton}" Content="СТОП"
+                                                    Margin="6,0,0,0" Click="OnTimerStop" />
+                                        </StackPanel>
+
+                                        <!-- задачи -->
+                                        <controls:TrackedText Text="ЗАДАЧИ" FontSize="8" Tracking="0.28"
+                                                              Margin="2,14,0,6"
+                                                              Brush="{DynamicResource DsTextMuted}" />
+
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox x:Name="TaskInput" Grid.Column="0"
+                                                     Style="{StaticResource DsTextBox}"
+                                                     KeyDown="OnTaskInputKeyDown"
+                                                     ToolTip="Новая задача. Enter — добавить." />
+                                            <Button Grid.Column="1" Style="{StaticResource DsButton}"
+                                                    Content="+" Margin="6,0,0,0" Padding="10,4"
+                                                    Click="OnAddTask" />
+                                        </Grid>
+
+                                        <ListBox x:Name="TaskList" Margin="0,8,0,0" 
+                                                 ItemsSource="{Binding TaskList}"
+                                                 Background="Transparent" BorderThickness="0"
+                                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="0,1">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <!-- Квадрат-галочка: вычеркнутая задача видна сразу -->
+                                                        <Border Width="14" Height="14" CornerRadius="2"
+                                                                BorderThickness="1" VerticalAlignment="Center"
+                                                                BorderBrush="{DynamicResource DsBorder}"
+                                                                Background="Transparent"
+                                                                Cursor="Hand" Tag="{Binding}"
+                                                                MouseLeftButtonUp="OnTaskToggle">
+                                                            <TextBlock Text="✕" FontSize="8"
+                                                                       HorizontalAlignment="Center"
+                                                                       VerticalAlignment="Center"
+                                                                       Foreground="{DynamicResource DsAccent}"
+                                                                       Visibility="{Binding Done, Converter={StaticResource BoolToVis}}" />
+                                                        </Border>
+
+                                                        <TextBlock Grid.Column="1" Text="{Binding Text}"
+                                                                   Margin="8,0,6,0" VerticalAlignment="Center"
+                                                                   FontFamily="Segoe UI" FontSize="11"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   Foreground="{DynamicResource DsText}">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Done}" Value="True">
+                                                                            <Setter Property="TextDecorations" Value="Strikethrough" />
+                                                                            <Setter Property="Opacity" Value="0.45" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+
+                                                        <Button Grid.Column="2" Style="{StaticResource DsButton}"
+                                                                Content="✕" FontSize="9" Padding="6,2"
+                                                                Tag="{Binding}" Click="OnTaskRemove"
+                                                                ToolTip="Убрать задачу" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+
+                                        <!-- напоминания -->
+                                        <controls:TrackedText Text="НАПОМИНАНИЯ" FontSize="8" Tracking="0.28"
+                                                              Margin="2,12,0,6"
+                                                              Brush="{DynamicResource DsTextMuted}" />
+
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox x:Name="ReminderInput" Grid.Column="0"
+                                                     Style="{StaticResource DsTextBox}"
+                                                     KeyDown="OnReminderInputKeyDown"
+                                                     ToolTip="Например: через 20 минут чай · в 18:30 созвон · каждый день 23:00 таблетки" />
+                                            <Button Grid.Column="1" Style="{StaticResource DsButton}"
+                                                    Content="+" Margin="6,0,0,0" Padding="10,4"
+                                                    Click="OnAddReminder" />
+                                        </Grid>
+
+                                        <ListBox x:Name="ReminderList" Margin="0,8,0,0" 
+                                                 ItemsSource="{Binding Reminders}"
+                                                 Background="Transparent" BorderThickness="0"
+                                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="0,1">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Text}" FontFamily="Segoe UI"
+                                                                       FontSize="11" Foreground="{DynamicResource DsText}"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                            <TextBlock Text="{Binding WhenLabel}" FontFamily="Segoe UI"
+                                                                       FontSize="9" Foreground="{DynamicResource DsAccent}" />
+                                                        </StackPanel>
+                                                        <Button Grid.Column="1" Style="{StaticResource DsButton}"
+                                                                Content="✕" FontSize="9" Padding="6,2"
+                                                                Tag="{Binding}" Click="OnRemoveReminder" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                        </StackPanel>
+                                    </ScrollViewer>
+                                </Grid>
+
+
+                                <!-- БУФЕР -->
+                                <Grid x:Name="TabClipboard" Visibility="Collapsed">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
+
+                                    <!-- Заголовок вкладки: точечная подпись и подсказка,
+                                         как на главной и в чате. -->
+                                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <controls:TrackedText Grid.Column="0" Text="БУФЕР" FontSize="8"
+                                                              Tracking="0.30" VerticalAlignment="Center"
+                                                              Brush="{DynamicResource DsTextMuted}" />
+                                        <TextBlock Grid.Column="1" Text="двойной клик — вставить в то окно, где работал"
+                                                   FontFamily="Segoe UI" FontSize="9" HorizontalAlignment="Right"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource DsTextMuted}" />
+                                    </Grid>
+
+                                    <!-- Алхимия буфера: умные действия над свежей копией -->
+                                    <StackPanel x:Name="SmartRow" Grid.Row="1" Orientation="Horizontal"
+                                                Margin="0,0,0,8" Visibility="Collapsed" />
+
+                                    <Grid Grid.Row="2" Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="ClipSearch" Grid.Column="0"
+                                                 Style="{StaticResource DsTextBox}"
+                                                 TextChanged="OnClipboardSearch"
+                                                 ToolTip="Нечёткий поиск: буквы должны встречаться по порядку, но не обязательно подряд" />
+                                        <Button Grid.Column="1" Style="{StaticResource DsButton}"
+                                                Content="ОЧИСТИТЬ" Margin="6,0,0,0" Click="OnClearClipboard" />
+                                    </Grid>
+
+                                    <ListBox x:Name="ClipList" Grid.Row="3"
+                                             ItemsSource="{Binding ClipboardItems}"
+                                             Background="Transparent" BorderThickness="0"
+                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                             MouseDoubleClick="OnClipboardItemUse">
+                                        <ListBox.ItemContainerStyle>
+                                            <Style TargetType="ListBoxItem">
+                                                <Setter Property="Padding" Value="6,4" />
+                                                <Setter Property="Margin" Value="0" />
+                                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="ListBoxItem">
+                                                            <Border x:Name="Bd" Background="Transparent"
+                                                                    BorderBrush="{DynamicResource DsBorder}"
+                                                                    BorderThickness="0,0,0,1"
+                                                                    CornerRadius="0" Padding="{TemplateBinding Padding}">
+                                                                <ContentPresenter />
+                                                            </Border>
+                                                            <ControlTemplate.Triggers>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter TargetName="Bd" Property="Background"
+                                                                            Value="{DynamicResource DsSurfaceAlt}" />
+                                                                    <Setter TargetName="Bd" Property="BorderBrush"
+                                                                            Value="{DynamicResource DsBorder}" />
+                                                                </Trigger>
+                                                                <Trigger Property="IsSelected" Value="True">
+                                                                    <Setter TargetName="Bd" Property="BorderBrush"
+                                                                            Value="{DynamicResource DsAccentSoft}" />
+                                                                    <Setter TargetName="Bd" Property="Background"
+                                                                            Value="{DynamicResource DsAccentGhost}" />
+                                                                </Trigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </ListBox.ItemContainerStyle>
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="28" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <!-- Тип записи — буквой акцентом, без плашки:
+                                                         строка должна читаться как строка. -->
+                                                    <TextBlock Grid.Column="0" Text="{Binding KindLabel}"
+                                                               FontFamily="Bahnschrift" FontSize="12" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource DsAccent}"
+                                                               VerticalAlignment="Center" />
+
+                                                    <StackPanel Grid.Column="1" Margin="9,0" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Preview}"
+                                                                   FontSize="12"
+                                                                   Foreground="{DynamicResource DsText}"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock Text="{Binding AgeLabel}"
+                                                                   FontFamily="Segoe UI" FontSize="9"
+                                                                   Foreground="{DynamicResource DsTextMuted}" Margin="0,1,0,0" />
+                                                    </StackPanel>
+
+                                                    <Button Grid.Column="2" Style="{StaticResource DsButton}"
+                                                            Content="PIN" FontSize="9" Padding="7,4"
+                                                            Tag="{Binding}" Click="OnPinClick" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </Grid>
+
+                                <!-- ЧАТ: локальная модель, переписка как текст, а не пузыри -->
+                                <Grid x:Name="TabChat" Visibility="Collapsed">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <!-- Настройка: модель, обновить список, скачать, сохранить -->
+                                    <StackPanel Grid.Row="0" Margin="0,0,0,8">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <ComboBox x:Name="AiModelBox" Style="{StaticResource DsCombo}"
+                                                      IsEditable="True"
+                                                      DropDownOpened="OnModelDropDownOpened"
+                                                      ToolTip="Модель из твоей Ollama. Список приносит кнопка ⟳; можно вписать вручную (ollama list)." />
+                                            <Button Grid.Column="1" Style="{StaticResource DsButton}"
+                                                    Content="⟳" Padding="9,4" Margin="6,0,0,0" FontSize="11"
+                                                    ToolTip="Обновить список моделей из Ollama"
+                                                    Click="OnRefreshModels" />
+                                            <Button x:Name="AiPullBtn" Grid.Column="2" Style="{StaticResource DsButton}"
+                                                    Content="СКАЧАТЬ" Margin="6,0,0,0"
+                                                    ToolTip="Скачать рекомендованную модель в Ollama — один клик, 1.4 ГБ"
+                                                    Click="OnPullModel" />
+                                            <Button Grid.Column="3" Style="{StaticResource DsButton}"
+                                                    Content="СОХРАНИТЬ" Margin="6,0,0,0"
+                                                    Click="OnSaveAiConfig" />
+                                        </Grid>
+                                        <!-- Постоянная памятка: ИИ работает локально, но саму Ollama
+                                             надо поставить отдельно. Без неё чат молча не отвечает,
+                                             и это выглядит как поломка. -->
+                                        <!-- Пока модель думает: точки-полоска и обычная подпись.
+                                             Слово точками при таком размере не читается — проверено
+                                             на снимке: «ДУМАЮ» превращалось в кашу. -->
+                                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0"
+                                                    Visibility="{Binding ChatBusy, Converter={StaticResource BoolToVis}}">
+                                            <controls:MiniEq x:Name="AiThinkingEq" Width="56" Height="12"
+                                                             IsHitTestVisible="False" VerticalAlignment="Center" />
+                                            <controls:TrackedText Text="ДУМАЮ" FontSize="8" Tracking="0.30"
+                                                                  Margin="8,0,0,0" VerticalAlignment="Center"
+                                                                  Brush="{DynamicResource DsTextMuted}" />
+                                        </StackPanel>
+
+                                        <Border x:Name="OllamaNote" Visibility="Collapsed"
+                                                Margin="0,8,0,0" Padding="10,8" CornerRadius="8"
+                                                BorderThickness="1">
+                                            <Border.BorderBrush>
+                                                <SolidColorBrush Color="#33D71920" />
+                                            </Border.BorderBrush>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="&#xE946;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                           FontSize="12" VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource DsAccent}" />
+                                                <StackPanel Margin="8,0,0,0" VerticalAlignment="Center">
+                                                    <TextBlock FontFamily="Segoe UI" FontSize="10"
+                                                               Foreground="{DynamicResource DsText}"
+                                                               Text="Для чата нужна Ollama — её ставят отдельно, дальше всё работает без интернета." />
+                                                    <TextBlock FontFamily="Segoe UI" FontSize="9" Margin="0,2,0,0"
+                                                               Foreground="{DynamicResource DsTextMuted}"
+                                                               Text="ollama.com/download · после установки вернись сюда и нажми СКАЧАТЬ" />
+                                                </StackPanel>
+                                                <Button Style="{StaticResource DsButton}" Content="ОТКРЫТЬ САЙТ"
+                                                        Margin="12,0,0,0" VerticalAlignment="Center"
+                                                        Click="OnOpenOllamaSite" />
+                                            </StackPanel>
+                                        </Border>
+                                        <TextBlock x:Name="AiHint" Visibility="Collapsed"
+                                                   TextWrapping="Wrap" Margin="0,6,0,0"
+                                                   FontFamily="Segoe UI" FontSize="10"
+                                                   Foreground="{DynamicResource DsAccent}" />
+                                        <ProgressBar x:Name="AiPullBar" Visibility="Collapsed"
+                                                     Height="3" Minimum="0" Maximum="100" Margin="0,6,0,0"
+                                                     Foreground="{DynamicResource DsAccent}"
+                                                     Background="{DynamicResource DsBorder}"
+                                                     BorderThickness="0" />
+                                    </StackPanel>
+
+                                    <ScrollViewer x:Name="ChatScroller" Grid.Row="1" Style="{StaticResource DsScroll}">
+                                        <ItemsControl ItemsSource="{Binding ChatLines}" Margin="0,0,6,12">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <!-- Без пузырей: реплика — строка переписки, а не карточка
+                                                         из мессенджера. Свои помечены акцентной полоской,
+                                                         ответы — тихой подписью ИИ и временем. -->
+                                                    <Grid Margin="0,0,0,14">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <Border x:Name="Bar" Grid.Column="0" Width="2"
+                                                                Margin="0,3,10,3" CornerRadius="1"
+                                                                Background="{DynamicResource DsAccent}"
+                                                                Visibility="Collapsed" />
+
+                                                        <StackPanel Grid.Column="1">
+                                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+                                                                <!-- Автор реплики — мелким текстом с разрядкой.
+                                                                     Пробовал точками: при сетке 8×8 буквы сливаются в кашу.
+                                                                     Точки остались там, где работают: заголовок и «думаю». -->
+                                                                <controls:TrackedText Text="{Binding WhoLabel}"
+                                                                                      FontSize="8" Tracking="0.32"
+                                                                                      Brush="{DynamicResource DsTextMuted}" />
+                                                                <TextBlock Text="{Binding Stamp}"
+                                                                           FontFamily="Bahnschrift" FontSize="8"
+                                                                           Opacity="0.6" Margin="9,0,0,0"
+                                                                           Foreground="{DynamicResource DsTextMuted}" />
+                                                            </StackPanel>
+                                                            <TextBlock x:Name="ReplyText" Text="{Binding Text}"
+                                                                       FontFamily="Segoe UI" FontSize="12.5"
+                                                                       LineHeight="19" TextWrapping="Wrap"
+                                                                       Foreground="{DynamicResource DsText}" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                    <DataTemplate.Triggers>
+                                                        <DataTrigger Binding="{Binding IsUser}" Value="True">
+                                                            <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsError}" Value="True">
+                                                            <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
+                                                            <Setter TargetName="Bar" Property="Background" Value="#E5484D" />
+                                                        </DataTrigger>
+                                                    </DataTemplate.Triggers>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+
+                                    <Grid Grid.Row="2" Margin="0,10,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="ChatInput" Style="{StaticResource DsTextBox}"
+                                                 Background="Transparent" BorderThickness="0,0,0,1"
+                                                 Padding="2,8,2,8" FontSize="12.5"
+                                                 KeyDown="OnChatInputKeyDown"
+                                                 ToolTip="Enter — отправить" />
+                                        <Button Grid.Column="1" Style="{StaticResource DsButton}"
+                                                Content="→" FontSize="13" Padding="12,4"
+                                                ToolTip="Отправить (Enter)"
+                                                Margin="10,0,0,0" Click="OnChatSend" />
+                                    </Grid>
+                                </Grid>
+
+                                <!-- ПОЛКА ФАЙЛОВ -->
+                                <Grid x:Name="TabShelf" Visibility="Collapsed">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <!-- Заголовок вкладки: точечная подпись и подсказка, как у буфера. -->
+                                    <Grid Grid.Row="0" Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <controls:TrackedText Grid.Column="0" Text="ПОЛКА" FontSize="8"
+                                                              Tracking="0.30" VerticalAlignment="Center"
+                                                              Brush="{DynamicResource DsTextMuted}" />
+                                        <TextBlock Grid.Column="1" Text="перетащи файл сюда · двойной клик — открыть"
+                                                   FontFamily="Segoe UI" FontSize="9" HorizontalAlignment="Right"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource DsTextMuted}" />
+                                    </Grid>
+
+                                    <ListBox x:Name="ShelfList" Grid.Row="1"
+                                             ItemsSource="{Binding ShelfItems}"
+                                             Background="Transparent" BorderThickness="0"
+                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                             MouseDoubleClick="OnShelfOpen">
+                                        <ListBox.ItemContainerStyle>
+                                            <Style TargetType="ListBoxItem">
+                                                <Setter Property="Padding" Value="6,4" />
+                                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                                <Setter Property="Cursor" Value="SizeAll" />
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="ListBoxItem">
+                                                            <Border x:Name="Bd" Background="Transparent"
+                                                                    BorderBrush="{DynamicResource DsBorder}"
+                                                                    BorderThickness="0,0,0,1"
+                                                                    CornerRadius="0" Padding="{TemplateBinding Padding}">
+                                                                <ContentPresenter />
+                                                            </Border>
+                                                            <ControlTemplate.Triggers>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter TargetName="Bd" Property="Background"
+                                                                            Value="{DynamicResource DsSurfaceAlt}" />
+                                                                    <Setter TargetName="Bd" Property="BorderBrush"
+                                                                            Value="{DynamicResource DsBorder}" />
+                                                                </Trigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </ListBox.ItemContainerStyle>
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Name}" FontFamily="Segoe UI"
+                                                                   FontSize="12" Foreground="{DynamicResource DsText}"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock Text="{Binding SizeLabel}" FontFamily="Segoe UI"
+                                                                   FontSize="9" Foreground="{DynamicResource DsTextMuted}" />
+                                                    </StackPanel>
+                                                    <Button Grid.Column="1" Style="{StaticResource DsButton}"
+                                                            Content="✕" FontSize="9" Padding="7,4"
+                                                            Tag="{Binding}" Click="OnShelfRemove" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+
+                                    <Grid Grid.Row="2" Margin="0,8,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" VerticalAlignment="Center" TextWrapping="Wrap"
+                                                   FontFamily="Segoe UI" FontSize="9"
+                                                   Foreground="{DynamicResource DsTextMuted}"
+                                                   Text="Брось файлы на остров — подождут здесь. Потяни строку из списка в нужное окно — файл улетит туда. Двойной клик — открыть." />
+                                        <Button Grid.Column="1" Style="{StaticResource DsButton}"
+                                                Content="ОЧИСТИТЬ" Click="OnShelfClear" />
+                                    </Grid>
+                                </Grid>
+
+                                <!-- КОМАНДНАЯ СТРОКА -->
+                                <Grid x:Name="TabCmd" Visibility="Collapsed">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <!-- Заголовок вкладки: точечная подпись + подсказка, как у буфера и полки. -->
+                                    <Grid Grid.Row="0" Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <controls:TrackedText Grid.Column="0" Text="ТЕРМИНАЛ" FontSize="8"
+                                                              Tracking="0.30" VerticalAlignment="Center"
+                                                              Brush="{DynamicResource DsTextMuted}" />
+                                        <TextBlock Grid.Column="1" Text="cmd /c · Enter — выполнить"
+                                                   FontFamily="Segoe UI" FontSize="9" HorizontalAlignment="Right"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource DsTextMuted}" />
+                                    </Grid>
+
+                                    <ScrollViewer x:Name="CmdScroller" Grid.Row="1" Style="{StaticResource DsScroll}"
+                                                  Margin="0,0,0,6">
+                                        <TextBlock Text="{Binding CmdLog}" TextWrapping="Wrap"
+                                                   FontFamily="Consolas" FontSize="10"
+                                                   LineHeight="15"
+                                                   Foreground="{DynamicResource DsTextMuted}" />
+                                    </ScrollViewer>
+
+                                    <!-- Строка ввода отделена волосяной линией: это граница
+                                         «вывода» и «ввода», а не карточка. -->
+                                    <Border Grid.Row="2" BorderBrush="{DynamicResource DsBorder}"
+                                            BorderThickness="0,1,0,0" Padding="0,6,0,0">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="20" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="❯" FontFamily="Consolas" FontSize="12"
+                                                       Foreground="{DynamicResource DsAccent}"
+                                                       VerticalAlignment="Center" />
+                                            <TextBox x:Name="CmdInput" Grid.Column="1" Style="{StaticResource DsTextBox}"
+                                                     FontFamily="Consolas" KeyDown="OnCmdKeyDown"
+                                                     ToolTip="Команда выполняется через cmd /c. Enter — выполнить." />
+                                            <Button Grid.Column="2" Style="{StaticResource DsButton}"
+                                                    Content="ВЫПОЛНИТЬ" Margin="6,0,0,0" Click="OnCmdRun" />
+                                        </Grid>
+                                    </Border>
+                                </Grid>
+
+                                <!-- СИСТЕМА -->
+                                <ScrollViewer x:Name="TabSystem" Visibility="Collapsed"
+                                              Style="{StaticResource DsScroll}">
+                                    <StackPanel>
+                                        <CheckBox Style="{StaticResource DsToggle}"
+                                                  Content="Прятать остров в полноэкранном режиме"
+                                                  IsChecked="{Binding HideInFullscreen}" />
+                                        <CheckBox Style="{StaticResource DsToggle}"
+                                                  Content="Запускать вместе с Windows"
+                                                  IsChecked="{Binding RunAtStartup}" />
+                                        <CheckBox Style="{StaticResource DsToggle}"
+                                                  Content="Показывать погасшие точки сетки"
+                                                  IsChecked="{Binding ShowGhostDots}" />
+                                        <CheckBox Style="{StaticResource DsToggle}"
+                                                  Content="Папки открывать вкладкой в проводнике"
+                                                  IsChecked="{Binding ExplorerTabs}"
+                                                  ToolTip="В Windows 11 22H2+ новая папка открывается вкладкой в уже открытом окне. На Windows 10 вкладок нет — там всегда новое окно" />
+                                        <!-- Город для погоды: не все догадаются до правого клика,
+                                             поэтому выбор есть и здесь, в настройках. -->
+                                        <Grid Margin="0,6,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <controls:TrackedText Grid.Column="0" Text="ГОРОД ПОГОДЫ" FontSize="8"
+                                                                  Tracking="0.26" VerticalAlignment="Center"
+                                                                  Brush="{DynamicResource DsTextMuted}" />
+                                            <ComboBox x:Name="WeatherCityBox" Grid.Column="1" Margin="10,0,0,0"
+                                                      Style="{StaticResource DsCombo}" IsEditable="True"
+                                                      ToolTip="Выбери из списка или впиши свой город" />
+                                            <Button Grid.Column="2" Style="{StaticResource DsButton}"
+                                                    Content="СОХРАНИТЬ" Margin="8,0,0,0"
+                                                    Click="OnSaveWeatherCity" />
+                                        </Grid>
+                                        <CheckBox x:Name="CursorCheck" Style="{StaticResource DsToggle}"
+                                                  Content="Свой курсор: точка вместо стрелки"
+                                                  Click="OnCustomCursorToggled"
+                                                  ToolTip="Меняет стрелку, ссылку, текстовый курсор, прицел и ожидание на точечные. Только ваш профиль, отключается обратно" />
+                                        <CheckBox x:Name="WinAccentCheck" Style="{StaticResource DsToggle}"
+                                                  Content="Акцент Windows = цвет обоев"
+                                                  Click="OnWindowsAccentToggled"
+                                                  ToolTip="Перекрашивает акцент Windows под цвет обоев: заголовки, подсветку, «Пуск». Часть элементов подхватит после перезапуска проводника. Отключается обратно — цвет вернётся прежний" />
+                                        <CheckBox x:Name="FullStyleCheck" Style="{StaticResource DsToggle}"
+                                                  Content="Оформление всей Windows (тёмные заголовки)"
+                                                  IsChecked="False" Click="OnFullStyleToggled"
+                                                  ToolTip="Красит заголовки окон всех программ под тёмную тему. Обратимо: снял галочку — вернулось как было" />
+                                        <CheckBox Style="{StaticResource DsToggle}"
+                                                  Content="Тёмная тема Windows"
+                                                  IsChecked="{Binding SystemDark}" />
+                                        <CheckBox Style="{StaticResource DsToggle}"
+                                                  Content="Не мешать: сжиматься при развёрнутом окне"
+                                                  IsChecked="{Binding QuietOnMaximized}"
+                                                  ToolTip="Когда на весь экран открыто чужое окно (браузер, документ), остров становится тонкой полоской и разворачивается при наведении" />
+                                        <CheckBox Style="{StaticResource DsToggle}"
+                                                  Content="Скрыть иконки рабочего стола"
+                                                  IsChecked="{Binding HideDesktopIcons}" />
+                                        <CheckBox Style="{StaticResource DsToggle}"
+                                                  Content="Подсказки хоткеев: зажать Ctrl / Alt / Win"
+                                                  IsChecked="{Binding HotkeyHudEnabled}" />
+                                        <TextBlock x:Name="StatsLine" Margin="0,8,0,0" TextWrapping="Wrap"
+                                                   FontFamily="Segoe UI" FontSize="10"
+                                                   Foreground="{DynamicResource DsTextMuted}" />
+                                    </StackPanel>
+                                </ScrollViewer>
+
+                                <!-- ТЕМА -->
+                                <ScrollViewer x:Name="TabTheme" Visibility="Collapsed"
+                                              Style="{StaticResource DsScroll}">
+                                    <StackPanel>
+                                        <CheckBox Style="{StaticResource DsToggle}"
+                                                  Content="Авто-цвет из обоев"
+                                                  IsChecked="{Binding AutoAccent}" />
+
+                                        <CheckBox x:Name="CoverAccentCheck"
+                                                  Style="{StaticResource DsToggle}"
+                                                  Content="Цвет заголовка трека из обложки"
+                                                  IsChecked="True" Click="OnCoverAccentToggled"
+                                                  Margin="0,2,0,4"
+                                                  ToolTip="Заголовок плеера красится в оттенок обложки; остальной интерфейс остаётся в цвете обоев" />
+
+                                        <TextBlock Style="{StaticResource DsLabel}" Text="СКИНЫ" Margin="0,4,0,6" />
+                                        <WrapPanel x:Name="SkinChips" />
+
+                                        <TextBlock Style="{StaticResource DsLabel}" Text="ПРЕСЕТЫ АКЦЕНТА" Margin="0,10,0,6" />
+                                        <UniformGrid x:Name="AccentPresets" Rows="2" Columns="3" />
+
+                                        <!-- Рисунок внутри капсулы. Тот же акцент, но «материал»,
+                                             чтобы чёрная подложка перестала быть плоской. -->
+                                        <TextBlock Style="{StaticResource DsLabel}" Text="РИСУНОК ОСТРОВА" Margin="0,12,0,6" />
+                                        <WrapPanel x:Name="BackdropChips" />
+
+                                        <TextBlock Style="{StaticResource DsLabel}" Text="ПЛЕЕР" Margin="0,10,0,6" />
+                                        <WrapPanel x:Name="PlayerChips" />
+
+                                        <TextBlock Style="{StaticResource DsLabel}" Text="ПЛОТНОСТЬ РИСУНКА" Margin="0,8,0,2" />
+                                        <Slider Style="{StaticResource DsSlider}" Minimum="0" Maximum="100"
+                                                Value="{Binding BackdropOpacity}" />
+
+                                        <TextBlock Style="{StaticResource DsLabel}" Text="РАЗМЕР ТОЧКИ" Margin="0,12,0,2" />
+                                        <Slider Style="{StaticResource DsSlider}" Value="{Binding CellSize}" />
+
+                                        <TextBlock Style="{StaticResource DsLabel}" Text="ЗАЗОР" Margin="0,8,0,2" />
+                                        <Slider Style="{StaticResource DsSlider}" Minimum="0" Maximum="8" Value="{Binding Gap}" />
+
+                                        <!-- Прозрачность влияет только на чёрную подложку:
+                                             акцент, текст и точки остаются плотными -->
+                                        <TextBlock Style="{StaticResource DsLabel}" Text="ПЛОТНОСТЬ ФОНА ОСТРОВА" Margin="0,8,0,2" />
+                                        <Slider Style="{StaticResource DsSlider}" Minimum="30" Maximum="100"
+                                                Value="{Binding IslandOpacity}" />
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Grid>
+
+                            <!-- == нижняя строка == -->
+                            <Grid Grid.Row="3" Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{Binding StatusLine}"
+                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                           FontFamily="Segoe UI" FontSize="9"
+                                           Foreground="{DynamicResource DsTextMuted}" />
+                                <Button Grid.Column="1" Style="{StaticResource DsButton}"
+                                        Content="ВЫЙТИ" Click="OnMenuExit" />
+                            </Grid>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <!-- ============ СВЁРНУТОЕ СОСТОЯНИЕ ============ -->
+                <Grid x:Name="CollapsedRow" Margin="14,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- Юниты: точечные существа, следящие за курсором.
+                             Циферблат уступил им место по просьбе владельца,
+                             а читаемые цифры остались рядом. -->
+                        <controls:Units x:Name="Units" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding TimeText}"
+                                   FontFamily="Segoe UI" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource DsTextMuted}"
+                                   VerticalAlignment="Center" Margin="9,1,0,0" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0"
+                                VerticalAlignment="Center" HorizontalAlignment="Left"
+                                Visibility="{Binding HasMedia, Converter={StaticResource BoolToVis}}">
+                        <Ellipse Width="6" Height="6" VerticalAlignment="Center"
+                                 Fill="{DynamicResource DsAccent}" Margin="0,0,7,0" />
+                        <TextBlock Text="{Binding MediaLine}"
+                                   FontFamily="Segoe UI" FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource DsTextMuted}"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                   MaxWidth="150" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- Громкость колесом мыши: чип вспыхивает и гаснет -->
+                        <Border x:Name="VolChip" Style="{StaticResource DsChip}" Margin="0,0,5,0"
+                                Visibility="Collapsed">
+                            <TextBlock x:Name="VolChipText" Style="{StaticResource DsChipText}"
+                                       Foreground="{DynamicResource DsAccent}" />
+                        </Border>
+                        <!-- Таймер живёт прямо в пилюле, как и просил владелец -->
+                        <Border Style="{StaticResource DsChip}" Margin="0,0,5,0"
+                                Visibility="{Binding TimerActive, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Style="{StaticResource DsChipText}"
+                                       Foreground="{DynamicResource DsAccent}"
+                                       Text="{Binding TimerText}" />
+                        </Border>
+                        <Border Style="{StaticResource DsChip}" Margin="0,0,5,0">
+                            <TextBlock Style="{StaticResource DsChipText}" Text="{Binding CpuText}" />
+                        </Border>
+                        <Border Style="{StaticResource DsChip}"
+                                Visibility="{Binding HasBattery, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Style="{StaticResource DsChipText}" Text="{Binding BatteryText}" />
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- Мини-EQ-"сталактиты": свисает ИЗ-ПОД таблетки на прозрачном фоне.
+             Лежит ВНЕ пилюли, поэтому не обрезается её скруглениями и не ловит клики -->
+        <controls:MiniEq x:Name="MiniEq" Width="400" Height="44"
+                         Margin="0,54,0,0"
+                         HorizontalAlignment="Center" VerticalAlignment="Top"
+                         IsHitTestVisible="False" />
+
+        <!-- Зона дока: когда остров утоплен за кромку экрана, снаружи торчит только
+             эта полоска. Наведение = остров выплывает, клик = выплыть и раскрыть.
+
+             Важно про прозрачность: у layered-окна Windows делает hit-test по
+             альфе пикселя. Полностью прозрачный (alpha=0) прямоугольник мышь
+             НЕ ловит — остров становился недосягаемым, если музыка не играла
+             и сталактитов на экране не было. Поэтому фон alpha=1 (невидим, но
+             осязаем) и поверх него — маленькая акцентная «ручка», чтобы человек
+             вообще понимал, что там что-то есть. -->
+        <Border x:Name="DockHit" Width="400" Height="46" Margin="0,52,0,0"
+                HorizontalAlignment="Center" VerticalAlignment="Top"
+                Background="#01000000" Cursor="Hand" Visibility="Collapsed"
+                MouseLeftButtonUp="OnDockHitClick">
+            <Grid VerticalAlignment="Top">
+                <Border x:Name="DockHandle" Width="34" Height="2" CornerRadius="1"
+                        Margin="0,3,0,0" VerticalAlignment="Top"
+                        Background="{DynamicResource DsAccent}" Opacity="0.55" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

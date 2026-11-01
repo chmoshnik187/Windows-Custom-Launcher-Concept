@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows10.0.22621.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>DotShell.Core</RootNamespace>
+    <AssemblyName>DotShell.Core</AssemblyName>
+
+    <!--
+      Почему здесь НЕТ ни UseWinUI, ни пакета Microsoft.WindowsAppSDK.
+
+      TFM "net8.0-windows10.0.22621.0" сам по себе даёт доступ к WinRT-API:
+      Windows.Media.Control (плеер), Windows.ApplicationModel.DataTransfer
+      (буфер обмена), Windows.Graphics.Imaging, Windows.Storage.
+      WinUI для этого не нужен — а вместе с ним уходят MSIX/PRI-этапы сборки,
+      из-за которых библиотеку нельзя было собрать даже на машине без
+      Visual Studio.
+
+      Побочный бонус: ядро теперь не привязано к конкретному UI-фреймворку,
+      поэтому его одинаково используют и WPF-остров (DotShell.Island.Wpf),
+      и будущий WinUI-остров (DotShell.Island).
+
+      Позволяет собирать проект на любой ОС (проверено на Linux) и не тянет
+      инструменты Visual Studio.
+    -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+
+    <!-- Комментарии в коде содержат разделители из подряд идущих дефисов,
+         а XML такие последовательности запрещает. Файл документации мы не
+         генерируем, поэтому проверку XML в комментариях выключаем. -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591;CS1570;CS1571;CS1572;CS1573;CS1574;CS1580;CS1581;CS1584;CS1658;CS1734;CS1735;CS1711;CS1712;CS1723</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" Version="8.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- WASAPI loopback-захват и FFT для настоящего спектра.
+         Выбран NAudio, а не ручной COM-interop: те же самые интерфейсы
+         IAudioClient/IAudioCaptureClient, но уже проверенные тысячами проектов. -->
+    <PackageReference Include="NAudio" Version="2.2.1" />
+  </ItemGroup>
+</Project>

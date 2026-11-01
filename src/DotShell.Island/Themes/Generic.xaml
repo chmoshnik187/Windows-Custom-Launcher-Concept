@@ -1,0 +1,53 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:DotShell.Island.Controls">
+
+    <!--
+      Темы самодельных контролов по умолчанию.
+      WinUI ищет этот файл автоматически по пути Themes/Generic.xaml —
+      именно поэтому он лежит здесь и называется именно так.
+    -->
+
+    <Style TargetType="controls:DotTextBlock">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="controls:DotTextBlock">
+                    <Grid>
+                        <!-- Результат: картинка из точек -->
+                        <Image x:Name="PART_Dots"
+                               Stretch="Fill"
+                               HorizontalAlignment="Left"
+                               VerticalAlignment="Center" />
+
+                        <!--
+                          Источник для растеризации.
+                          Opacity=0, а НЕ Visibility=Collapsed: свернувшийся элемент
+                          не попадает в визуальное дерево, и RenderTargetBitmap
+                          отказывается его снимать.
+                        -->
+                        <TextBlock x:Name="PART_Source"
+                                   Opacity="0"
+                                   IsHitTestVisible="False"
+                                   TextWrapping="NoWrap"
+                                   HorizontalAlignment="Left"
+                                   VerticalAlignment="Top" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="controls:EqDotsControl">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="controls:EqDotsControl">
+                    <Grid>
+                        <Image x:Name="PART_Canvas" Stretch="Fill" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>

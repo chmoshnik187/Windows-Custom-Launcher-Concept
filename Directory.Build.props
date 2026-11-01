@@ -1,0 +1,40 @@
+<Project>
+  <!--
+    Общие настройки для всех проектов решения.
+
+    ВАЖНО: WindowsAppSDKSelfContained здесь НЕ задаём. Этот флаг имеет смысл только
+    для исполняемого проекта, а в библиотечном (DotShell.Core) он включает этап
+    упаковки MSIX и ломает сборку. Флаг стоит в DotShell.Island.csproj.
+  -->
+  <PropertyGroup>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Company>DotShell</Company>
+    <Product>DotShell</Product>
+    <Version>0.58.0</Version>
+
+    <!-- Комментарии с разделителями из дефисов ломают проверку XML, а файл
+         документации мы не генерируем, поэтому выключаем эту проверку везде. -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591;CS1570;CS1571;CS1572;CS1573;CS1574;CS1580;CS1581;CS1584;CS1658;CS1734;CS1735;CS1711;CS1712;CS1723</NoWarn>
+  </PropertyGroup>
+</Project>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

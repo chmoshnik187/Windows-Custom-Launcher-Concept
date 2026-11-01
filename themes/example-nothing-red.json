@@ -1,0 +1,33 @@
+{
+  "name": "Nothing Red (пример)",
+  "author": "dotshell",
+  "version": 1,
+  "colors": {
+    "accent": "#D71920",
+    "background": "#000000",
+    "surface": "#121214",
+    "surface_alt": "#17171A",
+    "border": "#26262B",
+    "text": "#ECECEE",
+    "text_muted": "#8A8A93",
+    "ghost_dot": "#14FFFFFF"
+  },
+  "dot": {
+    "cell": 4,
+    "gap": 2,
+    "fill": 0.86,
+    "min_radius": 0.16,
+    "threshold": 0.07
+  },
+  "motion": {
+    "island_expand_ms": 420,
+    "easing": "cubic-bezier(0.2, 0.9, 0.2, 1)",
+    "panel_fade_ms": 220
+  },
+  "widgets": {
+    "collapsed": ["clock", "media", "cpu", "battery"],
+    "tabs": ["notes", "clipboard", "eq", "system", "theme"],
+    "launcher_hotkey": "Ctrl+Space",
+    "clipboard_hotkey": "Ctrl+Shift+V"
+  }
+}

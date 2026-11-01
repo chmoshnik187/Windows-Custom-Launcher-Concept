@@ -1,0 +1,14 @@
+<UserControl x:Class="DotShell.Island.Wpf.Controls.DotText"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Focusable="False"
+             IsHitTestVisible="False">
+    <!--
+      Внутри одна картинка: результат работы точечного рендера.
+      Растягивать её нельзя (Stretch=None), иначе точки станут некруглыми.
+    -->
+    <Image x:Name="DotsImage" Stretch="None"
+           HorizontalAlignment="Left" VerticalAlignment="Top"
+           SnapsToDevicePixels="True"
+           RenderOptions.BitmapScalingMode="NearestNeighbor" />
+</UserControl>

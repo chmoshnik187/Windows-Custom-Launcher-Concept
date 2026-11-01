@@ -1,0 +1,394 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="DotShell.Island.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:DotShell.Island.Controls"
+    xmlns:local="using:DotShell.Island"
+    xmlns:clip="using:DotShell.Core.Clipboard"
+    Background="Transparent">
+
+    <Page.Resources>
+        <local:BoolToVisibilityConverter x:Key="BoolToVis" />
+        <local:PercentConverter x:Key="Percent" />
+
+        <!-- Одна запись буфера обмена -->
+        <DataTemplate x:Key="ClipboardItemTemplate" x:DataType="clip:ClipboardItem">
+            <Grid Padding="6,5" ColumnSpacing="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="30" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Width="28" Height="28" CornerRadius="8"
+                        Background="{ThemeResource DsSurfaceAlt}"
+                        BorderBrush="{ThemeResource DsBorder}" BorderThickness="1">
+                    <TextBlock Text="{x:Bind KindLabel}"
+                               FontFamily="{ThemeResource DsMonoFont}" FontSize="11"
+                               FontWeight="Bold"
+                               Foreground="{ThemeResource DsAccent}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+
+                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="{x:Bind Preview}"
+                               FontSize="12" Foreground="{ThemeResource DsText}"
+                               TextTrimming="CharacterEllipsis" MaxLines="1" />
+                    <TextBlock Text="{x:Bind AgeLabel}"
+                               FontFamily="{ThemeResource DsMonoFont}" FontSize="9"
+                               CharacterSpacing="60"
+                               Foreground="{ThemeResource DsTextMuted}" />
+                </StackPanel>
+
+                <Button Grid.Column="2" Content="PIN"
+                        Style="{ThemeResource DsTabButton}"
+                        FontSize="9" Padding="8,5"
+                        Click="OnPinClick" Tag="{x:Bind}" />
+            </Grid>
+        </DataTemplate>
+    </Page.Resources>
+
+    <Grid Background="Transparent">
+
+        <!-- ================= ТАБЛЕТКА (остров) ================= -->
+        <Border x:Name="Pill"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Margin="0,10,0,0"
+                Width="372" Height="46"
+                CornerRadius="23"
+                Background="{ThemeResource DsBackground}"
+                BorderBrush="{ThemeResource DsAccentSoft}"
+                BorderThickness="1"
+                Tapped="OnPillTapped">
+
+            <Border.Resources>
+                <!--
+                  Анимация раскрытия — та самая "айфоновская".
+                  Секрет не в кривой, а в порядке: сначала гаснет старое содержимое,
+                  потом едет размер, потом проявляется новое. Если проявлять сразу,
+                  содержимое будет некрасиво "размазываться" по растущей таблетке.
+                -->
+                <Storyboard x:Name="ExpandStory">
+                    <DoubleAnimation Storyboard.TargetName="CollapsedRow" Storyboard.TargetProperty="Opacity"
+                                     To="0" Duration="0:0:0.12" />
+                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="CollapsedRow"
+                                                   Storyboard.TargetProperty="Visibility">
+                        <DiscreteObjectKeyFrame KeyTime="0:0:0.12" Value="Collapsed" />
+                    </ObjectAnimationUsingKeyFrames>
+
+                    <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Width"
+                                     To="620" Duration="0:0:0.42" BeginTime="0:0:0.06">
+                        <DoubleAnimation.EasingFunction>
+                            <CubicEase EasingMode="EaseOut" />
+                        </DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                    <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Height"
+                                     To="296" Duration="0:0:0.42" BeginTime="0:0:0.06">
+                        <DoubleAnimation.EasingFunction>
+                            <CubicEase EasingMode="EaseOut" />
+                        </DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                    <DoubleAnimation Storyboard.TargetName="Pill"
+                                     Storyboard.TargetProperty="(Border.CornerRadius)"
+                                     To="26" Duration="0:0:0.30" />
+
+                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ExpandedPanel"
+                                                   Storyboard.TargetProperty="Visibility">
+                        <DiscreteObjectKeyFrame KeyTime="0:0:0.16" Value="Visible" />
+                    </ObjectAnimationUsingKeyFrames>
+                    <DoubleAnimation Storyboard.TargetName="ExpandedPanel" Storyboard.TargetProperty="Opacity"
+                                     From="0" To="1" Duration="0:0:0.22" BeginTime="0:0:0.16" />
+                </Storyboard>
+
+                <Storyboard x:Name="CollapseStory">
+                    <DoubleAnimation Storyboard.TargetName="ExpandedPanel" Storyboard.TargetProperty="Opacity"
+                                     To="0" Duration="0:0:0.10" />
+                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ExpandedPanel"
+                                                   Storyboard.TargetProperty="Visibility">
+                        <DiscreteObjectKeyFrame KeyTime="0:0:0.10" Value="Collapsed" />
+                    </ObjectAnimationUsingKeyFrames>
+
+                    <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Width"
+                                     To="372" Duration="0:0:0.34" BeginTime="0:0:0.04">
+                        <DoubleAnimation.EasingFunction>
+                            <CubicEase EasingMode="EaseOut" />
+                        </DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                    <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Height"
+                                     To="46" Duration="0:0:0.34" BeginTime="0:0:0.04">
+                        <DoubleAnimation.EasingFunction>
+                            <CubicEase EasingMode="EaseOut" />
+                        </DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                    <DoubleAnimation Storyboard.TargetName="Pill"
+                                     Storyboard.TargetProperty="(Border.CornerRadius)"
+                                     To="23" Duration="0:0:0.28" />
+
+                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="CollapsedRow"
+                                                   Storyboard.TargetProperty="Visibility">
+                        <DiscreteObjectKeyFrame KeyTime="0:0:0.12" Value="Visible" />
+                    </ObjectAnimationUsingKeyFrames>
+                    <DoubleAnimation Storyboard.TargetName="CollapsedRow" Storyboard.TargetProperty="Opacity"
+                                     From="0" To="1" Duration="0:0:0.18" BeginTime="0:0:0.12" />
+                </Storyboard>
+            </Border.Resources>
+
+            <Grid>
+
+                <!-- ============ СВЁРНУТОЕ СОСТОЯНИЕ ============ -->
+                <Grid x:Name="CollapsedRow" Padding="14,0" ColumnSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <controls:DotClockControl Grid.Column="0" VerticalAlignment="Center" />
+
+                    <!-- Что сейчас играет: одна строка, чтобы не раздувать таблетку -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7"
+                                VerticalAlignment="Center" HorizontalAlignment="Left"
+                                Visibility="{x:Bind VM.Media.HasSession, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+                        <Grid Width="6" Height="6" VerticalAlignment="Center">
+                            <Ellipse Fill="{ThemeResource DsAccent}" />
+                        </Grid>
+                        <TextBlock Text="{x:Bind VM.MediaLine, Mode=OneWay}"
+                                   FontFamily="{ThemeResource DsMonoFont}"
+                                   FontSize="10" FontWeight="SemiBold" CharacterSpacing="70"
+                                   Foreground="{ThemeResource DsTextMuted}"
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                        <Border Style="{ThemeResource DsChip}">
+                            <TextBlock Style="{ThemeResource DsChipText}"
+                                       Text="{x:Bind VM.Stats.Cpu, Mode=OneWay, Converter={StaticResource Percent}, ConverterParameter=CPU}" />
+                        </Border>
+                        <Border Style="{ThemeResource DsChip}"
+                                Visibility="{x:Bind VM.Stats.HasBattery, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Style="{ThemeResource DsChipText}"
+                                       Text="{x:Bind VM.Stats.Battery, Mode=OneWay, Converter={StaticResource Percent}, ConverterParameter=BAT}" />
+                        </Border>
+                    </StackPanel>
+                </Grid>
+
+                <!-- ============ РАСКРЫТОЕ СОСТОЯНИЕ ============ -->
+                <Grid x:Name="ExpandedPanel"
+                      Visibility="Collapsed"
+                      Opacity="0"
+                      Padding="16,14"
+                      RowSpacing="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Плеер -->
+                    <Grid Grid.Row="0" ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0" Width="62" Height="62" CornerRadius="13"
+                                Background="{ThemeResource DsSurfaceAlt}"
+                                BorderBrush="{ThemeResource DsBorder}" BorderThickness="1">
+                            <Image x:Name="ArtworkImage" Stretch="UniformToFill" />
+                        </Border>
+
+                        <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                            <TextBlock Text="{x:Bind VM.Media.Title, Mode=OneWay, FallbackValue='ничего не играет'}"
+                                       FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource DsText}"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{x:Bind VM.Media.Artist, Mode=OneWay}"
+                                       FontFamily="{ThemeResource DsMonoFont}" FontSize="10"
+                                       CharacterSpacing="50"
+                                       Foreground="{ThemeResource DsTextMuted}"
+                                       TextTrimming="CharacterEllipsis" />
+                            <ProgressBar x:Name="Progress" Height="3" Minimum="0" Maximum="100" Value="0"
+                                         Foreground="{ThemeResource DsAccent}"
+                                         Background="{ThemeResource DsBorder}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <Button Style="{ThemeResource DsRoundButton}" Click="OnPrevClick">
+                                <FontIcon Glyph="&#xE892;" FontSize="11" />
+                            </Button>
+                            <Button x:Name="PlayButton" Click="OnPlayClick"
+                                    Width="40" Height="40" Padding="0" CornerRadius="999"
+                                    Background="{ThemeResource DsAccent}"
+                                    BorderBrush="{ThemeResource DsAccent}"
+                                    Foreground="Black">
+                                <FontIcon x:Name="PlayGlyph" Glyph="&#xE768;" FontSize="13" />
+                            </Button>
+                            <Button Style="{ThemeResource DsRoundButton}" Click="OnNextClick">
+                                <FontIcon Glyph="&#xE893;" FontSize="11" />
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Вкладки -->
+                    <Grid x:Name="TabsGrid" Grid.Row="1" ColumnSpacing="6" Padding="0,8,0,0"
+                          BorderBrush="{ThemeResource DsBorder}" BorderThickness="0,1,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" Content="ЗАМЕТКИ" Style="{ThemeResource DsTabButton}" Click="OnTabClick" Tag="notes" />
+                        <Button Grid.Column="1" Content="БУФЕР"   Style="{ThemeResource DsTabButton}" Click="OnTabClick" Tag="clipboard" />
+                        <Button Grid.Column="2" Content="EQ"      Style="{ThemeResource DsTabButton}" Click="OnTabClick" Tag="eq" />
+                        <Button Grid.Column="3" Content="СИСТЕМА" Style="{ThemeResource DsTabButton}" Click="OnTabClick" Tag="system" />
+                        <Button Grid.Column="4" Content="ТЕМА"    Style="{ThemeResource DsTabButton}" Click="OnTabClick" Tag="theme" />
+                    </Grid>
+
+                    <!-- Содержимое вкладок -->
+                    <Grid Grid.Row="2">
+
+                        <!-- ЗАМЕТКИ -->
+                        <Grid x:Name="TabNotes">
+                            <TextBox x:Name="NoteBox"
+                                     Text="{x:Bind VM.NoteText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     AcceptsReturn="True" TextWrapping="Wrap"
+                                     FontFamily="{ThemeResource DsMonoFont}" FontSize="11"
+                                     Foreground="{ThemeResource DsText}"
+                                     Background="{ThemeResource DsSurfaceAlt}"
+                                     BorderBrush="{ThemeResource DsBorder}"
+                                     PlaceholderText="markdown-файл, лежит в %LOCALAPPDATA%/DotShell/notes.md"
+                                     PlaceholderForeground="{ThemeResource DsTextMuted}"
+                                     LostFocus="OnNoteLostFocus" />
+                        </Grid>
+
+                        <!-- БУФЕР -->
+                        <Grid x:Name="TabClipboard" Visibility="Collapsed" RowSpacing="6">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <Grid Grid.Row="0" ColumnSpacing="6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="ClipSearch" Grid.Column="0"
+                                         PlaceholderText="поиск по скопированному…"
+                                         FontFamily="{ThemeResource DsMonoFont}" FontSize="11"
+                                         Background="{ThemeResource DsSurfaceAlt}"
+                                         BorderBrush="{ThemeResource DsBorder}"
+                                         TextChanged="OnClipboardSearch" />
+                                <Button Grid.Column="1" Content="ОЧИСТИТЬ"
+                                        Style="{ThemeResource DsTabButton}" Click="OnClearClipboard" />
+                            </Grid>
+                            <ListView Grid.Row="1" x:Name="ClipList"
+                                      ItemsSource="{x:Bind VM.ClipboardItems, Mode=OneWay}"
+                                      ItemTemplate="{StaticResource ClipboardItemTemplate}"
+                                      SelectionMode="Single"
+                                      Background="Transparent"
+                                      DoubleTapped="OnClipboardItemUse" />
+                        </Grid>
+
+                        <!-- EQ -->
+                        <Grid x:Name="TabEq" Visibility="Collapsed" RowSpacing="8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <controls:EqDotsControl x:Name="Eq" Grid.Row="0"
+                                                    DotColor="{ThemeResource DsAccent}"
+                                                    GhostColor="#18FFFFFF"
+                                                    CellSize="4" Gap="2" />
+                            <TextBlock Grid.Row="1"
+                                       Text="пока это визуализация; реальный системный EQ подключается мордой к Equalizer APO (Фаза 2)"
+                                       FontFamily="{ThemeResource DsMonoFont}" FontSize="9"
+                                       CharacterSpacing="40" TextWrapping="Wrap"
+                                       Foreground="{ThemeResource DsTextMuted}" />
+                        </Grid>
+
+                        <!-- СИСТЕМА -->
+                        <ScrollViewer x:Name="TabSystem" Visibility="Collapsed">
+                            <StackPanel Spacing="0">
+                                <ToggleSwitch Header="Прятать остров в полноэкранном режиме"
+                                              IsOn="{x:Bind VM.Settings.HideInFullscreen, Mode=TwoWay}"
+                                              OnContent="ДА" OffContent="НЕТ" />
+                                <ToggleSwitch Header="Автозапуск вместе с Windows"
+                                              IsOn="{x:Bind VM.Settings.RunAtStartup, Mode=TwoWay}"
+                                              OnContent="ДА" OffContent="НЕТ" />
+                                <ToggleSwitch Header="Показывать погасшие точки сетки"
+                                              IsOn="{x:Bind VM.Settings.ShowGhostDots, Mode=TwoWay}"
+                                              OnContent="ДА" OffContent="НЕТ" />
+                                <TextBlock x:Name="StatsLine"
+                                           FontFamily="{ThemeResource DsMonoFont}" FontSize="10"
+                                           CharacterSpacing="40" Margin="0,8,0,0" TextWrapping="Wrap"
+                                           Foreground="{ThemeResource DsTextMuted}" />
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <!-- ТЕМА -->
+                        <ScrollViewer x:Name="TabTheme" Visibility="Collapsed">
+                            <StackPanel Spacing="10">
+                                <ToggleSwitch Header="Авто-цвет из обоев"
+                                              IsOn="{x:Bind VM.Settings.AutoAccent, Mode=TwoWay}"
+                                              OnContent="САМ" OffContent="ВРУЧНУЮ" />
+
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="ПРЕСЕТЫ АКЦЕНТА"
+                                               FontFamily="{ThemeResource DsMonoFont}" FontSize="9"
+                                               CharacterSpacing="80"
+                                               Foreground="{ThemeResource DsTextMuted}" />
+                                    <ItemsControl x:Name="AccentPresets">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal" Spacing="6" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                </StackPanel>
+
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="РАЗМЕР ТОЧКИ"
+                                               FontFamily="{ThemeResource DsMonoFont}" FontSize="9"
+                                               CharacterSpacing="80"
+                                               Foreground="{ThemeResource DsTextMuted}" />
+                                    <Slider Minimum="2" Maximum="10" StepFrequency="1"
+                                            Value="{x:Bind VM.Settings.CellSize, Mode=TwoWay}" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="ЗАЗОР МЕЖДУ ТОЧКАМИ"
+                                               FontFamily="{ThemeResource DsMonoFont}" FontSize="9"
+                                               CharacterSpacing="80"
+                                               Foreground="{ThemeResource DsTextMuted}" />
+                                    <Slider Minimum="0" Maximum="8" StepFrequency="1"
+                                            Value="{x:Bind VM.Settings.Gap, Mode=TwoWay}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <!-- Нижняя строка: статус + выход -->
+                    <Grid Grid.Row="3" ColumnSpacing="8" Padding="0,6,0,0"
+                          BorderBrush="{ThemeResource DsBorder}" BorderThickness="0,1,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{x:Bind VM.StatusLine, Mode=OneWay}"
+                                   FontFamily="{ThemeResource DsMonoFont}" FontSize="9"
+                                   CharacterSpacing="50" VerticalAlignment="Center"
+                                   Foreground="{ThemeResource DsTextMuted}"
+                                   TextTrimming="CharacterEllipsis" />
+                        <Button Grid.Column="1" Content="ВЫЙТИ"
+                                Style="{ThemeResource DsTabButton}" Click="OnExit" />
+                    </Grid>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</Page>

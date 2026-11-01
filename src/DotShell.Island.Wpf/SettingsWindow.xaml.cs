@@ -1,0 +1,204 @@
+namespace DotShell.Island.Wpf;
+
+using System.Diagnostics;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using DotShell.Core;
+using DotShell.Core.Settings;
+
+/// <summary>
+/// Окно настроек. Раньше всё это жило во вкладке СИСТЕМА, и там уже не помещалось:
+/// один длинный свиток, в котором оформление Windows, погода и хоткеи лежали вперемешку.
+///
+/// Теперь категории слева, содержимое справа. Категории — это не украшение: они
+/// отвечают на вопрос «где искать», который у длинного списка не отпадает никогда.
+///
+/// Окно использует те же ресурсы, что остров (тёмные кисти, точечные подписи),
+/// поэтому выглядит частью шелла, а не системным диалогом.
+/// </summary>
+public partial class SettingsWindow : Window
+{
+    private readonly IslandViewModel _vm;
+    private readonly ShellServices _services;
+
+    public SettingsWindow(IslandViewModel vm, ShellServices services, Window owner)
+    {
+        _vm = vm;
+        _services = services;
+
+        // Стили кнопок, тумблеров, ползунков и списков живут в окне острова, а не
+        // в ресурсах приложения. Забираем их у владельца ДО разбора XAML — иначе
+        // разметка падает на StaticResource.
+        // Кладём их в ресурсы приложения, а не окна: XAML ниже объявляет свои
+        // Window.Resources и перезаписал бы словарь, подготовленный до Initialize.
+        foreach (var key in new[] { "DsButton", "DsToggle", "DsSlider", "DsCombo", "DsScroll" })
+        {
+            if (Application.Current.Resources.Contains(key)) continue;
+            if (owner.TryFindResource(key) is Style style) Application.Current.Resources[key] = style;
+        }
+
+        InitializeComponent();
+        DataContext = vm;
+
+        // Город погоды: список частых + возможность вписать свой.
+        foreach (var city in new[] { "Москва", "Санкт-Петербург", "Иркутск", "Новосибирск", "Екатеринбург", "Казань", "Владивосток" })
+            CityBox.Items.Add(city);
+
+        CityBox.Text = _services.Settings.Current.WeatherCity;
+        VersionLine.Text = $"установлена {DotShell.Core.Updates.UpdateChecker.ActualText}";
+        DataPath.Text = AppSettings.SettingsDirectory;
+        StatusText.Text = "изменения сохраняются сразу";
+
+        // Рисунок — тот же, что в капсуле: тема острова переносится в настройки.
+        var look = _services.Settings.Current;
+        Backdrop.Style = string.IsNullOrWhiteSpace(look.BackdropStyle) ? "none" : look.BackdropStyle;
+        Backdrop.Strength = Math.Clamp(look.BackdropOpacity / 100.0, 0, 1);
+        Backdrop.Corner = 16;
+
+        FillAudioDevices();
+
+        KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
+    }
+
+    /// <summary>Переключение категорий: показываем ровно одну панель.</summary>
+    private void OnCategoryChecked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not RadioButton { Tag: string tag }) return;
+        if (PanelLook is null) return;   // ещё не загрузились
+
+        PanelLook.Visibility = tag == "look" ? Visibility.Visible : Visibility.Collapsed;
+        PanelIsland.Visibility = tag == "island" ? Visibility.Visible : Visibility.Collapsed;
+        PanelWindows.Visibility = tag == "windows" ? Visibility.Visible : Visibility.Collapsed;
+        PanelNotify.Visibility = tag == "notify" ? Visibility.Visible : Visibility.Collapsed;
+        PanelUpdates.Visibility = tag == "updates" ? Visibility.Visible : Visibility.Collapsed;
+        PanelData.Visibility = tag == "data" ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Список устройств вывода: первым идёт «системное», дальше реальные.
+    /// Храним id в Tag, а показываем человеческое имя.
+    /// </summary>
+    private void FillAudioDevices()
+    {
+        EqDeviceBox.Items.Clear();
+        EqDeviceBox.Items.Add(new ComboBoxItem { Content = "Системное (по умолчанию)", Tag = string.Empty });
+
+        foreach (var (id, name) in DotShell.Core.Audio.AudioSpectrum.OutputDevices())
+            EqDeviceBox.Items.Add(new ComboBoxItem { Content = name, Tag = id });
+
+        Log.Info($"audio devices: {EqDeviceBox.Items.Count - 1}");
+        var current = _services.Settings.Current.AudioDeviceId;
+        foreach (var item in EqDeviceBox.Items)
+        {
+            if (item is not ComboBoxItem { Tag: string tag }) continue;
+            if (!string.Equals(tag, current, StringComparison.OrdinalIgnoreCase)) continue;
+
+            EqDeviceBox.SelectedItem = item;
+            return;
+        }
+
+        EqDeviceBox.SelectedIndex = 0;
+    }
+
+    private void OnApplyEqDevice(object sender, RoutedEventArgs e)
+    {
+        if (EqDeviceBox.SelectedItem is not ComboBoxItem { Tag: string id }) return;
+
+        _vm.AudioDeviceId = id;
+        StatusText.Text = id.Length == 0
+            ? "эквалайзер: системное устройство"
+            : $"эквалайзер: {(EqDeviceBox.SelectedItem as ComboBoxItem)?.Content}";
+    }
+    /// <summary>Перечитать рисунок: тема острова могла смениться при открытом окне.</summary>
+    public void RefreshBackdrop()
+    {
+        var look = _services.Settings.Current;
+        Backdrop.Style = string.IsNullOrWhiteSpace(look.BackdropStyle) ? "none" : look.BackdropStyle;
+        Backdrop.Strength = Math.Clamp(look.BackdropOpacity / 100.0, 0, 1);
+    }
+
+    private void OnClose(object sender, RoutedEventArgs e) => Close();
+
+    private void OnSaveCity(object sender, RoutedEventArgs e)
+    {
+        var city = (CityBox.Text ?? string.Empty).Trim();
+        if (city.Length == 0) { StatusText.Text = "город не может быть пустым"; return; }
+
+        _services.Settings.Update(s => s.WeatherCity = city);
+        DotShell.Core.Weather.WeatherService.ClearCache();
+        DotShell.Island.Wpf.Widgets.WidgetsManager.RefreshAll();
+        StatusText.Text = $"погода: {city}";
+    }
+
+    private void OnResetPosition(object sender, RoutedEventArgs e)
+    {
+        _services.Settings.Update(s =>
+        {
+            s.IslandLeft = -32000;
+            s.IslandTop = -32000;
+        });
+
+        StatusText.Text = "позиция сброшена — перезапусти остров, чтобы он встал по центру";
+    }
+
+    private void OnRestartExplorer(object sender, RoutedEventArgs e)
+    {
+        bool ok = DotShell.Core.Native.ExplorerRestart.Restart();
+        StatusText.Text = ok ? "проводник перезапущен" : "не удалось перезапустить проводник";
+    }
+
+    private void OnTestToast(object sender, RoutedEventArgs e)
+    {
+        bool ok = Toast.Show("DotShell", "Проверка уведомлений: если видишь это справа — тосты работают.");
+        StatusText.Text = ok ? "тост отправлен" : "Windows не показала тост (см. crash.log)";
+    }
+
+    private async void OnCheckNow(object sender, RoutedEventArgs e)
+    {
+        StatusText.Text = "проверяю GitHub…";
+        var info = await DotShell.Core.Updates.UpdateChecker.CheckAsync();
+
+        if (info is null) { StatusText.Text = "GitHub не ответил"; return; }
+
+        if (info.Version <= DotShell.Core.Updates.UpdateChecker.Current)
+        {
+            StatusText.Text = $"обновлений нет: {DotShell.Core.Updates.UpdateChecker.ActualText} — последняя";
+            return;
+        }
+
+        StatusText.Text = $"есть {info.Version.ToString(3)}";
+        new UpdateWindow(info, _ => { }).Show();
+    }
+
+    private void OnOpenFolder(object sender, RoutedEventArgs e)
+    {
+        try { Process.Start(new ProcessStartInfo(AppSettings.SettingsDirectory) { UseShellExecute = true }); }
+        catch (Exception ex) { StatusText.Text = $"не смог открыть: {ex.Message}"; }
+    }
+
+    private void OnResetLook(object sender, RoutedEventArgs e)
+    {
+        _services.Settings.Update(s =>
+        {
+            s.AccentHex = "#D71920";
+            s.AutoAccent = true;
+            s.CellSize = 3;
+            s.Gap = 2;
+            s.IslandOpacity = 100;
+            s.BackdropOpacity = 60;
+            s.BackdropStyle = "dots";
+        });
+
+        _vm.RefreshFromSettings();
+        StatusText.Text = "оформление вернулось к значениям по умолчанию";
+    }
+
+    private void OnDisableWindowsStyle(object sender, RoutedEventArgs e)
+    {
+        _vm.FullStyleOn = false;
+        _vm.WindowsAccentOn = false;
+        _vm.CustomCursorOn = false;
+        StatusText.Text = "оформление Windows выключено: заголовки, акцент и курсоры системные";
+    }
+}

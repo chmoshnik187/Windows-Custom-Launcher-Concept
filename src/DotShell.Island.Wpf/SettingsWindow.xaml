@@ -1,0 +1,311 @@
+<Window x:Class="DotShell.Island.Wpf.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:DotShell.Island.Wpf.Controls"
+        Title="DotShell — настройки"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="NoResize" ShowInTaskbar="False"
+        WindowStartupLocation="CenterScreen"
+        Width="820" Height="600"
+        FontFamily="Segoe UI" FontSize="12"
+        TextOptions.TextFormattingMode="Display">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="MenuStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Категория в левой колонке: не «кнопка с фоном», а строка с акцентной чертой. -->
+            <Style x:Key="CatButton" TargetType="RadioButton">
+                <Setter Property="Foreground" Value="{DynamicResource DsTextMuted}" />
+                <Setter Property="FontFamily" Value="Bahnschrift" />
+                <Setter Property="FontSize" Value="11" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="Margin" Value="0,0,0,2" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="RadioButton">
+                            <Border x:Name="Row" Background="Transparent" Padding="10,8">
+        <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="3" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border x:Name="Bar" Grid.Column="0" Background="Transparent"
+                                            Width="3" HorizontalAlignment="Left" />
+                                    <ContentPresenter Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Foreground" Value="{DynamicResource DsText}" />
+                                </Trigger>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter Property="Foreground" Value="{DynamicResource DsAccent}" />
+                                    <Setter TargetName="Bar" Property="Background"
+                                            Value="{DynamicResource DsAccent}" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="Section" TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="Bahnschrift" />
+                <Setter Property="FontSize" Value="8" />
+                <Setter Property="Foreground" Value="{DynamicResource DsTextMuted}" />
+                <Setter Property="Margin" Value="0,16,0,8" />
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Border x:Name="Card" Margin="16" CornerRadius="16" BorderThickness="1" ClipToBounds="True"
+            Background="{DynamicResource DsBackground}" BorderBrush="{DynamicResource DsBorder}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <!-- Тот же рисунок, что в капсуле острова: сетка, волны, топо.
+                 Лежит под содержимым, поэтому текст читается при любой плотности. -->
+            <controls:IslandBackdrop x:Name="Backdrop" Grid.RowSpan="3" />
+
+
+            <!-- Шапка -->
+            <Grid Grid.Row="0" Margin="20,16,20,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="НАСТРОЙКИ" FontFamily="Bahnschrift" FontSize="16"
+                               Foreground="{DynamicResource DsText}" />
+                    <controls:TrackedText Text="DOTSHELL" FontSize="8" Tracking="0.30"
+                                          Margin="12,3,0,0" VerticalAlignment="Center"
+                                          Brush="{DynamicResource DsTextMuted}" />
+                </StackPanel>
+                <Button Grid.Column="1" Content="✕" Click="OnClose"
+                        Style="{StaticResource DsButton}" Padding="10,3" FontSize="11"
+                        ToolTip="Закрыть (Esc)" />
+            </Grid>
+
+            <Border Grid.Row="0" Height="1" Background="{DynamicResource DsBorder}"
+                    VerticalAlignment="Bottom" Margin="20,0,20,0" />
+
+            <!-- Левая колонка категорий + содержимое -->
+            <Grid Grid.Row="1" Margin="20,12,20,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="190" />
+                    <ColumnDefinition Width="1" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                    <RadioButton Style="{StaticResource CatButton}" Content="ВНЕШНИЙ ВИД"
+                                 GroupName="cat" Tag="look" IsChecked="True" Checked="OnCategoryChecked" />
+                    <RadioButton Style="{StaticResource CatButton}" Content="ОСТРОВ"
+                                 GroupName="cat" Tag="island" Checked="OnCategoryChecked" />
+                    <RadioButton Style="{StaticResource CatButton}" Content="ОКНА И WINDOWS"
+                                 GroupName="cat" Tag="windows" Checked="OnCategoryChecked" />
+                    <RadioButton Style="{StaticResource CatButton}" Content="УВЕДОМЛЕНИЯ"
+                                 GroupName="cat" Tag="notify" Checked="OnCategoryChecked" />
+                    <RadioButton Style="{StaticResource CatButton}" Content="ОБНОВЛЕНИЯ"
+                                 GroupName="cat" Tag="updates" Checked="OnCategoryChecked" />
+                    <RadioButton Style="{StaticResource CatButton}" Content="ДАННЫЕ"
+                                 GroupName="cat" Tag="data" Checked="OnCategoryChecked" />
+                </StackPanel>
+
+                <Border Grid.Column="1" Width="1" Background="{DynamicResource DsBorder}" />
+
+                <ScrollViewer Grid.Column="2" Margin="18,0,0,0" Padding="0,0,8,0"
+                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                              Style="{StaticResource DsScroll}">
+
+                    <Grid>
+                        <!-- ВНЕШНИЙ ВИД -->
+                        <StackPanel x:Name="PanelLook">
+                            <CheckBox Style="{StaticResource DsToggle}" Content="Авто-цвет из обоев"
+                                      IsChecked="{Binding AutoAccent}" />
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Ответы ИИ набирать точками"
+                                      IsChecked="{Binding AiAnswersInDots}"
+                                      ToolTip="Крупный точечный текст читается; мелкий — нет. Поэтому в точках только ответы ИИ, и кегль крупный" />                            <CheckBox Style="{StaticResource DsToggle}" Content="Показывать погасшие точки сетки"
+                                      IsChecked="{Binding ShowGhostDots}" />
+
+                            <!-- Скины, рисунки и пресеты акцента остаются во вкладке ТЕМА:
+                                 там их видно на самом острове, и выбирать так честнее,
+                                 чем вслепую в окне. -->
+                            <TextBlock Style="{StaticResource Section}" Text="СКИНЫ И ПРЕСЕТЫ" />
+                            <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="10"
+                                       Foreground="{DynamicResource DsTextMuted}"
+                                       Text="Выбираются во вкладке ТЕМА на самом острове — там их сразу видно." />
+
+                            <TextBlock Style="{StaticResource Section}" Text="ПЛОТНОСТЬ РИСУНКА" />
+                            <Slider Style="{StaticResource DsSlider}" Minimum="0" Maximum="100"
+                                    Value="{Binding BackdropOpacity}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="ПЛОТНОСТЬ ФОНА" />
+                            <Slider Style="{StaticResource DsSlider}" Minimum="30" Maximum="100"
+                                    Value="{Binding IslandOpacity}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="РАЗМЕР ТОЧКИ" />
+                            <Slider Style="{StaticResource DsSlider}" Value="{Binding CellSize}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="ЗАЗОР" />
+                            <Slider Style="{StaticResource DsSlider}" Minimum="0" Maximum="8"
+                                    Value="{Binding Gap}" />
+                        </StackPanel>
+
+                        <!-- ОСТРОВ -->
+                        <StackPanel x:Name="PanelIsland" Visibility="Collapsed">
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Прятать в полноэкранном режиме (игры, видео)"
+                                      IsChecked="{Binding HideInFullscreen}" />
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Не мешать: сжиматься при развёрнутом окне"
+                                      IsChecked="{Binding QuietOnMaximized}" />
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Запускать вместе с Windows"
+                                      IsChecked="{Binding RunAtStartup}" />
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Запускать свёрнутым"
+                                      IsChecked="{Binding StartMinimized}" />
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Показывать подсказки хоткеев (Ctrl / Alt / Win)"
+                                      IsChecked="{Binding HotkeyHudEnabled}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="ЭКВАЛАЙЗЕР" />
+                            <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="10"
+                                       Foreground="{DynamicResource DsTextMuted}" Margin="0,0,0,6"
+                                       Text="Захват снимает звук одного устройства. Если музыка играет в наушниках, а по умолчанию колонки — полоска будет стоять: выбери здесь то, куда идёт звук." />
+                            <ComboBox x:Name="EqDeviceBox" Style="{StaticResource DsCombo}"
+                                      ToolTip="Устройство вывода, с которого снимается звук" />
+                            <Button Style="{StaticResource DsButton}" Content="ПРИМЕНИТЬ"
+                                    HorizontalAlignment="Left" Margin="0,6,0,0" Click="OnApplyEqDevice" />
+                            <TextBlock Style="{StaticResource Section}" Text="ПОЛОЖЕНИЕ" />
+                            <Button Style="{StaticResource DsButton}" Content="ВЕРНУТЬ ОСТРОВ НА МЕСТО"
+                                    HorizontalAlignment="Left" Click="OnResetPosition"
+                                    ToolTip="Сбросить позицию: остров вернётся к верхней кромке по центру" />
+                        </StackPanel>
+
+                        <!-- ОКНА И WINDOWS -->
+                        <StackPanel x:Name="PanelWindows" Visibility="Collapsed">
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Тёмные заголовки всех окон (оформление Windows)"
+                                      IsChecked="{Binding FullStyleOn}" />
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Акцент Windows = цвет обоев"
+                                      IsChecked="{Binding WindowsAccentOn}" />
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Свой курсор: точка вместо стрелки"
+                                      IsChecked="{Binding CustomCursorOn}" />
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Тёмная тема Windows"
+                                      IsChecked="{Binding SystemDark}" />
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Папки открывать вкладкой в проводнике"
+                                      IsChecked="{Binding ExplorerTabs}" />
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Скрыть иконки рабочего стола"
+                                      IsChecked="{Binding HideDesktopIcons}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="ПРИМЕНИТЬ ПОЛНОСТЬЮ" />
+                            <Button Style="{StaticResource DsButton}" Content="ПЕРЕЗАПУСТИТЬ ПРОВОДНИК"
+                                    HorizontalAlignment="Left" Click="OnRestartExplorer"
+                                    ToolTip="Часть цветов оболочки применяется только при старте explorer.exe. Панель задач исчезнет на секунду-две." />
+                        </StackPanel>
+
+                        <!-- УВЕДОМЛЕНИЯ -->
+                        <StackPanel x:Name="PanelNotify" Visibility="Collapsed">
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Уведомления Windows (тосты) для напоминаний и таймера"
+                                      IsChecked="{Binding ToastOn}" />
+                            <Button Style="{StaticResource DsButton}" Content="ПРОВЕРИТЬ УВЕДОМЛЕНИЕ"
+                                    HorizontalAlignment="Left" Margin="0,8,0,0" Click="OnTestToast"
+                                    ToolTip="Показать тестовый тост — сразу видно, доходят ли они" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="ПОГОДА" />
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <controls:TrackedText Grid.Column="0" Text="ГОРОД" FontSize="8" Tracking="0.26"
+                                                      VerticalAlignment="Center"
+                                                      Brush="{DynamicResource DsTextMuted}" />
+                                <ComboBox x:Name="CityBox" Grid.Column="1" Margin="10,0,0,0"
+                                          Style="{StaticResource DsCombo}" IsEditable="True" />
+                                <Button Grid.Column="2" Style="{StaticResource DsButton}" Content="СОХРАНИТЬ"
+                                        Margin="8,0,0,0" Click="OnSaveCity" />
+                            </Grid>
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Показывать в Фаренгейтах"
+                                      IsChecked="{Binding WeatherFahrenheit}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="ТРЕЙ" />
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Скрывать служебные значки (прокси, webhelper)"
+                                      IsChecked="{Binding TrayHideHelpers}" />
+                        </StackPanel>
+
+                        <!-- ОБНОВЛЕНИЯ -->
+                        <StackPanel x:Name="PanelUpdates" Visibility="Collapsed">
+                            <TextBlock x:Name="VersionLine" FontFamily="Bahnschrift" FontSize="13"
+                                       Foreground="{DynamicResource DsAccent}" Margin="0,0,0,10" />
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Проверять обновления при запуске"
+                                      IsChecked="{Binding UpdateCheckOnStart}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="ПРОВЕРЯТЬ КАЖДЫЕ, ЧАСОВ" />
+                            <Slider x:Name="HoursSlider" Style="{StaticResource DsSlider}"
+                                    Minimum="1" Maximum="24" IsSnapToTickEnabled="True" TickFrequency="1"
+                                    Value="{Binding UpdateCheckHours}" />
+                            <TextBlock Text="{Binding UpdateCheckHoursText}" FontFamily="Segoe UI" FontSize="9"
+                                       Foreground="{DynamicResource DsTextMuted}" Margin="0,2,0,0" />
+
+                            <Button Style="{StaticResource DsButton}" Content="ПРОВЕРИТЬ СЕЙЧАС"
+                                    HorizontalAlignment="Left" Margin="0,12,0,0" Click="OnCheckNow" />
+                        </StackPanel>
+
+                        <!-- ДАННЫЕ -->
+                        <StackPanel x:Name="PanelData" Visibility="Collapsed">
+                            <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="11"
+                                       Foreground="{DynamicResource DsTextMuted}" Margin="0,0,0,10"
+                                       Text="Заметки, задачи, настройки и список программ лежат в вашем профиле — в папке DotShell. В репозиторий они не попадают." />
+                            <TextBlock x:Name="DataPath" FontFamily="Consolas" FontSize="10"
+                                       Foreground="{DynamicResource DsTextMuted}" Margin="0,0,0,10"
+                                       TextWrapping="Wrap" />
+                            <Button Style="{StaticResource DsButton}" Content="ОТКРЫТЬ ПАПКУ"
+                                    HorizontalAlignment="Left" Click="OnOpenFolder" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="ОПАСНО" />
+                            <Button Style="{StaticResource DsButton}" Content="СБРОСИТЬ ОФОРМЛЕНИЕ"
+                                    HorizontalAlignment="Left" Click="OnResetLook"
+                                    ToolTip="Вернуть акцент, рисунок и плотность к значениям по умолчанию. Заметки и программы не трогаются." />
+                            <Button Style="{StaticResource DsButton}" Content="ВЫКЛЮЧИТЬ ОФОРМЛЕНИЕ WINDOWS"
+                                    HorizontalAlignment="Left" Margin="0,6,0,0" Click="OnDisableWindowsStyle"
+                                    ToolTip="Снять тёмные заголовки, акцент и курсоры: система вернётся к своему виду" />
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- Подвал -->
+            <Grid Grid.Row="2" Margin="20,10,20,14">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="StatusText" Grid.Column="0" VerticalAlignment="Center"
+                           FontFamily="Segoe UI" FontSize="9"
+                           Foreground="{DynamicResource DsTextMuted}"
+                           TextTrimming="CharacterEllipsis" />
+                <Button Grid.Column="1" Style="{StaticResource DsButton}" Content="ГОТОВО" Click="OnClose" />
+            </Grid>
+        </Grid>
+    </Border>
+</Window>
