@@ -447,28 +447,24 @@ public partial class IslandWindow : Window
             {
                 // Виджеты: открываем витрину с карточками, а не список в меню —
                 // в меню не видно, что ставишь, и нельзя выбрать место на столе.
-                var widgets = new System.Windows.Forms.ToolStripMenuItem("Витрина виджетов");
-                widgets.Click += (_, _) => Dispatcher.BeginInvoke(OpenWidgetGallery);
-                menu.Items.Insert(2, widgets);
-
-                var keys = new System.Windows.Forms.ToolStripMenuItem("Клавиши и сочетания");
-                keys.Click += (_, _) => Dispatcher.BeginInvoke(OpenKeysWindow);
-                menu.Items.Insert(3, keys);
+                menu.Add("Витрина виджетов", () => Dispatcher.BeginInvoke(OpenWidgetGallery));
+                menu.Add("Клавиши и сочетания", () => Dispatcher.BeginInvoke(OpenKeysWindow));
 
                 // Обновления: одна строка «проверить» и, если есть новее,
                 // вторая — «скачать». Никаких авто-перезапусков без спроса.
-                var updates = new System.Windows.Forms.ToolStripMenuItem("Проверить обновления");
-                updates.Click += (_, _) => Dispatcher.BeginInvoke(() => _ = CheckUpdatesAsync(manual: true));
-                menu.Items.Insert(3, updates);
+                menu.Add("Проверить обновления", () => Dispatcher.BeginInvoke(() => _ = CheckUpdatesAsync(manual: true)));
 
-                var download = new System.Windows.Forms.ToolStripMenuItem("Скачать обновление") { Visible = false };
-                download.Click += (_, _) => Dispatcher.BeginInvoke(OpenUpdatePage);
-                menu.Items.Insert(4, download);
-                menu.Opening += (_, _) =>
+                var download = menu.Add("Скачать обновление", () => Dispatcher.BeginInvoke(OpenUpdatePage));
+                download.IsVisible = false;
+
+                menu.Opening += () =>
                 {
                     var info = _available;
-                    download.Visible = info is not null;
-                    if (info is not null) download.Text = $"Скачать обновление {info.Version.ToString(3)}";
+                    download.IsVisible = info is not null;
+                    download.Update(item =>
+                    {
+                        if (info is not null) item.Header = $"Скачать обновление {info.Version.ToString(3)}";
+                    });
                 };
             });
 

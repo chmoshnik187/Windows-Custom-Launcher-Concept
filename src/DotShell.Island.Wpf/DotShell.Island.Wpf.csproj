@@ -8,7 +8,6 @@
     <AssemblyName>DotShell</AssemblyName>
     <UseWPF>true</UseWPF>
     <!-- WinForms нужен только ради NotifyIcon: своя иконка в трее без COM-танцев. -->
-    <UseWindowsForms>true</UseWindowsForms>
     <!-- Оставляем только английские ресурсы платформы: 12 языков по 1.2 МБ —
          это 14 МБ в архиве, а интерфейс у нас свой. -->
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>

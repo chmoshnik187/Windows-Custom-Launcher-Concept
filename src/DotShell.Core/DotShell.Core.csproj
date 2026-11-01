@@ -40,6 +40,9 @@
     <!-- WASAPI loopback-захват и FFT для настоящего спектра.
          Выбран NAudio, а не ручной COM-interop: те же самые интерфейсы
          IAudioClient/IAudioCaptureClient, но уже проверенные тысячами проектов. -->
-    <PackageReference Include="NAudio" Version="2.2.1" />
+    <!-- Не метапакет NAudio: он тянет NAudio.WinForms и вместе с ним весь
+         System.Windows.Forms (~21 МБ в публикации). Нужны только ядро и WASAPI. -->
+    <PackageReference Include="NAudio.Core" Version="2.2.1" />
+    <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
   </ItemGroup>
 </Project>

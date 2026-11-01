@@ -15,7 +15,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Company>DotShell</Company>
     <Product>DotShell</Product>
-    <Version>0.63.0</Version>
+    <Version>0.64.0</Version>
 
     <!-- Комментарии с разделителями из дефисов ломают проверку XML, а файл
          документации мы не генерируем, поэтому выключаем эту проверку везде. -->
