@@ -16,32 +16,32 @@
         </Grid.ColumnDefinitions>
 
         <!-- Юнит с пастью: Canvas шире самого юнита, чтобы зубки было куда разводить -->
-        <Canvas x:Name="MouthCanvas" Grid.Column="0" Width="46" Height="52"
+        <Canvas x:Name="MouthCanvas" Grid.Column="0" Width="44" Height="52"
                 VerticalAlignment="Center" ClipToBounds="False">
             <Path x:Name="MouthTop" Fill="{DynamicResource DsAccent}" Opacity="0"
-                  Data="M 0,24 L 22,24 L 11,11 Z" Canvas.Left="0" Canvas.Top="0">
+                  Data="M 0,24 L 22,24 L 11,11 Z" Canvas.Left="11" Canvas.Top="0">
                 <Path.RenderTransform>
                     <TranslateTransform x:Name="TopShift" Y="0" />
                 </Path.RenderTransform>
             </Path>
             <Path x:Name="MouthBottom" Fill="{DynamicResource DsAccent}" Opacity="0"
-                  Data="M 0,24 L 22,24 L 11,37 Z" Canvas.Left="0" Canvas.Top="0">
+                  Data="M 0,24 L 22,24 L 11,37 Z" Canvas.Left="11" Canvas.Top="0">
                 <Path.RenderTransform>
                     <TranslateTransform x:Name="BottomShift" Y="0" />
                 </Path.RenderTransform>
             </Path>
 
-            <controls:Units x:Name="Faces" Canvas.Left="16" Canvas.Top="8" />
+            <controls:Units x:Name="Faces" Canvas.Left="9" Canvas.Top="8" />
         </Canvas>
 
         <StackPanel x:Name="Texts" Grid.Column="1" VerticalAlignment="Center"
-                    Margin="10,0,16,0" MinWidth="40">
+                    Margin="14,0,18,0" MinWidth="40" HorizontalAlignment="Left">
             <controls:TrackedText x:Name="TitleText" FontSize="8" Tracking="0.30"
-                                  Brush="{DynamicResource DsAccent}" HorizontalAlignment="Center" />
+                                  Brush="{DynamicResource DsAccent}" HorizontalAlignment="Left" />
             <TextBlock x:Name="MessageText" FontFamily="Segoe UI" FontSize="11.5"
                        TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                        Foreground="{DynamicResource DsText}" Margin="0,1,0,0"
-                       HorizontalAlignment="Center" />
+                       HorizontalAlignment="Left" />
         </StackPanel>
     </Grid>
 </UserControl>

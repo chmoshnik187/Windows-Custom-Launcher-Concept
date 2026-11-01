@@ -8,19 +8,19 @@ using System.Windows.Media.Animation;
 /// <summary>
 /// Уведомление внутри капсулы острова.
 ///
-/// Юнит «раскрывает пасть»: два треугольника расходятся вверх и вниз от центра,
-/// выходя за края капсулы, — и текст уведомления появляется между ними. Ширину
-/// капсулы просит владелец, контрол только сообщает, сколько места нужно тексту.
+/// Показ идёт тремя шагами, а не одним: капсула сначала сжимается к юниту, юнит
+/// остаётся в центре, и только потом вокруг него раскрывается пасть, а текст
+/// выезжает следом. Раньше зубки двигались, пока юнит стоял на месте — владелец
+/// справедливо заметил, что зубы должны быть его, а не отдельные.
 ///
-/// Переносы здесь не нужны: сообщение идёт одной строкой и обрезается, если места
-/// не хватило. Переносы в капсуле высотой 46 px превращаются в кашу.
+/// Пасть — два треугольника, которые расходятся вверх и вниз, выходя за края
+/// капсулы: слой лежит НАД пилюлей, поэтому её ClipToBounds их не режет.
 /// </summary>
 public partial class IslandNotification : UserControl
 {
-    // Именованные элементы внутри RenderTransform не попадают в поля XAML —
-    // это Freezable, а не визуальный элемент. Берём трансформы по ссылке из Path.
     private readonly TranslateTransform? _topShift;
     private readonly TranslateTransform? _bottomShift;
+
     public IslandNotification()
     {
         InitializeComponent();
@@ -29,12 +29,9 @@ public partial class IslandNotification : UserControl
         // создаются, поэтому берём ссылки у самих путей.
         _topShift = MouthTop.RenderTransform as TranslateTransform;
         _bottomShift = MouthBottom.RenderTransform as TranslateTransform;
-
-        // Пасть в покое: зубки сомкнуты в точку.
-        if (_topShift is not null) _topShift.Y = 0;
-        if (_bottomShift is not null) _bottomShift.Y = 0;
     }
-    /// <summary>Сколько места нужно тексту (DIP), без учёта юнита и отступов.</summary>
+
+    /// <summary>Сколько места нужно тексту (DIP), без юнита и отступов.</summary>
     public double MeasureWidth(string title, string message)
     {
         double pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
@@ -51,28 +48,38 @@ public partial class IslandNotification : UserControl
         return Math.Max(messageText.Width, titleText.Width) + 2;
     }
 
-    /// <summary>Показать текст и открыть пасть.</summary>
-    public void Present(string title, string message)
+    /// <summary>Первый шаг: только юнит, рот закрыт, текст спрятан.</summary>
+    public void Prepare(string title, string message)
     {
-
         TitleText.Text = (title ?? string.Empty).ToUpperInvariant();
         MessageText.Text = message ?? string.Empty;
+
         Visibility = Visibility.Visible;
 
-        MoveY(_topShift, -17, 230);
-        MoveY(_bottomShift, 17, 230);
-        Fade(MouthTop, 1, 160);
-        Fade(MouthBottom, 1, 160);
+        // Текст убираем из раскладки совсем: иначе он, невидимый, всё равно занимает
+        // ширину, и юнит стоит слева от центра вместо центра капсулы.
+        Texts.Visibility = Visibility.Collapsed;
+        Texts.Opacity = 0;
+        SetMouth(open: false, animate: false);
     }
 
-    /// <summary>Закрыть пасть и спрятать уведомление.</summary>
-    public void Dismiss(Action? after = null)
-    {
-        MoveY(_topShift, 0, 180);
-        MoveY(_bottomShift, 0, 180);
-        Fade(MouthTop, 0, 160);
-        Fade(MouthBottom, 0, 160);
+    /// <summary>Второй шаг: пасть раскрывается.</summary>
+    public void OpenMouth() => SetMouth(open: true, animate: true);
 
+    /// <summary>Третий шаг: текст проявляется рядом с юнитом.</summary>
+    public void ShowText()
+    {
+        Texts.Visibility = Visibility.Visible;
+        Fade(Texts, 1, 220);
+    }
+
+    public void HideText() => Fade(Texts, 0, 140);
+
+    public void CloseMouth() => SetMouth(open: false, animate: true);
+
+    /// <summary>Спрятать после закрытия: ждём, пока зубки сойдутся.</summary>
+    public void Hide(Action? after = null)
+    {
         var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(220) };
         timer.Tick += (_, _) =>
         {
@@ -83,10 +90,30 @@ public partial class IslandNotification : UserControl
         timer.Start();
     }
 
+    private void SetMouth(bool open, bool animate)
+    {
+        double target = open ? 17 : 0;
+
+        if (!animate)
+        {
+            if (_topShift is not null) _topShift.Y = -target;
+            if (_bottomShift is not null) _bottomShift.Y = target;
+            MouthTop.Opacity = open ? 1 : 0;
+            MouthBottom.Opacity = open ? 1 : 0;
+            return;
+        }
+
+        MoveY(_topShift, -target, 230);
+        MoveY(_bottomShift, target, 230);
+        Fade(MouthTop, open ? 1 : 0, 160);
+        Fade(MouthBottom, open ? 1 : 0, 160);
+    }
+
     /// <summary>Двигать зубок: анимация вешается прямо на трансформ, без Storyboard.</summary>
     private static void MoveY(TranslateTransform? target, double to, int milliseconds)
     {
         if (target is null) return;
+
         var animation = new DoubleAnimation(to, TimeSpan.FromMilliseconds(milliseconds))
         {
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },

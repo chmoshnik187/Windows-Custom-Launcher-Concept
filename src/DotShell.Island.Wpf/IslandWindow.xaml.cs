@@ -898,6 +898,9 @@ public partial class IslandWindow : Window
     //  Режим «не мешать»
     // ==================================================================
 
+    /// <summary>Ширина капсулы, когда в ней остаётся только юнит.</summary>
+    private const double UnitOnlyWidth = 84;
+
     private const double QuietWidth = 260;
     private const double QuietHeight = 5;
 
@@ -935,29 +938,22 @@ public partial class IslandWindow : Window
             double needed = _notice.MeasureWidth(title, text);
             double target = Math.Clamp(needed + 120, CollapsedWidth, 1100);
 
-            // Запоминаем геометрию: после показа капсула обязана вернуться на место,
-            // иначе уведомление утаскивает остров в сторону (проверено).
             _noticeSavedLeft = Left;
             _noticeSavedWidth = Width;
 
-            // Окно — сразу по нужной ширине, чтобы капсуле было куда расти.
+            // Окно сразу по максимальной ширине (оно прозрачное): капсуле будет куда
+            // расти, и текст не дёрнется, пока едет ширина.
             Width = target + 40;
             Left = (SystemParameters.WorkArea.Width - Width) / 2;
 
             CollapsedRow.Visibility = Visibility.Collapsed;
-            _notice.Visibility = Visibility.Visible;
+            _notice.Prepare(title, text);
 
-            var grow = new DoubleAnimation(target, TimeSpan.FromMilliseconds(220))
-            {
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-            };
-            Pill.BeginAnimation(FrameworkElement.WidthProperty, grow);
-
-            _notice.Present(title, text);
+            _ = PlayNoticeAsync(target);
 
             _noticeTimer = new System.Windows.Threading.DispatcherTimer
             {
-                Interval = TimeSpan.FromSeconds(5.5),
+                Interval = TimeSpan.FromSeconds(6),
             };
             _noticeTimer.Tick += (_, _) => HideNotification();
             _noticeTimer.Start();
@@ -966,24 +962,70 @@ public partial class IslandWindow : Window
         }
         catch (Exception ex)
         {
-            // Что-то не сложилось: возвращаем капсулу как была, чтобы не оставить
-            // пустую растянутую полосу, и отдаём показ обычной карточке.
+            // Что-то не сложилось: возвращаем капсулу как была и отдаём показ карточке.
             try { HideNotification(); } catch { }
-            Log.Info($"island notification failed: {ex}");
+            Log.Info($"island notification failed: {ex.Message}");
             return false;
         }
     }
 
-    private void HideNotification()
+    /// <summary>
+    /// Три шага: сжаться к юниту, раскрыть пасть, показать текст с ростом капсулы.
+    /// Паузы — чтобы шаги читались глазом, а не сливались в один рывок.
+    /// </summary>
+    private async Task PlayNoticeAsync(double target)
+    {
+        try
+        {
+            await AnimateWidthAsync(UnitOnlyWidth, 180);
+            await Task.Delay(70);
+
+            _notice?.OpenMouth();
+            await Task.Delay(120);
+
+            _notice?.ShowText();
+            await AnimateWidthAsync(target, 260);
+        }
+        catch (Exception ex)
+        {
+            Log.Info($"notice animation failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>Анимация ширины капсулы с ожиданием завершения.</summary>
+    private Task AnimateWidthAsync(double width, int milliseconds)
+    {
+        var done = new TaskCompletionSource();
+
+        var animation = new DoubleAnimation(width, TimeSpan.FromMilliseconds(milliseconds))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut },
+        };
+        animation.Completed += (_, _) => done.TrySetResult();
+
+        Pill.BeginAnimation(FrameworkElement.WidthProperty, animation);
+        return done.Task;
+    }
+    private async void HideNotification()
     {
         _noticeTimer?.Stop();
         _noticeTimer = null;
 
         if (_notice is null) return;
 
-        _notice.Dismiss(() =>
+        try
         {
-            // Возвращаем капсулу к обычной ширине и показываем прежнее содержимое.
+            // Обратный ход: текст гаснет, пасть закрывается, капсула снова сжимается
+            // к юниту и только потом возвращается обычное содержимое.
+            _notice.HideText();
+            await Task.Delay(140);
+
+            _notice.CloseMouth();
+            await AnimateWidthAsync(UnitOnlyWidth, 180);
+            await Task.Delay(60);
+
+            _notice.Hide();
+
             Pill.BeginAnimation(FrameworkElement.WidthProperty, null);
             Pill.Width = CollapsedWidth;
             CollapsedRow.Visibility = Visibility.Visible;
@@ -991,7 +1033,19 @@ public partial class IslandWindow : Window
             // Возвращаем окно штатным путём: он сам центрирует капсулу и знает про
             // рабочую область. Ручные Width/Left давали уезд вправо на 600 px.
             ResizeWindowTo(CollapsedWidth, CollapsedHeight);
-        });
+        }
+        catch (Exception ex)
+        {
+            Log.Info($"notice hide failed: {ex.Message}");
+            try
+            {
+                Pill.BeginAnimation(FrameworkElement.WidthProperty, null);
+                Pill.Width = CollapsedWidth;
+                CollapsedRow.Visibility = Visibility.Visible;
+                ResizeWindowTo(CollapsedWidth, CollapsedHeight);
+            }
+            catch { }
+        }
     }
     private void UpdateQuietMode()
     {
