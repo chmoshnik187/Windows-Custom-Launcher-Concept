@@ -35,7 +35,7 @@ Wallpaper Engine — берётся из превью текущих обоев 
 |---|---|
 | ![Остров](images/island-home.png) | ![Плеер](images/player-cover.png) |
 | **Заметки, задачи и таймер** | **Окно обновления** |
-| ![Заметки и задачи](images/chat.png) | ![Обновление](images/restyle-pill.png) |
+| ![Заметки и задачи](images/notes-tab.png) | ![Окно обновления](images/update-window.png) |
 
 </div>
 
