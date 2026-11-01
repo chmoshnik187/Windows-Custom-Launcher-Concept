@@ -204,6 +204,7 @@ public partial class IslandWindow : Window
 
         Loaded += OnWindowLoaded;
         Loaded += (_, _) => { if (Program.OpenSettingsOnStart) OpenSettings(); };
+        Loaded += (_, _) => { if (LauncherHost.OpenOnce) Dispatcher.BeginInvoke(LauncherHost.Toggle); };
 
         // Первая отрисовка переписки: прокрутка в конец, иначе чат открывается
         // на самых старых репликах, а свежие висят ниже без движения.

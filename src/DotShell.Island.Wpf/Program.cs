@@ -129,6 +129,11 @@ public static class Program
 
             return failed == 0 ? 0 : 1;
         }
+        // --launcher: сразу открыть умный поиск (удобно для снимков и проверки).
+        if (args.Any(a => a.Equals("--launcher", StringComparison.OrdinalIgnoreCase)))
+        {
+            LauncherHost.OpenOnce = true;
+        }
         // Иконки рабочего стола: --icons-apply / --icons-restore
         // (необязательный --icons-dir=PATH — работать с папкой вместо рабочего стола).
         bool iconsApply = args.Any(a => a.Equals("--icons-apply", StringComparison.OrdinalIgnoreCase));

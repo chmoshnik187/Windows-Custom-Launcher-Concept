@@ -21,10 +21,20 @@ using DotShell.Core.Launcher;
 public partial class LauncherWindow : Window
 {
     private readonly AppIndex _index;
+    private readonly DotShell.Core.Launcher.FileIndex _files = new();
 
     public LauncherWindow()
     {
         InitializeComponent();
+
+        // Меню «Закрепить» объявлено в стиле пункта, поэтому обработчик подключаем
+        // здесь: XAML не связывает Click внутри Style.Setter.
+        foreach (var setter in Results.ItemContainerStyle.Setters.OfType<Setter>())
+        {
+            if (setter.Property != System.Windows.FrameworkElement.ContextMenuProperty) continue;
+            if (setter.Value is not System.Windows.Controls.ContextMenu menu) continue;
+            menu.AddHandler(System.Windows.Controls.MenuItem.ClickEvent, new RoutedEventHandler(OnPinToIsland));
+        }
 
         _index = ShellServices.Instance.Launcher;
         _index.Changed += () => Dispatcher.BeginInvoke(Refresh);
@@ -72,16 +82,27 @@ public partial class LauncherWindow : Window
             return;
         }
 
-        var rows = _index.Search(SearchBox.Text, 8)
+        _files.EnsureFresh();
+
+        var rows = _index.Search(SearchBox.Text, 6)
             .Select(e => new LauncherRow(e))
             .ToList();
+
+        // Файлы идут после программ: сначала то, что запускают, потом то, что открывают.
+        foreach (var file in _files.Search(SearchBox.Text, 6))
+            rows.Add(new LauncherRow(file));
 
         Results.ItemsSource = rows;
         if (rows.Count > 0) Results.SelectedIndex = 0;
 
+        int apps = rows.Count(r => !r.IsFile);
+        int files = rows.Count - apps;
+
+        Log.Info($"launcher: запрос «{SearchBox.Text}» → {apps} программ, {files} файлов");
+
         StatusLine.Text = rows.Count == 0
             ? "ничего не найдено · Enter — запустить · ↑↓ — выбор · Alt+Enter — папка · Esc — закрыть"
-            : "Enter — запустить · ↑↓ — выбор · Alt+Enter — папка программы · Esc — закрыть";
+            : $"{apps} программ · {files} файлов · Enter — открыть · Alt+Enter — показать в папке · Esc — закрыть";
     }
 
     private void OnSearchKeyDown(object sender, KeyEventArgs e)
@@ -142,7 +163,7 @@ public partial class LauncherWindow : Window
                     UseShellExecute = true,
                     WorkingDirectory = Path.GetDirectoryName(row.Target) ?? string.Empty,
                 });
-                _index.Bump(row.Entry);
+                if (row.Entry is not null) _index.Bump(row.Entry);
             }
             Hide();
         }
@@ -166,15 +187,30 @@ public sealed class LauncherRow
 {
     private static readonly Dictionary<string, BitmapSource?> IconCache = new();
 
-    public AppEntry Entry { get; }
-    public string Name => Entry.Name;
-    public string Target => Entry.Target;
+    public AppEntry? Entry { get; }
+    public DotShell.Core.Launcher.FileEntry? File { get; }
+
+    /// <summary>Файл или папка, а не программа.</summary>
+    public bool IsFile => File is not null;
+
+    public string Name => File?.Name ?? Entry!.Name;
+    public string Target => File?.Path ?? Entry!.Target;
+
+    /// <summary>Подпись под результатом: у файла — папка и тип, у программы — путь к exe.</summary>
+    public string Detail => File is null ? Entry!.Target : File.Folder + " · " + File.Kind;
+
     public BitmapSource? Icon { get; }
 
     public LauncherRow(AppEntry entry)
     {
         Entry = entry;
         Icon = GetIcon(entry.Target);
+    }
+
+    public LauncherRow(DotShell.Core.Launcher.FileEntry file)
+    {
+        File = file;
+        Icon = GetIcon(file.Path);
     }
 
     private static BitmapSource? GetIcon(string target)
@@ -205,6 +241,8 @@ public sealed class LauncherRow
 /// <summary>Одиночное окно лаунчера + горячая клавиша из любого места системы.</summary>
 public static class LauncherHost
 {
+    /// <summary>--launcher: открыть поиск сразу после старта.</summary>
+    public static bool OpenOnce { get; set; }
     private static LauncherWindow? _window;
 
     public static void Toggle()

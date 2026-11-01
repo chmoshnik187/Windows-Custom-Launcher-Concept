@@ -23,7 +23,8 @@
             <Setter Property="ContextMenu">
                 <Setter.Value>
                     <ContextMenu>
-                        <MenuItem Header="Закрепить плиткой на острове" Click="OnPinToIsland" />
+                        <!-- Обработчик подключается в коде: внутри Style Click не связывается. -->
+                        <MenuItem Header="Закрепить плиткой на острове" Tag="{Binding}" />
                     </ContextMenu>
                 </Setter.Value>
             </Setter>
@@ -98,7 +99,7 @@
                                            FontWeight="SemiBold"
                                            Foreground="{DynamicResource DsText}"
                                            TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{Binding Target}" FontFamily="Segoe UI" FontSize="9"
+                                <TextBlock Text="{Binding Detail}" FontFamily="Segoe UI" FontSize="9"
                                            Foreground="{DynamicResource DsTextMuted}"
                                            TextTrimming="CharacterEllipsis" />
                             </StackPanel>
