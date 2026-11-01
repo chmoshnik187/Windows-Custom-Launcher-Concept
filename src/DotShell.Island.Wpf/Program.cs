@@ -37,6 +37,98 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        // Самопроверка: --selftest. Запускается в CI/перед релизом, ничего не меняет
+        // в системе, печатает результат и возвращает код (0 — всё в порядке).
+        if (args.Any(a => a.StartsWith("--selftest", StringComparison.OrdinalIgnoreCase)))
+        {
+            // Консоль Windows по умолчанию не в UTF-8 — русский текст в отчёте
+            // превращается в кашу, а отчёт читают глазами.
+            try { Console.OutputEncoding = System.Text.Encoding.UTF8; } catch { }
+
+            var results = new List<(string Name, bool Ok, string Note)>();
+
+            void Check(string name, Func<(bool ok, string note)> action)
+            {
+                try
+                {
+                    var (ok, note) = action();
+                    results.Add((name, ok, note));
+                }
+                catch (Exception ex)
+                {
+                    results.Add((name, false, ex.GetType().Name + ": " + ex.Message));
+                }
+            }
+
+            Check("версия", () =>
+            {
+                var text = DotShell.Core.Updates.UpdateChecker.ActualText;
+                return (Version.TryParse(text, out _), text);
+            });
+
+            Check("настройки: чтение", () =>
+            {
+                var dir = DotShell.Core.Settings.AppSettings.SettingsDirectory;
+                return (System.IO.Directory.Exists(dir), dir);
+            });
+
+            Check("акцент", () =>
+            {
+                var accent = DotShell.Island.Wpf.ColorPalette.Accent;
+                return (accent.A > 0, $"#{accent.R:X2}{accent.G:X2}{accent.B:X2}");
+            });
+
+            Check("мониторы", () =>
+            {
+                int count = DotShell.Core.Windowing.Monitors.Count;
+                return (count > 0, $"{count} шт.");
+            });
+
+            Check("иконки стола", () =>
+            {
+                var links = DotShell.Island.Wpf.Desktop.DesktopIcons.Shortcuts();
+                return (true, $"{links.Count} ярлыков");
+            });
+
+            Check("погода: кэш", () =>
+            {
+                var dir = DotShell.Core.Settings.AppSettings.SettingsDirectory;
+                return (System.IO.Directory.Exists(dir), dir);
+            });
+
+            Check("обновление: проверка версии", () =>
+            {
+                var current = DotShell.Core.Updates.UpdateChecker.Current;
+                return (current.Major >= 0, current.ToString(3));
+            });
+
+            int failed = results.Count(r => !r.Ok);
+
+            var lines = new List<string>();
+            foreach (var (name, ok, note) in results)
+                lines.Add($"{(ok ? "ok  " : "FAIL")} {name}: {note}");
+
+            lines.Add(failed == 0 ? "SMOKE ok" : $"SMOKE fail ({failed})");
+
+            // Консоль Windows отдаёт OEM-кодировку при перенаправлении, и русский
+            // отчёт превращается в кашу. Поэтому пишем UTF-8 в файл, а в консоль —
+            // то, что переживёт любую кодировку.
+            // В консоль — только ASCII-итог: подробности лежат в UTF-8 файле,
+            // а OEM-консоль Windows ломает русские буквы при перенаправлении.
+            Console.WriteLine(failed == 0 ? "SMOKE ok" : $"SMOKE fail ({failed})");
+
+            var selfTestPath = args
+                .FirstOrDefault(a => a.StartsWith("--selftest=", StringComparison.OrdinalIgnoreCase))
+                ?["--selftest=".Length..];
+
+            if (!string.IsNullOrWhiteSpace(selfTestPath))
+            {
+                try { System.IO.File.WriteAllLines(selfTestPath!, lines, System.Text.Encoding.UTF8); }
+                catch { }
+            }
+
+            return failed == 0 ? 0 : 1;
+        }
         // Иконки рабочего стола: --icons-apply / --icons-restore
         // (необязательный --icons-dir=PATH — работать с папкой вместо рабочего стола).
         bool iconsApply = args.Any(a => a.Equals("--icons-apply", StringComparison.OrdinalIgnoreCase));

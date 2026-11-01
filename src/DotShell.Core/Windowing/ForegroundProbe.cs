@@ -60,15 +60,16 @@ public static class ForegroundProbe
             // Рабочий стол и панель задач — не повод прятаться.
             if (name is "Progman" or "WorkerW" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd") return false;
 
-            var area = System.Windows.Forms.Screen.FromHandle(foreground).WorkingArea;
+            var area = Monitors.ForWindow(foreground);
+            if (area is null) return false;
 
             if (!GetWindowRect(foreground, out var rect)) return false;
 
             // Допуск: окно «развёрнуто», если занимает почти всю рабочую область.
             const int tolerance = 8;
 
-            bool wide = rect.Left <= area.Left + tolerance && rect.Right >= area.Right - tolerance;
-            bool tall = rect.Top <= area.Top + tolerance && rect.Bottom >= area.Bottom - tolerance;
+            bool wide = rect.Left <= area.Value.Left + tolerance && rect.Right >= area.Value.Right - tolerance;
+            bool tall = rect.Top <= area.Value.Top + tolerance && rect.Bottom >= area.Value.Bottom - tolerance;
 
             return wide && tall;
         }
