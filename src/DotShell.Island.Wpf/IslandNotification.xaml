@@ -9,7 +9,7 @@
       с юнитом выглядят чужеродно. Вместо них юнит сам реагирует — водит взглядом по
       строке, как человек, читающий уведомление (см. Units.Reading).
     -->
-    <Grid x:Name="Layout" HorizontalAlignment="Center">
+    <Grid x:Name="Layout" HorizontalAlignment="Left">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="Auto" />

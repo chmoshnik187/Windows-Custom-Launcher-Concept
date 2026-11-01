@@ -17,9 +17,47 @@ using System.Windows.Media.Animation;
 /// </summary>
 public partial class IslandNotification : UserControl
 {
+    private readonly RectangleGeometry _clip = new();
+
     public IslandNotification()
     {
         InitializeComponent();
+
+        // Текст не проявляется сам по себе — он уже лежит в капсуле и обрезается
+        // по её текущей ширине. Раскрывается капсула — «проступают» буквы, начиная
+        // с середины. Владелец: «пусть буквы появляются только внутри окна».
+        Texts.Clip = _clip;
+        SizeChanged += (_, _) => ApplyClip(_clipWidth);
+        Texts.SizeChanged += (_, _) => ApplyClip(_clipWidth);
+    }
+
+    private double _clipWidth = 84;
+
+    /// <summary>Видимая ширина текста: ровно ширина капсулы в этот кадр.</summary>
+    public void SetVisibleWidth(double width)
+    {
+        _clipWidth = Math.Max(0, width);
+
+        // Ширина слоя идёт за капсулой: юнит остаётся в её центре, а текст
+        // проступает справа, ровно по краю раскрывающегося окна.
+        Width = _clipWidth;
+        ApplyClip(_clipWidth);
+    }
+
+    /// <summary>
+    /// Обрезка текста по ширине капсулы. Юнит при этом не трогаем: он должен быть
+    /// виден всегда, а буквы проступают из середины, будто окно раздвигается.
+    /// </summary>
+    private void ApplyClip(double width)
+    {
+        if (Texts.ActualWidth <= 2 || Texts.ActualHeight <= 2) return;
+
+        // Из ширины капсулы вычитаем место юнита и отступы — остаётся окно текста.
+        double available = Math.Max(0, width - 78);
+        double w = Math.Min(available, Texts.ActualWidth);
+        double left = (Texts.ActualWidth - w) / 2;
+
+        _clip.Rect = new Rect(left, -4, Math.Max(0.1, w), Texts.ActualHeight + 8);
     }
 
     /// <summary>Сколько места нужно тексту (DIP), без юнита и отступов.</summary>
@@ -49,29 +87,23 @@ public partial class IslandNotification : UserControl
 
         // Текст вне раскладки, пока не показан: иначе он держит ширину, и юнит
         // стоит слева от центра вместо центра капсулы.
-        Texts.Visibility = Visibility.Collapsed;
-        Texts.Opacity = 0;
+        Texts.Visibility = Visibility.Visible;
+        Texts.Opacity = 1;
+
+        // Ширину текста фиксируем по содержимому: иначе при узком слое он схлопнется
+        // в многоточие вместо того, чтобы проступать по краю.
+        Texts.Width = MeasureWidth(title, message) + 4;
+        ApplyClip(_clipWidth);
     }
 
     /// <summary>Второй шаг: юнит начинает читать, текст проявляется.</summary>
-    public void StartReading()
-    {
-        Faces.Reading = true;
-        Texts.Visibility = Visibility.Visible;
-
-        var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220))
-        {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-            FillBehavior = FillBehavior.HoldEnd,
-        };
-        Texts.BeginAnimation(OpacityProperty, fade);
-    }
+    /// <summary>Юнит начинает читать; текст уже виден через обрезку по ширине.</summary>
+    public void StartReading() => Faces.Reading = true;
 
     /// <summary>Юнит перестаёт читать: взгляд возвращается к курсору.</summary>
     public void StopReading() => Faces.Reading = false;
 
-    public void HideText() => Texts.BeginAnimation(OpacityProperty,
-        new DoubleAnimation(Texts.Opacity, 0, TimeSpan.FromMilliseconds(140)));
+    public void HideText() { }
 
     /// <summary>Спрятать уведомление.</summary>
     public void Hide(Action? after = null)
