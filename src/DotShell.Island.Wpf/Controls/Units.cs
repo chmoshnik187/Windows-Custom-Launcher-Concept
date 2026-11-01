@@ -38,6 +38,24 @@ public sealed class Units : FrameworkElement
     /// <summary>Включать ли реакцию на клик (в острове — нет, там клик принадлежит капсуле).</summary>
     public bool Interactive { get; set; }
 
+    /// <summary>
+    /// Режим «читает»: юнит не следит за курсором, а водит взглядом по строке
+    /// слева направо, как человек, читающий уведомление.
+    /// </summary>
+    public bool Reading
+    {
+        get => _reading;
+        set
+        {
+            if (_reading == value) return;
+            _reading = value;
+            _readPhase = 0;
+        }
+    }
+
+    private bool _reading;
+    private double _readPhase;
+
     private static readonly int[,] Body =
     {
         { 0, 1, 1, 0 },
@@ -84,6 +102,22 @@ public sealed class Units : FrameworkElement
 
     private void TrackCursor()
     {
+        if (_reading)
+        {
+            // Взгляд едет по строке: плавно вправо, затем короткий возврат влево.
+            _readPhase += 0.045;
+            if (_readPhase > 1.25) _readPhase = 0;
+
+            double t = Math.Min(_readPhase, 1.0);
+            _dirX = -0.85 + 1.7 * t;
+            _dirY = 0.32;
+
+            _leanX += (_dirX - _leanX) * 0.25;
+            _leanY += (_dirY - _leanY) * 0.25;
+            _lastAttention = DateTime.Now;
+            return;
+        }
+
         if (!Win32.GetCursorPos(out var cursor)) return;
 
         var center = PointToScreen(new Point(ActualWidth / 2, ActualHeight / 2));

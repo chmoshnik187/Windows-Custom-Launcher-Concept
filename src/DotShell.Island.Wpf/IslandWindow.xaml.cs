@@ -980,10 +980,9 @@ public partial class IslandWindow : Window
             await AnimateWidthAsync(UnitOnlyWidth, 180);
             await Task.Delay(70);
 
-            _notice?.OpenMouth();
+            _notice?.StartReading();
             await Task.Delay(120);
 
-            _notice?.ShowText();
             await AnimateWidthAsync(target, 260);
         }
         catch (Exception ex)
@@ -1020,7 +1019,7 @@ public partial class IslandWindow : Window
             _notice.HideText();
             await Task.Delay(140);
 
-            _notice.CloseMouth();
+            _notice.StopReading();
             await AnimateWidthAsync(UnitOnlyWidth, 180);
             await Task.Delay(60);
 
