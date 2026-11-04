@@ -1,7 +1,7 @@
 <Window x:Class="DotShell.Island.Wpf.DashboardWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Width="1000" Height="620"
+        Width="1000" Height="560"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="False" Topmost="True" ResizeMode="NoResize"
         WindowStartupLocation="Manual" Visibility="Collapsed" Title="DotShell — обзор">
@@ -33,6 +33,13 @@
 
                 <!-- ОБЗОР -->
                 <Grid x:Name="OverviewPanel">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Верхняя половина: часы, метрики, календарь -->
+                    <Grid Grid.Row="0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="392" />
@@ -96,6 +103,44 @@
                             <UniformGrid x:Name="CalGrid" Rows="6" Columns="7" />
                         </StackPanel>
                     </Border>
+                    </Grid>
+
+                    <!-- Нижняя половина: медиа и погода. Раньше здесь была пустота
+                         на треть экрана — панель выглядела недоделанной. -->
+                    <Grid Grid.Row="1" Margin="0,26,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="392" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Margin="0,0,40,0" VerticalAlignment="Top">
+                            <TextBlock Text="01 · МЕДИА" FontFamily="Bahnschrift" FontSize="9"
+                                       Foreground="#5C5C66" />
+                            <TextBlock x:Name="OvMediaTitle" Text="ничего не играет"
+                                       FontFamily="Bahnschrift" FontSize="20" Foreground="#ECECEE"
+                                       Margin="0,8,0,0" TextTrimming="CharacterEllipsis" />
+                            <TextBlock x:Name="OvMediaArtist" Text="" FontFamily="Segoe UI"
+                                       FontSize="12" Foreground="#8A8A94" Margin="0,3,0,0"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+
+                        <Border Grid.Column="1" BorderBrush="#1E1E24" BorderThickness="1,0,0,0"
+                                Padding="24,0,0,0">
+                            <StackPanel VerticalAlignment="Top">
+                                <TextBlock Text="02 · ПОГОДА" FontFamily="Bahnschrift" FontSize="9"
+                                           Foreground="#5C5C66" />
+                                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                    <TextBlock x:Name="OvWeatherTemp" Text="—"
+                                               FontFamily="Bahnschrift" FontSize="32"
+                                               Foreground="#ECECEE" />
+                                    <TextBlock x:Name="OvWeatherCity" Text=""
+                                               FontFamily="Bahnschrift" FontSize="11"
+                                               Foreground="#8A8A94" VerticalAlignment="Bottom"
+                                               Margin="10,0,0,7" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
                 </Grid>
 
                 <!-- МЕДИА -->

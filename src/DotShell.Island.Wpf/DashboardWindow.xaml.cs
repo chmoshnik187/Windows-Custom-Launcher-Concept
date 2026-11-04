@@ -213,6 +213,9 @@ public partial class DashboardWindow : Window
         {
             MediaTitle.Text = "Ничего не играет";
             MediaArtist.Text = string.Empty;
+
+            if (OvMediaTitle is not null) OvMediaTitle.Text = "ничего не играет";
+            if (OvMediaArtist is not null) OvMediaArtist.Text = "включи что-нибудь — покажу здесь";
             MediaAlbum.Text = string.Empty;
             PlayPause.Text = "▶";
             ProgressText.Text = "— / —";
@@ -222,6 +225,12 @@ public partial class DashboardWindow : Window
 
         MediaTitle.Text = string.IsNullOrWhiteSpace(media.Title) ? "Без названия" : media.Title;
         MediaArtist.Text = media.Artist ?? string.Empty;
+
+        if (OvMediaTitle is not null)
+            OvMediaTitle.Text = string.IsNullOrWhiteSpace(media.Title) ? "Без названия" : media.Title;
+
+        if (OvMediaArtist is not null)
+            OvMediaArtist.Text = string.IsNullOrWhiteSpace(media.Artist) ? media.SourceApp : media.Artist;
         MediaAlbum.Text = string.IsNullOrWhiteSpace(media.Album) ? media.SourceApp : media.Album;
         PlayPause.Text = media.IsPlaying ? "❚❚" : "▶";
 
@@ -264,6 +273,10 @@ public partial class DashboardWindow : Window
             }
 
             WeatherCity.Text = weather.City.ToUpperInvariant();
+
+            if (OvWeatherTemp is not null) OvWeatherTemp.Text = $"{weather.Temperature:0}°";
+            if (OvWeatherCity is not null)
+                OvWeatherCity.Text = $"{weather.City} · {WeatherNow.Translate(weather.Condition)}";
             WeatherTemp.Text = $"{weather.Temperature:0}°";
             WeatherCondition.Text = WeatherNow.Translate(weather.Condition);
             WeatherFeels.Text = $"{weather.FeelsLike:0}°";
@@ -334,7 +347,10 @@ public partial class DashboardWindow : Window
         var area = SystemParameters.WorkArea;
 
         Left = area.Left + (area.Width - Width) / 2;
-        Top = area.Top;
+
+        // Отступ сверху: иначе раскрытый остров висит поверх шапки обзора и
+        // перекрывает вкладки. 68 px — высота свёрнутой капсулы с запасом.
+        Top = area.Top + 68;
 
         var slide = new DoubleAnimation(-Height * 0.35, 18, TimeSpan.FromMilliseconds(260))
         {
