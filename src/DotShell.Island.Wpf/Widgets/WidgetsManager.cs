@@ -144,6 +144,23 @@ public static class WidgetsManager
         Store.UpdateSize(window.WidgetType, (int)window.ActualWidth, (int)window.ActualHeight);
     }
 
+    /// <summary>
+    /// Убрать все виджеты сразу: закрыть окна и почистить сохранённый состав.
+    /// Без этого виджеты копились — каждый запуск добавлял свои, и на столе
+    /// оказывался десяток окон, которые надо было закрывать по одному.
+    /// </summary>
+    public static void CloseAll()
+    {
+        foreach (var window in Open.Values.ToList())
+        {
+            try { window.Close(); } catch { }
+        }
+
+        Open.Clear();
+        Store.Clear();
+        Changed?.Invoke();
+    }
+
     /// <summary>Восстановить виджеты прошлого запуска (вызывается при старте шелла).</summary>
     public static void Restore()
     {

@@ -510,6 +510,7 @@ public partial class IslandWindow : Window
                 }));
                 menu.Add("Обзор", () => Dispatcher.BeginInvoke(() => DashboardWindow.Toggle()));
                 menu.Add("Витрина виджетов", () => Dispatcher.BeginInvoke(OpenWidgetGallery));
+                menu.Add("Убрать все виджеты", () => Dispatcher.BeginInvoke(Widgets.WidgetsManager.CloseAll));
                 menu.Add("Клавиши и сочетания", () => Dispatcher.BeginInvoke(OpenKeysWindow));
 
                 // Обновления: одна строка «проверить» и, если есть новее,
@@ -658,6 +659,11 @@ public partial class IslandWindow : Window
                 {
                     window.Width = size.W;
                     window.Height = size.H;
+
+                    // Размер, заданный флагом, тоже сохраняем: иначе в widgets.json
+                    // оставались нули, и следующий запуск открывал виджет по размеру
+                    // содержимого.
+                    Widgets.WidgetsManager.OnResized(window);
                 }
             });
         }

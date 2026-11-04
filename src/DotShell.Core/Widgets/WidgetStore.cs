@@ -54,6 +54,15 @@ public sealed class WidgetStore
         }
     }
 
+    /// <summary>Убрать весь сохранённый состав виджетов.</summary>
+    public void Clear()
+    {
+        if (Items.Count == 0) return;
+
+        Items.Clear();
+        Save();
+    }
+
     public void Remove(string type)
     {
         lock (_lock) Items.RemoveAll(i => i.Type == type);
