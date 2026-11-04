@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using DotShell.Core;
 using DotShell.Core.Settings;
 using DotShell.Island.Wpf.Desktop;
@@ -296,6 +297,14 @@ public partial class SettingsWindow : Window
 
         _category = tag;
 
+        // Ручное переключение категории снимает фильтр поиска.
+        if (SearchBox is not null && SearchBox.Text.Length == 0)
+        {
+            foreach (var category in Categories())
+                foreach (var row in VisualRows(category.Panel))
+                    row.Visibility = Visibility.Visible;
+        }
+
         PanelLook.Visibility = tag == "look" ? Visibility.Visible : Visibility.Collapsed;
         PanelIsland.Visibility = tag == "island" ? Visibility.Visible : Visibility.Collapsed;
         PanelWindows.Visibility = tag == "windows" ? Visibility.Visible : Visibility.Collapsed;
@@ -551,22 +560,39 @@ public partial class SettingsWindow : Window
         new Category("data", "ДАННЫЕ", PanelData),
     };
 
+    /// <summary>
+    /// Поиск по настройкам.
+    ///
+    /// Работает по ВИЗУАЛЬНОМУ дереву и координатам: фильтрация по логическому дереву
+    /// оставляла соседние строки видимыми, потому что шаблоны контролов живут отдельно.
+    /// Здесь мы собираем сами строки-контролы и подписи, сопоставляем их по вертикали
+    /// и прячем только то, что действительно не относится к запросу.
+    /// </summary>
     private void OnSearchChanged(object sender, TextChangedEventArgs e)
     {
         string query = SearchBox.Text?.Trim() ?? string.Empty;
         SearchHint.Visibility = query.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
 
+        // Собираем строки и подписи по всем категориям.
+        var rows = new List<FrameworkElement>();
+        var labels = new List<TextBlock>();
+
+        foreach (var category in Categories())
+        {
+            CollectRows(category.Panel, rows);
+            CollectLabels(category.Panel, labels);
+        }
+
+        // Снимаем прошлую фильтрацию.
+        foreach (var row in rows) row.Visibility = Visibility.Visible;
+        foreach (var label in labels) label.Visibility = Visibility.Visible;
+
         if (query.Length == 0)
         {
             foreach (var category in Categories())
-            {
                 category.Panel.Visibility = category.Tag == _category
                     ? Visibility.Visible
                     : Visibility.Collapsed;
-
-                foreach (UIElement child in category.Panel.Children)
-                    child.Visibility = Visibility.Visible;
-            }
 
             SearchInfo.Text = string.Empty;
             return;
@@ -578,9 +604,31 @@ public partial class SettingsWindow : Window
 
         foreach (var category in Categories())
         {
-            int count = Filter(category.Panel, query);
+            // Свёрнутая панель не имеет раскладки: координаты строк нулевые, и поиск
+            // в ней ничего не находил. Показываем на время замера, прячем после.
+            category.Panel.Visibility = Visibility.Visible;
+            category.Panel.UpdateLayout();
 
-            Tidy(category.Panel);
+            var categoryRows = new List<FrameworkElement>();
+            var categoryLabels = new List<TextBlock>();
+            CollectRows(category.Panel, categoryRows);
+            CollectLabels(category.Panel, categoryLabels);
+
+            int count = 0;
+
+            foreach (var row in categoryRows)
+            {
+                string text = RowTextByPosition(row, categoryLabels);
+                bool match = text.Contains(query, StringComparison.OrdinalIgnoreCase);
+
+                row.Visibility = match ? Visibility.Visible : Visibility.Collapsed;
+                if (match) count++;
+            }
+
+            // Подписи НЕ прячем: геометрический тест «подпись над строкой» ошибается
+            // и убирал название найденного пункта. Лишние заголовки лучше, чем пункт
+            // без подписи: по одному значению «Только развернутые окна» не понять,
+            // что это за настройка.
 
             if (count > bestCount)
             {
@@ -588,6 +636,18 @@ public partial class SettingsWindow : Window
                 bestTag = category.Tag;
                 bestTitle = category.Title;
             }
+        }
+
+        // Строки, которые лежат вне категорий, при поиске тоже прячем.
+        var globalRows = new List<FrameworkElement>();
+        CollectRows(this, globalRows);
+        foreach (var row in globalRows)
+        {
+            bool belongsToPanel = Categories().Any(category =>
+                VisualRows(category.Panel).Contains(row));
+
+            if (!belongsToPanel && !ReferenceEquals(row, SearchBox))
+                row.Visibility = Visibility.Collapsed;
         }
 
         if (bestCount == 0)
@@ -607,7 +667,6 @@ public partial class SettingsWindow : Window
         _category = bestTag;
         SearchInfo.Text = $"найдено {bestCount} · {bestTitle}";
 
-        // Переключаем категорию вручную: ищем кнопку обходом логического дерева.
         foreach (var button in RadioButtons(this))
         {
             if (button.Tag is string tag && tag == bestTag)
@@ -618,51 +677,113 @@ public partial class SettingsWindow : Window
         }
     }
 
-    /// <summary>
-    /// Вторая проходка после фильтрации: прячет контейнеры, внутри которых не осталось
-    /// ни одной видимой настройки, и подписи разделов, под которыми ничего не видно.
-    /// Без неё вокруг найденного пункта оставались соседние строки.
-    /// </summary>
-    private static void Tidy(DependencyObject node)
+    /// <summary>Строки-контролы: то, что можно спрятать целиком.</summary>
+    private static void CollectRows(DependencyObject root, List<FrameworkElement> rows)
     {
-        var children = Enumerable.ToList<object>(
-            Enumerable.Cast<object>(LogicalTreeHelper.GetChildren(node)));
-
-        foreach (var child in children)
+        foreach (var child in VisualChildren(root))
         {
-            if (child is not UIElement element)
+            if (child is CheckBox or ComboBox or Slider or TextBox or Button)
             {
-                if (child is DependencyObject nested) Tidy(nested);
-                continue;
+                rows.Add(child);
+                continue;   // внутрь шаблона контрола не лезем
             }
 
-            Tidy(element);
-
-            if (IsRow(element) || element is TextBlock || element is DotShell.Island.Wpf.Controls.TrackedText)
-                continue;
-
-            if (element.Visibility == Visibility.Visible && !HasVisibleRow(element))
-                element.Visibility = Visibility.Collapsed;
+            CollectRows(child, rows);
         }
     }
 
-    private static bool IsRow(UIElement element) =>
-        element is CheckBox || element is ComboBox || element is Slider
-        || element is TextBox || element is Button;
-
-    private static bool HasVisibleRow(DependencyObject node)
+    /// <summary>Подписи: TextBlock'и вне шаблонов контролов.</summary>
+    private static void CollectLabels(DependencyObject root, List<TextBlock> labels)
     {
-        foreach (var child in Enumerable.ToList<object>(
-                     Enumerable.Cast<object>(LogicalTreeHelper.GetChildren(node))))
+        foreach (var child in VisualChildren(root))
         {
-            if (child is not UIElement element || element.Visibility != Visibility.Visible)
-                continue;
+            if (child is CheckBox or ComboBox or Slider or TextBox or Button) continue;
 
-            if (IsRow(element)) return true;
-            if (HasVisibleRow(element)) return true;
+            if (child is TextBlock text && !string.IsNullOrWhiteSpace(text.Text))
+            {
+                labels.Add(text);
+                continue;
+            }
+
+            CollectLabels(child, labels);
+        }
+    }
+
+    private static IEnumerable<FrameworkElement> VisualRows(DependencyObject root)
+    {
+        var rows = new List<FrameworkElement>();
+        CollectRows(root, rows);
+        return rows;
+    }
+
+    private static IEnumerable<FrameworkElement> VisualChildren(DependencyObject root)
+    {
+        int count = VisualTreeHelper.GetChildrenCount(root);
+
+        for (int i = 0; i < count; i++)
+            if (VisualTreeHelper.GetChild(root, i) is FrameworkElement child)
+                yield return child;
+    }
+
+    /// <summary>Текст строки: её подпись — ближайший TextBlock выше в пределах 40 px.</summary>
+    private static string RowTextByPosition(FrameworkElement row, List<TextBlock> labels)
+    {
+        if (!row.IsLoaded) return string.Empty;
+
+        Point rowTop;
+        try { rowTop = row.TranslatePoint(new Point(0, 0), Window.GetWindow(row)); }
+        catch { return string.Empty; }
+
+        TextBlock? closest = null;
+        double bestDistance = double.MaxValue;
+
+        foreach (var label in labels)
+        {
+            if (!label.IsLoaded) continue;
+
+            Point labelTop;
+            try { labelTop = label.TranslatePoint(new Point(0, 0), Window.GetWindow(row)); }
+            catch { continue; }
+
+            double distance = rowTop.Y - labelTop.Y;
+            if (distance < 0 || distance > 40) continue;
+
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                closest = label;
+            }
         }
 
-        return false;
+        string own = row switch
+        {
+            System.Windows.Controls.ContentControl cc when cc.Content is string s => s,
+            TextBox textBox => textBox.Text,
+            _ => string.Empty,
+        };
+
+        return $"{closest?.Text} {own} {row.ToolTip}".Trim();
+    }
+
+    /// <summary>Стоит ли подпись прямо над строкой (в пределах 40 px).</summary>
+    private static bool IsLabelAbove(TextBlock label, FrameworkElement row)
+    {
+        if (!label.IsLoaded || !row.IsLoaded) return false;
+
+        try
+        {
+            var window = Window.GetWindow(row);
+            Point labelTop = label.TranslatePoint(new Point(0, 0), window);
+            Point rowTop = row.TranslatePoint(new Point(0, 0), window);
+
+            // Подпись стоит ВЫШЕ строки: расстояние = rowTop − labelTop.
+            double distance = rowTop.Y - labelTop.Y;
+            return distance >= -4 && distance <= 40;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>Текст строки: свой и предыдущего элемента (подписи стоят отдельными TextBlock).</summary>
