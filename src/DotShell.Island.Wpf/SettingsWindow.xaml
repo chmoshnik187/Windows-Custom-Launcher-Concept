@@ -230,6 +230,11 @@
                             <TextBlock Style="{StaticResource Section}" Text="КРОМКА" />
                             <ComboBox x:Name="IslandEdgeBox" Style="{StaticResource DsCombo}" />
 
+                            <TextBlock Style="{StaticResource Section}" Text="МАСШТАБ ИНТЕРФЕЙСА" />
+                            <Slider Style="{StaticResource DsSlider}" Minimum="0.8" Maximum="1.4"
+                                    SmallChange="0.1" LargeChange="0.1" TickFrequency="0.1"
+                                    Value="{Binding InterfaceScale}" />
+
                             <TextBlock Style="{StaticResource Section}" Text="ОТСТУП ОТ КРАЯ" />
                             <Slider Style="{StaticResource DsSlider}" Minimum="0" Maximum="24"
                                     Value="{Binding TopOffset}" />

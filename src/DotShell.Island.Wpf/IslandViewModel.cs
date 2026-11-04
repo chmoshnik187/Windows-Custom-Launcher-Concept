@@ -229,6 +229,18 @@ public sealed class IslandViewModel : INotifyPropertyChanged
         set { _services.Settings.Update(s => s.DesktopWidgets = value); RaisePropertyChanged(); }
     }
 
+    public double InterfaceScale
+    {
+        get => _services.Settings.Current.InterfaceScale;
+        set
+        {
+            double clamped = Math.Clamp(value, 0.8, 1.4);
+            if (Math.Abs(clamped - _services.Settings.Current.InterfaceScale) < 0.001) return;
+            _services.Settings.Update(s => s.InterfaceScale = clamped);
+            RaisePropertyChanged();
+        }
+    }
+
     public string IslandEdge
     {
         get => _services.Settings.Current.IslandEdge;

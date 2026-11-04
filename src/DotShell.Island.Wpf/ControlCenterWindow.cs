@@ -58,6 +58,7 @@ public sealed class ControlCenterWindow : Window
 
         // Высота по содержимому: раньше окно было 520–650 px с пустотой в треть экрана.
         SizeToContent = SizeToContent.Height;
+        UiScale.ApplyToContent(this);
 
         var area = SystemParameters.WorkArea;
         Left = area.Right - Width - 12;

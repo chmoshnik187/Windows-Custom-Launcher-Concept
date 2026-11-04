@@ -346,6 +346,8 @@ public partial class DashboardWindow : Window
     {
         var area = SystemParameters.WorkArea;
 
+        UiScale.Apply(this, 1000, 560);
+
         Left = area.Left + (area.Width - Width) / 2;
 
         // Отступ сверху: иначе раскрытый остров висит поверх шапки обзора и

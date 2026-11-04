@@ -173,6 +173,9 @@ public sealed class AppSettings
     /// <summary>Кромка, к которой прилипает остров: top или bottom.</summary>
     public string IslandEdge { get; set; } = "top";
 
+    /// <summary>Масштаб интерфейса для окон (настройки, обзор, центр управления), 0.8–1.4.</summary>
+    public double InterfaceScale { get; set; } = 1.0;
+
     /// <summary>Показывать док слева при старте.</summary>
     public bool DockEnabled { get; set; }
 
