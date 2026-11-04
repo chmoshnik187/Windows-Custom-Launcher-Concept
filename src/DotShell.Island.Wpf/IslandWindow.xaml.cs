@@ -607,6 +607,20 @@ public partial class IslandWindow : Window
 
         bool bottom = string.Equals(settings.IslandEdge, "bottom", StringComparison.OrdinalIgnoreCase);
 
+        // Кто живёт в капсуле: глазки или персонаж (готка/скелетик).
+        string unitStyle = settings.UnitStyle ?? "goth";
+
+        if (Unit is not null && Units is not null)
+        {
+            bool eyes = unitStyle.Equals("eyes", StringComparison.OrdinalIgnoreCase);
+
+            Units.Visibility = eyes ? Visibility.Visible : Visibility.Collapsed;
+            Unit.Visibility = eyes ? Visibility.Collapsed : Visibility.Visible;
+            Unit.Kind = unitStyle.Equals("skeleton", StringComparison.OrdinalIgnoreCase)
+                ? Controls.UnitCharacter.UnitKind.Skeleton
+                : Controls.UnitCharacter.UnitKind.Goth;
+        }
+
         // Капсула прижимается к своей кромке: сверху — верхний отступ, снизу — нижний.
         Pill.VerticalAlignment = bottom ? VerticalAlignment.Bottom : VerticalAlignment.Top;
         Pill.Margin = bottom

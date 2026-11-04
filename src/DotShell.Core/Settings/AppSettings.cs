@@ -179,6 +179,9 @@ public sealed class AppSettings
     /// <summary>Яркость экрана через гамму: 0.3–1.0 (1.0 — как есть).</summary>
     public double ScreenBrightness { get; set; } = 1.0;
 
+    /// <summary>Кто живёт в свёрнутой капсуле: eyes (глазки) / goth (готка) / skeleton (скелетик).</summary>
+    public string UnitStyle { get; set; } = "goth";
+
     /// <summary>Показывать док слева при старте.</summary>
     public bool DockEnabled { get; set; }
 

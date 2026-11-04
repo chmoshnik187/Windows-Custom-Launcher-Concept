@@ -1492,6 +1492,8 @@
                              Циферблат уступил им место по просьбе владельца,
                              а читаемые цифры остались рядом. -->
                         <controls:Units x:Name="Units" VerticalAlignment="Center" />
+                        <controls:UnitCharacter x:Name="Unit" VerticalAlignment="Center"
+                                                Visibility="Collapsed" />
                         <TextBlock Text="{Binding TimeText}"
                                    FontFamily="Segoe UI" FontSize="13" FontWeight="SemiBold"
                                    Foreground="{DynamicResource DsTextMuted}"

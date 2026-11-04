@@ -82,6 +82,19 @@ public partial class SettingsWindow : Window
             ("dash", "Штрихи"),
         }, vm.DotShapeName);
 
+        FillChoices(UnitStyleBox, new (string Value, string Label)[]
+        {
+            ("goth", "Готка"),
+            ("skeleton", "Скелетик"),
+            ("eyes", "Просто глазки"),
+        }, vm.UnitStyle);
+
+        UnitStyleBox.SelectionChanged += (_, _) =>
+        {
+            if (UnitStyleBox.SelectedItem is System.Windows.Controls.ComboBoxItem { Tag: string value })
+                vm.UnitStyle = value;
+        };
+
         FillChoices(IslandEdgeBox, new (string Value, string Label)[]
         {
             ("top", "Верхняя"),
