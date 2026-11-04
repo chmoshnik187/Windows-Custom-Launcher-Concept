@@ -8,57 +8,60 @@ using DotShell.Core.Audio;
 /// <summary>
 /// Юнит-персонаж в свёрнутой капсуле: маленькая фигурка вместо двух точек-глаз.
 ///
-/// Рисуется по клеточной маске: каждый символ — одна «точка» персонажа. Так фигурка
-/// остаётся в языке острова (точки, а не сглаженные картинки) и читается в 32–40 px.
+/// Рисуется по клеточной маске, и каждая клетка — ТОЧКА, а не квадрат: тот же язык,
+/// что у острова. Зазор между точками — часть образа, поэтому радиус чуть меньше клетки.
 ///
-/// Живость: дыхание (покачивание), моргание раз в 3–6 секунд, взгляд за курсором,
-/// подпрыгивание на бас. Всё на CompositionTarget.Rendering, 20 кадров в секунду —
-/// чаще не нужно, а батарею бережёт.
+/// Живость: дыхание, моргание раз в 3–6 секунд, взгляд за курсором, подпрыгивание на бас.
+/// Цикл на CompositionTarget.Rendering с ограничением ~20 кадров/с и корректной остановкой.
 /// </summary>
 public sealed class UnitCharacter : FrameworkElement
 {
     public enum UnitKind { Goth, Skeleton }
 
+    // Чиби-готка: боб с чёлкой до бровей, бледное лицо, глаза акцентом с бликом,
+    // чокер, платье с бантом, платформы. Сетка 12×16: одна клетка — одна точка.
     private static readonly string[] GothSprite =
     {
-        "....hhhh....",
-        "...hhhhhh...",
-        "..hhhhhhhh..",
-        "..hhhhhhhh..",
-        "..hffffffh..",
-        "..hfeffefh..",
-        "b.hffmmffh.b",
-        "...hffffh...",
-        "....aaaa....",
-        "...aaaaaa...",
-        "..aaaaaaaa..",
-        "..aabbaaaa..",
-        "...aaaaaa...",
-        "...aa..aa...",
-        "...aa..aa...",
-        "..bbb..bbb..",
-    };
-    private static readonly string[] SkeletonSprite =
-    {
-        "....wwww....",
-        "...wwwwww...",
-        "..wwwwwwww..",
-        "..wkkwwkkw..",
-        "..wkwwwwkw..",
-        "..wwkwwkww..",
-        "..wwwwwwww..",
-        "...wwkkww...",
-        "....wwww....",
-        "...wwwwww...",
-        "..w.w..w.w..",
-        "..w.w..w.w..",
-        "..w.w..w.w..",
-        "...w.ww.w...",
-        "....w..w....",
-        "...ww..ww...",
+        "....oooo....",
+        "..ooHHHHoo..",
+        ".oHHhhhhHHo.",
+        ".ohhhhhhhho.",
+        ".ohhhhhhhho.",
+        ".ofeffffefo.",
+        ".ogffffffgo.",
+        ".offfmmfffo.",
+        ".ohhffffhho.",
+        "..ohffffho..",
+        "...occcco...",
+        "..oaaaaaao..",
+        "..oabbbbao..",
+        "..oaaaaaao..",
+        "...ollllo...",
+        "..oLLooLLo..",
     };
 
-    private DateTime _started = DateTime.Now;
+    // Скелетик: тот же размер и та же точка, иначе переключение «прыгает».
+    private static readonly string[] SkeletonSprite =
+    {
+        "....oooo....",
+        "..ooWWWWoo..",
+        ".oWwwwwwwWo.",
+        ".owwwwwwwwo.",
+        ".owkkwwkkwo.",
+        ".owkkwwkkwo.",
+        ".owwwkkwwwo.",
+        ".owwwwwwwwo.",
+        "..owkkkkwo..",
+        "...owwwwo...",
+        "..oWwwwwWo..",
+        ".owwowwowwo.",
+        ".owwowwowwo.",
+        "..owowwowo..",
+        "...owwwwo...",
+        "..oWWooWWo..",
+    };
+
+    private readonly DateTime _started = DateTime.Now;
     private DateTime _nextBlink = DateTime.Now.AddSeconds(4);
     private DateTime _blinkUntil = DateTime.MinValue;
     private bool _running;
@@ -80,8 +83,7 @@ public sealed class UnitCharacter : FrameworkElement
     public UnitCharacter()
     {
         Width = 40;
-        Height = 40;
-        IsHitTestVisible = true;
+        Height = 42;
         SnapsToDevicePixels = true;
 
         Loaded += (_, _) => StartLoop();
@@ -92,13 +94,12 @@ public sealed class UnitCharacter : FrameworkElement
     {
         if (_running) return;
         _running = true;
-
         CompositionTarget.Rendering += OnFrame;
     }
 
     private void OnFrame(object? sender, EventArgs e)
     {
-        // 20 кадров в секунду достаточно: дыхание и моргание плавные, а рендер не греется.
+        // 20 кадров в секунду: дыхание и моргание плавные, а рендер не греется.
         if (DateTime.Now.Millisecond % 50 > 5) return;
 
         if (PresentationSource.FromVisual(this) is null)
@@ -108,10 +109,12 @@ public sealed class UnitCharacter : FrameworkElement
             return;
         }
 
-        if (DateTime.Now >= _nextBlink && DateTime.Now >= _blinkUntil)
+        var now = DateTime.Now;
+
+        if (now >= _nextBlink && now >= _blinkUntil)
         {
-            _blinkUntil = DateTime.Now.AddMilliseconds(130);
-            _nextBlink = DateTime.Now.AddSeconds(3 + Random.Shared.Next(0, 4));
+            _blinkUntil = now.AddMilliseconds(130);
+            _nextBlink = now.AddSeconds(3 + Random.Shared.Next(0, 4));
         }
 
         InvalidateVisual();
@@ -127,14 +130,10 @@ public sealed class UnitCharacter : FrameworkElement
         double width = cell * 12;
         double height = cell * 16;
 
-        // Дыхание: фигурка покачивается на пол-клетки.
-        double breathe = Math.Sin((DateTime.Now - _started).TotalSeconds * 1.6) * cell * 0.35;
-
-        // Бас подбрасывает: чем громче низ, тем выше прыжок.
+        double breathe = Math.Sin((DateTime.Now - _started).TotalSeconds * 1.6) * cell * 0.3;
         double bass = AudioSpectrum.Current?.Bass ?? 0f;
-        double bounce = -Math.Clamp(bass, 0, 1) * cell * 1.6;
+        double bounce = -Math.Clamp(bass, 0, 1) * cell * 1.4;
 
-        // Взгляд: глаза смотрят в сторону курсора (на 1 клетку).
         int lookX = 0;
         try
         {
@@ -152,48 +151,57 @@ public sealed class UnitCharacter : FrameworkElement
         for (int row = 0; row < sprite.Length; row++)
         {
             var line = sprite[row];
+
             for (int col = 0; col < line.Length; col++)
             {
                 char symbol = line[col];
                 if (symbol == '.') continue;
 
-                Brush brush = BrushFor(symbol);
-
                 double x = originX + col * cell;
                 double y = originY + row * cell;
+                double cx = x + cell / 2;
+                double cy = y + cell / 2;
+
+                // Обводка чуть тоньше: держит силуэт, но не превращается в кайму.
+                double radius = cell * (symbol == 'o' ? 0.40 : 0.47);
+
+                var brush = BrushFor(symbol);
 
                 if (blink && symbol == 'e')
                 {
-                    // Моргание: вместо глаза — тонкая полоска ресниц.
-                    dc.DrawRectangle(brush, null, new Rect(x, y + cell * 0.4, cell, Math.Max(1, cell * 0.3)));
+                    // Моргание: вместо глаза — короткая полоска ресниц.
+                    dc.DrawRectangle(brush, null, new Rect(x, y + cell * 0.42, cell, Math.Max(1, cell * 0.24)));
                     continue;
                 }
 
-                if (symbol == 'e' && lookX != 0)
-                {
-                    dc.DrawRectangle(brush, null, new Rect(x + lookX * cell * 0.4, y, cell, cell));
-                    continue;
-                }
+                if (symbol == 'e' && lookX != 0) cx += lookX * cell * 0.32;
 
-                dc.DrawRectangle(brush, null, new Rect(x, y, cell, cell));
+                dc.DrawEllipse(brush, null, new Point(cx, cy), radius, radius);
             }
         }
     }
 
-    private Brush BrushFor(char symbol)
+    private static Brush BrushFor(char symbol)
     {
         var accent = ColorPalette.Accent;
 
         Color color = symbol switch
         {
-            'h' => Color.FromRgb(0x1A, 0x1A, 0x20),      // волосы: почти чёрный
-            'f' => Color.FromRgb(0xEC, 0xEC, 0xEE),      // лицо: светлое
-            'e' => accent,                                // глаза: акцент
-            'm' => Color.FromRgb(0x8A, 0x8A, 0x93),      // рот: приглушённый
-            'a' => Color.FromRgb(0x2A, 0x2A, 0x32),      // платье
-            'b' => accent,                                // отделка платья
+            'o' => Color.FromRgb(0x38, 0x38, 0x42),      // обводка
+            'h' => Color.FromRgb(0x1B, 0x1B, 0x22),      // волосы
+            'H' => Color.FromRgb(0x35, 0x35, 0x40),      // блик волос
+            'f' => Color.FromRgb(0xED, 0xED, 0xEF),      // лицо
+            'e' => accent,                                // глаза — акцент
+            'g' => Color.FromRgb(0xFF, 0xFF, 0xFF),      // блик в глазу
+            'm' => Color.FromRgb(0x9A, 0x9A, 0xA4),      // рот
+            'c' => accent,                                // чокер
+            'a' => Color.FromRgb(0x26, 0x26, 0x2E),      // платье
+            'b' => accent,                                // бант
+            'l' => Color.FromRgb(0x2A, 0x2A, 0x32),      // колготки
+            'L' => Color.FromRgb(0x46, 0x46, 0x52),      // платформы
             'w' => Color.FromRgb(0xE8, 0xE8, 0xEA),      // кости
-            'k' => Color.FromRgb(0x0B, 0x0B, 0x0E),      // глазницы/тени
+            'W' => Color.FromRgb(0xC4, 0xC4, 0xCC),      // тень костей
+            'k' => Color.FromRgb(0x0B, 0x0B, 0x0E),      // глазницы
             _ => Colors.Transparent,
         };
 
