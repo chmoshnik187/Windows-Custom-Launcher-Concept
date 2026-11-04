@@ -104,14 +104,33 @@ public sealed class ControlCenterWindow : Window
         // --- переключатели ---
         root.Children.Add(Section("БЫСТРО"));
 
-        var toggles = new WrapPanel { Margin = new Thickness(0, 0, 0, 6) };
-        toggles.Children.Add(Toggle("ТЁМНЫЕ ЗАГОЛОВКИ", () => ShellServices.Instance.Settings.Current.SystemStyleFull,
+        // Сетка 2×2 вместо WrapPanel: раньше «ЗВУК» переносился на вторую строку
+        // один и висел под тремя — выглядело как ошибка вёрстки.
+        var toggles = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+        toggles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        toggles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        toggles.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        toggles.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        void AddToggle(int row, int column, UIElement chip)
+        {
+            var cell = new Border
+            {
+                Margin = new Thickness(0, 0, column == 0 ? 6 : 0, 6),
+                Child = chip,
+            };
+            Grid.SetRow(cell, row);
+            Grid.SetColumn(cell, column);
+            toggles.Children.Add(cell);
+        }
+
+        AddToggle(0, 0, Toggle("ТЁМНЫЕ ЗАГОЛОВКИ", () => ShellServices.Instance.Settings.Current.SystemStyleFull,
             value => ShellServices.Instance.Settings.Update(s => s.SystemStyleFull = value)));
-        toggles.Children.Add(Toggle("ИКОНКИ СТОЛА", () => ShellServices.Instance.Settings.Current.HideDesktopIcons,
+        AddToggle(0, 1, Toggle("ИКОНКИ СТОЛА", () => ShellServices.Instance.Settings.Current.HideDesktopIcons,
             value => ShellServices.Instance.Settings.Update(s => s.HideDesktopIcons = value)));
-        toggles.Children.Add(Toggle("НЕ МЕШАТЬ", () => ShellServices.Instance.Settings.Current.QuietThreshold != "off",
+        AddToggle(1, 0, Toggle("НЕ МЕШАТЬ", () => ShellServices.Instance.Settings.Current.QuietThreshold != "off",
             value => ShellServices.Instance.Settings.Update(s => s.QuietThreshold = value ? "maximized" : "off")));
-        toggles.Children.Add(Toggle("ЗВУК", () => !_volume.Muted, value => _volume.SetMute(!value)));
+        AddToggle(1, 1, Toggle("ЗВУК", () => !_volume.Muted, value => _volume.SetMute(!value)));
 
         root.Children.Add(toggles);
 
@@ -207,7 +226,18 @@ public sealed class ControlCenterWindow : Window
 
         bool activated = false;
         Activated += (_, _) => activated = true;
-        Deactivated += (_, _) => { if (activated) Close(); };
+
+        Deactivated += (_, _) =>
+        {
+            if (!activated) return;
+
+            // Не закрываемся, если фокус ушёл к нашему же окну (док, виджет, остров):
+            // иначе панель захлопывалась сразу после открытия, стоило доку получить
+            // активацию. Закрываем только при уходе в другое приложение.
+            if (ForegroundProcessId() == Environment.ProcessId) return;
+
+            Close();
+        };
         Closed += (_, _) =>
         {
             _statsTimer.Stop();
@@ -339,11 +369,11 @@ public sealed class ControlCenterWindow : Window
         var border = new Border
         {
             Padding = new Thickness(9, 7, 9, 7),
-            Margin = new Thickness(0, 0, 6, 6),
             CornerRadius = new CornerRadius(2),
             BorderThickness = new Thickness(1),
             Child = label,
             Cursor = Cursors.Hand,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
         };
 
         void Render()
@@ -379,5 +409,27 @@ public sealed class ControlCenterWindow : Window
         };
 
         BeginAnimation(LeftProperty, slide);
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+    private static uint ForegroundProcessId()
+    {
+        try
+        {
+            var hwnd = GetForegroundWindow();
+            if (hwnd == IntPtr.Zero) return 0;
+
+            GetWindowThreadProcessId(hwnd, out uint pid);
+            return pid;
+        }
+        catch
+        {
+            return 0;
+        }
     }
 }

@@ -512,6 +512,10 @@ public partial class SettingsWindow : Window
 
         foreach (var slider in sliders)
         {
+            // Tolko slaydery vnutri panely kategoriy: inache metka dostavalas skrytym
+            // polzunkam vne kategoriy i odinokaya "0,0" visela v shapke.
+            if (!InsideCategoryPanel(slider)) continue;
+
             if (slider.Parent is not Panel panel) continue;
 
             int index = panel.Children.IndexOf(slider);
@@ -959,5 +963,21 @@ public partial class SettingsWindow : Window
         {
             Log.Info($"visual dump не удался: {ex.Message}");
         }
+    }
+
+    private static bool InsideCategoryPanel(DependencyObject node)
+    {
+        var current = node;
+
+        while (current is not null)
+        {
+            if (current is FrameworkElement element
+                && element.Name.StartsWith("Panel", StringComparison.Ordinal))
+                return true;
+
+            current = System.Windows.Media.VisualTreeHelper.GetParent(current);
+        }
+
+        return false;
     }
 }
