@@ -625,6 +625,13 @@ public partial class IslandWindow : Window
 
             Units.Visibility = eyes ? Visibility.Visible : Visibility.Collapsed;
             Unit.Visibility = eyes ? Visibility.Collapsed : Visibility.Visible;
+
+            // Юнит растёт вместе с капсулой: при высоте 46 он мелкий, при 56–64 —
+            // крупный и с читаемой мимикой. Пропорции сетки 12×16 сохраняем,
+            // иначе фигурка сплющится.
+            double unitHeight = Math.Clamp(height - 6, 34, 58);
+            Unit.Height = unitHeight;
+            Unit.Width = Math.Round(unitHeight * 12.0 / 16.0);
             Unit.Kind = unitStyle.Equals("skeleton", StringComparison.OrdinalIgnoreCase)
                 ? Controls.UnitCharacter.UnitKind.Skeleton
                 : Controls.UnitCharacter.UnitKind.Goth;
