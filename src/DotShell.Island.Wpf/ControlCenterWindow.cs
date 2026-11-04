@@ -50,7 +50,9 @@ public sealed class ControlCenterWindow : Window
         Topmost = true;
         ResizeMode = ResizeMode.NoResize;
         Width = 340;
-        Height = 520;
+
+        // Высота по содержимому: раньше окно было 520–650 px с пустотой в треть экрана.
+        SizeToContent = SizeToContent.Height;
 
         var area = SystemParameters.WorkArea;
         Left = area.Right - Width - 12;
@@ -60,7 +62,7 @@ public sealed class ControlCenterWindow : Window
 
         root.Children.Add(new TextBlock
         {
-            Text = "ЦЕНТР УПРАВЛЕНИЯ",
+            Text = $"ЦЕНТР УПРАВЛЕНИЯ · {DateTime.Now:dd.MM} · {DateTime.Now:HH:mm}",
             FontFamily = new FontFamily("Bahnschrift"),
             FontSize = 9,
             Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x8A, 0x93)),
@@ -99,7 +101,7 @@ public sealed class ControlCenterWindow : Window
         var toggles = new WrapPanel { Margin = new Thickness(0, 0, 0, 6) };
         toggles.Children.Add(Toggle("ТЁМНЫЕ ЗАГОЛОВКИ", () => ShellServices.Instance.Settings.Current.SystemStyleFull,
             value => ShellServices.Instance.Settings.Update(s => s.SystemStyleFull = value)));
-        toggles.Children.Add(Toggle("СПРЯТАТЬ СТОЛ", () => ShellServices.Instance.Settings.Current.HideDesktopIcons,
+        toggles.Children.Add(Toggle("ИКОНКИ СТОЛА", () => ShellServices.Instance.Settings.Current.HideDesktopIcons,
             value => ShellServices.Instance.Settings.Update(s => s.HideDesktopIcons = value)));
         toggles.Children.Add(Toggle("НЕ МЕШАТЬ", () => ShellServices.Instance.Settings.Current.QuietThreshold != "off",
             value => ShellServices.Instance.Settings.Update(s => s.QuietThreshold = value ? "maximized" : "off")));

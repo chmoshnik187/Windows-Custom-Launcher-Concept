@@ -309,7 +309,9 @@ public partial class DashboardWindow : Window
             var cell = new Border
             {
                 Margin = new Thickness(2),
-                CornerRadius = new CornerRadius(14),
+                // Штамп, а не «таблетка»: в этом шелле акцент — метка с радиусом 2,
+            // скругления 14 px выбивались из языка (тот же принцип, что в плитках).
+            CornerRadius = new CornerRadius(2),
                 Background = today ? Accent : Brushes.Transparent,
                 Child = new TextBlock
                 {

@@ -16,6 +16,40 @@
                 <ResourceDictionary Source="MenuStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
+            <!-- Тёмный скроллбар: системный светлый выбивался из тёмного окна —
+                 белая полоса справа была самым заметным «чужим» элементом. -->
+            <Style TargetType="ScrollBar">
+                <Setter Property="Width" Value="6" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ScrollBar">
+                            <Grid Background="Transparent">
+                                <Track x:Name="PART_Track" Orientation="{TemplateBinding Orientation}"
+                                       IsDirectionReversed="True">
+                                    <Track.Thumb>
+                                        <Thumb>
+                                            <Thumb.Template>
+                                                <ControlTemplate TargetType="Thumb">
+                                                    <Border CornerRadius="3" Width="6"
+                                                            Background="#33FFFFFF" />
+                                                </ControlTemplate>
+                                            </Thumb.Template>
+                                        </Thumb>
+                                    </Track.Thumb>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageDownCommand" Opacity="0" />
+                                    </Track.IncreaseRepeatButton>
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageUpCommand" Opacity="0" />
+                                    </Track.DecreaseRepeatButton>
+                                </Track>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <!-- Категория в левой колонке: не «кнопка с фоном», а строка с акцентной чертой. -->
             <Style x:Key="CatButton" TargetType="RadioButton">
                 <Setter Property="Foreground" Value="{DynamicResource DsTextMuted}" />
@@ -124,7 +158,10 @@
                               VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                               Style="{StaticResource DsScroll}">
 
-                    <Grid>
+                    <!-- Фон непрозрачный: сквозь полупрозрачную карточку проступала
+                         сжатая строка подписей категорий — читалось как «двоящийся» текст
+                         поверх первого пункта. -->
+                    <Grid Background="#0B0B0E">
                         <!-- ВНЕШНИЙ ВИД -->
                         <StackPanel x:Name="PanelLook">
                             <CheckBox Style="{StaticResource DsToggle}" Content="Авто-цвет из обоев"

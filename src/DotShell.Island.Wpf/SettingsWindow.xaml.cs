@@ -42,6 +42,10 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         DataContext = vm;
 
+        // Рядом с каждым ползунком — его значение. Раньше человек двигал ползунок и не
+        // видел числа: «плотность рисунка» или «радиус капсулы» приходилось угадывать.
+        Loaded += (_, _) => AttachSliderValues(this);
+
         // Пачка 1 кастомизации: кривая движения и форма точки. Списки собираем
         // кодом — так проще держать значения и подписи рядом.
         FillChoices(CurveBox, new (string Value, string Label)[]
@@ -463,5 +467,52 @@ public partial class SettingsWindow : Window
         }
 
         box.SelectedItem ??= box.Items[0];
+    }
+
+    /// <summary>Подписать все ползунки их текущим значением.</summary>
+    private void AttachSliderValues(DependencyObject root)
+    {
+        var sliders = new List<Slider>();
+        Collect(root, sliders);
+
+        foreach (var slider in sliders)
+        {
+            if (slider.Parent is not Panel panel) continue;
+
+            int index = panel.Children.IndexOf(slider);
+            if (index < 0) continue;
+
+            var value = new TextBlock
+            {
+                FontFamily = new System.Windows.Media.FontFamily("Bahnschrift"),
+                FontSize = 9,
+                Margin = new Thickness(0, -4, 0, 6),
+                HorizontalAlignment = HorizontalAlignment.Right,
+            };
+            value.SetResourceReference(TextBlock.ForegroundProperty, "DsTextMuted");
+
+            var current = slider;
+            void Update()
+            {
+                double step = current.Maximum - current.Minimum;
+                value.Text = step <= 3 ? current.Value.ToString("0.00")
+                    : step <= 12 ? current.Value.ToString("0.0")
+                    : current.Value.ToString("0");
+            }
+
+            current.ValueChanged += (_, _) => Update();
+            Update();
+
+            panel.Children.Insert(index + 1, value);
+        }
+    }
+
+    private static void Collect(DependencyObject root, List<Slider> result)
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(root))
+        {
+            if (child is Slider slider) result.Add(slider);
+            if (child is DependencyObject node) Collect(node, result);
+        }
     }
 }
