@@ -371,6 +371,13 @@ public partial class IslandWindow : Window
                 _vm.PinFromPicker(row);
                 e.Handled = true;
             }
+            else if (e.Key == Key.Escape && _isExpanded)
+            {
+                // Явный способ свернуть: после фикса ползунков клик по содержимому
+                // больше не сворачивает остров (он промахивался мимо дорожки).
+                Collapse();
+                e.Handled = true;
+            }
             else if (e.Key == Key.Escape)
             {
                 ClosePicker();
@@ -1650,6 +1657,19 @@ public partial class IslandWindow : Window
         }
 
         if (IsInteractive(e.OriginalSource as DependencyObject)) return;
+
+        // Раскрытый остров: клик по его содержимому НЕ сворачивает капсулу.
+        // Раньше промах мимо ползунка попадал сюда и сворачивал остров — человек
+        // повторял попытку пять раз, прежде чем попадал в дорожку.
+        if (_isExpanded && ExpandedLayer.Visibility == Visibility.Visible)
+        {
+            var point = e.GetPosition(ExpandedLayer);
+            if (point.X >= 0 && point.Y >= 0
+                && point.X <= ExpandedLayer.ActualWidth && point.Y <= ExpandedLayer.ActualHeight)
+            {
+                return;
+            }
+        }
 
         // Действие клика — настройка: раскрыть, лаунчер или панель-обзор.
         switch (ShellServices.Instance.Settings.Current.ClickAction)

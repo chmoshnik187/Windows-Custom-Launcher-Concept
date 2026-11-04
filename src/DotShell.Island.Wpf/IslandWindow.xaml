@@ -304,19 +304,29 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RepeatButton">
-                        <Border Height="2" Background="{TemplateBinding Background}" />
+                        <!-- Линия 2 px, но кликабельная полоса на всю высоту строки:
+                             иначе клик мимо линии проваливался в капсулу и сворачивал остров. -->
+                        <Grid Background="Transparent" MinHeight="30">
+                            <Border Height="2" VerticalAlignment="Center"
+                                    Background="{TemplateBinding Background}" />
+                        </Grid>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
 
         <Style x:Key="DsThumb" TargetType="Thumb">
-            <Setter Property="Width" Value="10" />
-            <Setter Property="Height" Value="14" />
+            <!-- Зона захвата намеренно больше рисунка: промахнуться сложно,
+                 а «ручка» остаётся тонкой линией. -->
+            <Setter Property="Width" Value="16" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Thumb">
-                        <Rectangle x:Name="El" Width="3" Height="14" Fill="{DynamicResource DsAccent}" />
+                        <Grid Background="Transparent">
+                        <Rectangle x:Name="El" Width="4" Height="18" Fill="{DynamicResource DsAccent}" />
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="El" Property="Stroke"
@@ -333,10 +343,15 @@
             <Setter Property="Maximum" Value="10" />
             <Setter Property="IsSnapToTickEnabled" Value="True" />
             <Setter Property="TickFrequency" Value="1" />
-            <Setter Property="Height" Value="24" />
+            <!-- Строка 34 px и клик по дорожке сразу переставляет ручку. -->
+            <Setter Property="Height" Value="34" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="IsMoveToPointEnabled" Value="True" />
+            <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Slider">
+                        <Grid Background="Transparent" MinHeight="34">
                         <Track x:Name="PART_Track" VerticalAlignment="Center">
                             <Track.DecreaseRepeatButton>
                                 <RepeatButton Command="Slider.DecreaseLarge"
@@ -352,6 +367,7 @@
                                 <Thumb Style="{StaticResource DsThumb}" />
                             </Track.Thumb>
                         </Track>
+                        </Grid>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
