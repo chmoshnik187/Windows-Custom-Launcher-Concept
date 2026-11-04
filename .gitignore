@@ -8,18 +8,6 @@ installer/Output/
 # Готовый exe в git не храним — он лежит в GitHub Releases (75 МБ)
 release/*.exe
 
-# Личные данные шелла: заметки, задачи, настройки, плитки, логи.
-# Они живут в %LOCALAPPDATA%\DotShell и в репозиторий не попадают никогда.
-notes.md
-tasks.json
-settings.json
-pinned.json
-widgets.json
-crash.log
-*.log
-cursors/
-*.zip
-
 # IDE
 .vs/
 .idea/

@@ -40,7 +40,7 @@ def pick_font(size):
     raise SystemExit("не нашёл ни одного шрифта из списка")
 
 
-def render(text, size, cell, gap, accent_share, seed):
+def render(text, size, cell, gap, accent_share, seed, pad_ratio=1/3):
     font = pick_font(size)
 
     # 1. маска текста
@@ -50,7 +50,7 @@ def render(text, size, cell, gap, accent_share, seed):
     if text_w < 1 or text_h < 1:
         raise SystemExit("пустой текст")
 
-    pad = size // 3
+    pad = int(size * pad_ratio)
     mask = Image.new("L", (text_w + pad * 2, text_h + pad * 2), 0)
     ImageDraw.Draw(mask).text((pad - left, pad - top), text, font=font, fill=255)
 
@@ -99,9 +99,24 @@ def main():
     parser.add_argument("--gap", type=int, default=2, help="зазор между точками, px")
     parser.add_argument("--accent", type=float, default=0.12, help="доля акцентных точек 0..1")
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--canvas", default="", help="подложка WxH, баннер вписывается по центру")
+    parser.add_argument("--pad", type=float, default=0.34, help="поля вокруг текста, доля кегля")
     args = parser.parse_args()
 
-    image = render(args.text, args.size, args.cell, args.gap, args.accent, args.seed)
+    image = render(args.text, args.size, args.cell, args.gap, args.accent, args.seed, args.pad)
+
+    # Подложка нужного размера: баннер вписывается по центру без искажений.
+    # Так делается соцпревью 1280x640 для шаринга ссылки.
+    if args.canvas:
+        width, height = (int(v) for v in args.canvas.lower().split("x"))
+        canvas = Image.new("RGB", (width, height), BACKGROUND)
+        scale = min(width / image.width, height / image.height) * 0.72
+        fitted = image
+        if scale < 1:
+            fitted = image.resize((max(1, int(image.width * scale)), max(1, int(image.height * scale))))
+        canvas.paste(fitted, ((width - fitted.width) // 2, (height - fitted.height) // 2))
+        image = canvas
+
     os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
     image.save(args.output)
     print(f"{args.output}: {image.width}x{image.height}")
