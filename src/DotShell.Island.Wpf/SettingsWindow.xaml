@@ -237,6 +237,12 @@
                             <TextBlock Style="{StaticResource Section}" Text="ЗВУК УВЕДОМЛЕНИЯ" />
                             <ComboBox x:Name="NotifySoundBox" Style="{StaticResource DsCombo}" />
 
+                        <StackPanel x:Name="PanelDesktop" Visibility="Collapsed">
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Виджеты на обоях (под окнами)"
+                                      IsChecked="{Binding DesktopWidgets}" />
+                        </StackPanel>
+
                         <!-- ОСТРОВ -->
                         <StackPanel x:Name="PanelIsland" Visibility="Collapsed">
 

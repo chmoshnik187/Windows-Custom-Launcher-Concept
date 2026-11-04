@@ -503,6 +503,11 @@ public partial class IslandWindow : Window
                 // в меню не видно, что ставишь, и нельзя выбрать место на столе.
                 menu.Add("Центр управления", () => Dispatcher.BeginInvoke(() => ControlCenterWindow.Toggle()));
                 menu.Add("Док слева", () => Dispatcher.BeginInvoke(() => DockWindow.Toggle()));
+                menu.Add("Виджеты на обоях", () => Dispatcher.BeginInvoke(() =>
+                {
+                    var now = ShellServices.Instance.Settings.Current.DesktopWidgets;
+                    ShellServices.Instance.Settings.Update(s => s.DesktopWidgets = !now);
+                }));
                 menu.Add("Обзор", () => Dispatcher.BeginInvoke(() => DashboardWindow.Toggle()));
                 menu.Add("Витрина виджетов", () => Dispatcher.BeginInvoke(OpenWidgetGallery));
                 menu.Add("Клавиши и сочетания", () => Dispatcher.BeginInvoke(OpenKeysWindow));

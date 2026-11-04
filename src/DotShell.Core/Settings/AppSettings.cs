@@ -176,6 +176,12 @@ public sealed class AppSettings
     /// <summary>Показывать док слева при старте.</summary>
     public bool DockEnabled { get; set; }
 
+    /// <summary>
+    /// Виджеты на обоях: окно уходит под все окна и не забирает фокус.
+    /// Так они читаются как часть рабочего стола, а не как «ещё одно окно».
+    /// </summary>
+    public bool DesktopWidgets { get; set; }
+
     /// <summary>Радиус капсулы: 0 — прямоугольник, 23 — «таблетка».</summary>
     public int IslandRadius { get; set; } = 23;
 

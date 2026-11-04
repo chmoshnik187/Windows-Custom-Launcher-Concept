@@ -64,6 +64,8 @@ public sealed partial class WidgetWindow : Window
         SetContent(type);
         outer.Children.Add(_root);
 
+        Loaded += (_, _) => KeepOnDesktopLayer();
+
         // Ручка размера: висит поверх содержимого в правом нижнем углу.
         var grip = new Thumb { Style = (Style)FindResource("WResizeGrip") };
         grip.DragStarted += (_, _) =>
@@ -117,7 +119,19 @@ public sealed partial class WidgetWindow : Window
             var ex = Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE).ToInt64();
             ex |= Win32.WS_EX_TOOLWINDOW;
             ex &= ~Win32.WS_EX_APPWINDOW;
+
+            // Режим «на обоях»: окно не активируется и уходит под остальные окна.
+            if (ShellServices.Instance.Settings.Current.DesktopWidgets)
+            {
+                ex |= Win32.WS_EX_NOACTIVATE;
+            }
+
             Win32.SetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE, new IntPtr(ex));
+
+            if (ShellServices.Instance.Settings.Current.DesktopWidgets)
+            {
+                SendToDesktopLayer();
+            }
 
             // Авто-цвет не должен брать пробы с самих виджетов (иначе палитра
             // закольцуется сама на себя).
@@ -1178,5 +1192,37 @@ public sealed partial class WidgetWindow : Window
     }
     /// <summary>Кисть из ресурсов окна (для контролов, созданных кодом).</summary>
     private Brush ResBrush(string key) => TryFindResource(key) as Brush ?? Brushes.White;
+
+    /// <summary>
+    /// Опустить окно на самый низ z-порядка: виджет остаётся на обоях, а любые
+    /// обычные окна его перекрывают.
+    ///
+    /// Почему не родитель WorkerW (трюк живых обоев): он ломает ввод и перетаскивание,
+    /// а нам нужны живые виджеты. HWND_BOTTOM даёт тот же визуальный результат и
+    /// переживает перезапуск проводника.
+    /// </summary>
+    private void SendToDesktopLayer()
+    {
+        try
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero) return;
+
+            Win32.SetWindowPos(hwnd, new IntPtr(1) /* HWND_BOTTOM */, 0, 0, 0, 0,
+                Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
+        }
+        catch { }
+    }
+
+    /// <summary>Каждые 2 секунды возвращаем окно на дно: иначе оно всплывает после кликов.</summary>
+    private void KeepOnDesktopLayer()
+    {
+        if (!ShellServices.Instance.Settings.Current.DesktopWidgets) return;
+
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        timer.Tick += (_, _) => SendToDesktopLayer();
+        _timers.Add(timer);
+        timer.Start();
+    }
 }
 

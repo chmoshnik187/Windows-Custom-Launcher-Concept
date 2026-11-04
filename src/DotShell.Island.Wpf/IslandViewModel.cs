@@ -209,6 +209,12 @@ public sealed class IslandViewModel : INotifyPropertyChanged
         }
     }
 
+    public bool DesktopWidgets
+    {
+        get => _services.Settings.Current.DesktopWidgets;
+        set { _services.Settings.Update(s => s.DesktopWidgets = value); RaisePropertyChanged(); }
+    }
+
     public string IslandEdge
     {
         get => _services.Settings.Current.IslandEdge;
