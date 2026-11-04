@@ -121,9 +121,28 @@
                                           Margin="12,3,0,0" VerticalAlignment="Center"
                                           Brush="{DynamicResource DsTextMuted}" />
                 </StackPanel>
-                <Button Grid.Column="1" Content="✕" Click="OnClose"
-                        Style="{StaticResource DsButton}" Padding="10,3" FontSize="11"
-                        ToolTip="Закрыть (Esc)" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- Поиск по настройкам: 76 полей в шести категориях, без поиска
+                         «где порог не мешать» превращается в игру в прятки. -->
+                    <Border Width="240" Height="26" CornerRadius="2" BorderThickness="1"
+                            BorderBrush="{DynamicResource DsBorder}"
+                            Background="{DynamicResource DsSurfaceAlt}" Margin="0,0,8,0">
+                        <Grid>
+                            <TextBox x:Name="SearchBox" BorderThickness="0" Background="Transparent"
+                                     Foreground="{DynamicResource DsText}" FontSize="11"
+                                     VerticalContentAlignment="Center" Padding="8,0"
+                                     TextChanged="OnSearchChanged" />
+                            <TextBlock x:Name="SearchHint" Text="поиск по настройкам"
+                                       IsHitTestVisible="False" FontSize="11"
+                                       Foreground="{DynamicResource DsTextMuted}"
+                                       VerticalAlignment="Center" Margin="8,0,0,0" />
+                        </Grid>
+                    </Border>
+
+                    <Button Content="✕" Click="OnClose"
+                            Style="{StaticResource DsButton}" Padding="10,3" FontSize="11"
+                            ToolTip="Закрыть (Esc)" VerticalAlignment="Center" />
+                </StackPanel>
             </Grid>
 
             <Border Grid.Row="0" Height="1" Background="{DynamicResource DsBorder}"
@@ -150,6 +169,10 @@
                                  GroupName="cat" Tag="updates" Checked="OnCategoryChecked" />
                     <RadioButton Style="{StaticResource CatButton}" Content="ДАННЫЕ"
                                  GroupName="cat" Tag="data" Checked="OnCategoryChecked" />
+
+                    <TextBlock x:Name="SearchInfo" Text="" FontFamily="Bahnschrift" FontSize="9"
+                               Foreground="{DynamicResource DsTextMuted}" Margin="10,10,0,0"
+                               TextWrapping="Wrap" />
                 </StackPanel>
 
                 <Border Grid.Column="1" Width="1" Background="{DynamicResource DsBorder}" />

@@ -272,10 +272,15 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>Переключение категорий: показываем ровно одну панель.</summary>
+    /// <summary>Какая категория открыта сейчас (нужна поиску, чтобы вернуть её при очистке).</summary>
+    private string _category = "look";
+
     private void OnCategoryChecked(object sender, RoutedEventArgs e)
     {
         if (sender is not RadioButton { Tag: string tag }) return;
         if (PanelLook is null) return;   // ещё не загрузились
+
+        _category = tag;
 
         PanelLook.Visibility = tag == "look" ? Visibility.Visible : Visibility.Collapsed;
         PanelIsland.Visibility = tag == "island" ? Visibility.Visible : Visibility.Collapsed;
@@ -514,5 +519,198 @@ public partial class SettingsWindow : Window
             if (child is Slider slider) result.Add(slider);
             if (child is DependencyObject node) Collect(node, result);
         }
+    }
+
+    // ------------------------------------------------------------------
+    //  Поиск по настройкам
+    // ------------------------------------------------------------------
+
+    private sealed record Category(string Tag, string Title, StackPanel Panel);
+
+    private Category[] Categories() => new[]
+    {
+        new Category("look", "ВНЕШНИЙ ВИД", PanelLook),
+        new Category("island", "ОСТРОВ", PanelIsland),
+        new Category("windows", "ОКНА И WINDOWS", PanelWindows),
+        new Category("notify", "УВЕДОМЛЕНИЯ", PanelNotify),
+        new Category("updates", "ОБНОВЛЕНИЯ", PanelUpdates),
+        new Category("data", "ДАННЫЕ", PanelData),
+    };
+
+    private void OnSearchChanged(object sender, TextChangedEventArgs e)
+    {
+        string query = SearchBox.Text?.Trim() ?? string.Empty;
+        SearchHint.Visibility = query.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        if (query.Length == 0)
+        {
+            foreach (var category in Categories())
+            {
+                category.Panel.Visibility = category.Tag == _category
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+
+                foreach (UIElement child in category.Panel.Children)
+                    child.Visibility = Visibility.Visible;
+            }
+
+            SearchInfo.Text = string.Empty;
+            return;
+        }
+
+        string bestTag = string.Empty;
+        string bestTitle = string.Empty;
+        int bestCount = 0;
+
+        foreach (var category in Categories())
+        {
+            int count = Filter(category.Panel, query);
+
+            if (count > bestCount)
+            {
+                bestCount = count;
+                bestTag = category.Tag;
+                bestTitle = category.Title;
+            }
+        }
+
+        if (bestCount == 0)
+        {
+            foreach (var category in Categories())
+                category.Panel.Visibility = Visibility.Collapsed;
+
+            SearchInfo.Text = $"ничего не нашлось: «{query}»";
+            return;
+        }
+
+        foreach (var category in Categories())
+            category.Panel.Visibility = category.Tag == bestTag
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        _category = bestTag;
+        SearchInfo.Text = $"найдено {bestCount} · {bestTitle}";
+
+        // Переключаем категорию вручную: ищем кнопку обходом логического дерева.
+        foreach (var button in RadioButtons(this))
+        {
+            if (button.Tag is string tag && tag == bestTag)
+            {
+                button.IsChecked = true;
+                break;
+            }
+        }
+    }
+
+    /// <summary>Текст строки: свой и предыдущего элемента (подписи стоят отдельными TextBlock).</summary>
+    private static string RowText(UIElement element, UIElement? previous)
+    {
+        var parts = new List<string>();
+
+        string label = TextOf(previous);
+        if (!string.IsNullOrWhiteSpace(label)) parts.Add(label);
+
+        if (element is FrameworkElement { ToolTip: string tip } && !string.IsNullOrWhiteSpace(tip))
+            parts.Add(tip);
+
+        string own = TextOf(element);
+        if (!string.IsNullOrWhiteSpace(own)) parts.Add(own);
+
+        return string.Join(" ", parts);
+    }
+
+    private static string TextOf(UIElement? element)
+    {
+        if (element is null) return string.Empty;
+
+        var parts = new List<string>();
+
+        void Walk(DependencyObject node)
+        {
+            if (node is TextBlock tb && !string.IsNullOrWhiteSpace(tb.Text))
+            {
+                parts.Add(tb.Text);
+            }
+            else if (node is DotShell.Island.Wpf.Controls.TrackedText tracked
+                     && !string.IsNullOrWhiteSpace(tracked.Text))
+            {
+                parts.Add(tracked.Text);
+            }
+            else if (node is System.Windows.Controls.ContentControl cc
+                     && cc.Content is string content && !string.IsNullOrWhiteSpace(content))
+            {
+                parts.Add(content);
+            }
+
+            foreach (var child in LogicalTreeHelper.GetChildren(node))
+                if (child is DependencyObject dependencyObject)
+                    Walk(dependencyObject);
+        }
+
+        Walk(element);
+        return string.Join(" ", parts);
+    }
+
+    /// <summary>Все RadioButton в дереве: нужны поиску, чтобы переключить категорию.</summary>
+    private static IEnumerable<RadioButton> RadioButtons(DependencyObject root)
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(root))
+        {
+            if (child is RadioButton button) yield return button;
+
+            if (child is DependencyObject node)
+                foreach (var nested in RadioButtons(node))
+                    yield return nested;
+        }
+    }
+
+    /// <summary>
+    /// Рекурсивная фильтрация: возвращает число найденных строк в поддереве и прячет
+    /// всё остальное. Без рекурсии фильтровался только верхний уровень, и внутри
+    /// контейнеров оставались лишние поля — поиск выглядел неточным.
+    /// </summary>
+    private static int Filter(DependencyObject node, string query)
+    {
+        int count = 0;
+        string previous = string.Empty;
+
+        foreach (var child in Enumerable.ToList<object>(
+                     Enumerable.Cast<object>(LogicalTreeHelper.GetChildren(node))))
+        {
+            if (child is not UIElement element)
+            {
+                if (child is DependencyObject nestedNode)
+                    count += Filter(nestedNode, query);
+                continue;
+            }
+
+            // Подпись раздела: не прячем и запоминаем как «название» следующей строки.
+            bool caption = (element is TextBlock captionText && captionText.FontSize <= 10.5)
+                           || element is DotShell.Island.Wpf.Controls.TrackedText;
+
+            if (caption)
+            {
+                previous = TextOf(element);
+                continue;
+            }
+
+            string text = $"{previous} {TextOf(element)}".Trim();
+            previous = string.Empty;
+
+            int inner = Filter(element, query);
+
+            bool isRow = element is CheckBox || element is ComboBox
+                         || element is Slider || element is TextBox || element is Button;
+
+            bool match = isRow && text.Contains(query, StringComparison.OrdinalIgnoreCase);
+
+            if (match) count++;
+            count += inner;
+
+            // Контейнер оставляем, только если внутри что-то нашлось.
+            element.Visibility = match || inner > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        return count;
     }
 }
