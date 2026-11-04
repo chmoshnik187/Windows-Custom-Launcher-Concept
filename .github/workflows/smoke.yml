@@ -3,6 +3,9 @@ name: smoke
 # Проверка сборки на каждый пуш и пулл-реквест: собираем exe, гоняем самопроверку,
 # ищем FATAL в логе. Раньше это делалось только руками, и регрессия могла уехать в
 # релиз — ровно так и случилось с кнопками на главной.
+#
+# Важно: в репозитории корень — это сам проект (Directory.Build.props, src, scripts),
+# поэтому working-directory нигде не переопределяем.
 
 on:
   push:
@@ -14,9 +17,6 @@ on:
 jobs:
   windows:
     runs-on: windows-latest
-    defaults:
-      run:
-        working-directory: dotshell
 
     steps:
       - name: Забрать код
@@ -30,8 +30,8 @@ jobs:
       - name: Проверить, что версия в props читается
         shell: pwsh
         run: |
-          [xml]$props = Get-Content Directory.Build.props
-          $version = $props.Project.PropertyGroup.Version
+          [xml]$props = Get-Content Directory.Build.props -Raw
+          $version = @($props.Project.PropertyGroup.Version) | Where-Object { $_ } | Select-Object -First 1
           Write-Host "версия проекта: $version"
           if (-not $version) { throw "в Directory.Build.props нет Version" }
 
