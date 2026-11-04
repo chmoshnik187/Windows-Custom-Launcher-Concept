@@ -9,6 +9,7 @@
 [![Release](https://img.shields.io/github/v/release/chmoshnik187/Windows-Custom-Launcher-Concept?style=flat-square&color=d71920&label=версия)](../../releases/latest)
 [![Windows](https://img.shields.io/badge/Windows-10%2F11%20x64-2b2b2b?style=flat-square)](#скачать-и-установить)
 [![.NET](https://img.shields.io/badge/.NET-8%20внутри-512bd4?style=flat-square)](#собрать-из-исходников)
+[![smoke](https://github.com/chmoshnik187/Windows-Custom-Launcher-Concept/actions/workflows/smoke.yml/badge.svg)](../../actions/workflows/smoke.yml)
 [![License](https://img.shields.io/github/license/chmoshnik187/Windows-Custom-Launcher-Concept?style=flat-square&color=2b2b2b)](LICENSE)
 [![Код написан ИИ](https://img.shields.io/badge/код%20написан-Qwen%20%2B%20DeepSeek-d71920?style=flat-square)](#честно-о-том-кто-это-написал)
 
