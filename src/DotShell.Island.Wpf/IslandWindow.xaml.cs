@@ -1407,6 +1407,16 @@ public partial class IslandWindow : Window
         AnimateTo(this, WidthProperty, winW, ms, ease);
         AnimateTo(this, HeightProperty, winH, ms, ease);
         AnimateTo(this, LeftProperty, centerX - winW / 2, ms, ease);
+
+        // Нижняя кромка: окно растёт вверх, значит Top обязан уезжать вверх вместе с
+        // высотой. Раньше Top оставался от свёрнутого состояния и раскрытый остров
+        // целиком уходил под панель задач.
+        if (string.Equals(ShellServices.Instance.Settings.Current.IslandEdge, "bottom", StringComparison.OrdinalIgnoreCase))
+        {
+            var work = SystemParameters.WorkArea;
+            double offset = Math.Clamp(ShellServices.Instance.Settings.Current.IslandTopOffset, 0, 24);
+            AnimateTo(this, TopProperty, work.Bottom - winH - offset, ms, ease);
+        }
         AnimateTo(Pill, WidthProperty, width, ms, ease);
         AnimateTo(Pill, HeightProperty, height, ms, ease);
     }

@@ -207,6 +207,8 @@ public sealed partial class WidgetWindow : Window
     /// </summary>
     private void SetContent(string type)
     {
+        _relayout = null;   // новому составу — своё правило композиции
+
         var settings = ShellServices.Instance?.Settings.Current;
 
         var backdrop = new DotShell.Island.Wpf.Controls.IslandBackdrop
@@ -226,7 +228,23 @@ public sealed partial class WidgetWindow : Window
     {
         try
         {
-            _root.Child = BuildContent(_type);
+            // Перед пересборкой обязательно снимаем всё, что держало старый состав:
+            // таймеры продолжали тикать по мёртвым элементам, а media.PropertyChanged
+            // получал обработчик поверх старого — нагрузка росла с каждой сменой темы.
+            foreach (var t in _timers) t.Stop();
+            _timers.Clear();
+
+            _mediaUnsubscribe?.Invoke();
+            _mediaUnsubscribe = null;
+
+            _paletteUnsubscribe?.Invoke();
+            _paletteUnsubscribe = null;
+
+            _relayout = null;
+
+            // Через SetContent, а не _root.Child: только он собирает подложку острова,
+            // которую Reload раньше терял.
+            SetContent(_type);
         }
         catch { }
     }
