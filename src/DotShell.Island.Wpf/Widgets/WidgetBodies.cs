@@ -321,13 +321,14 @@ public sealed partial class WidgetWindow
         var pick = WBtn("ВЫБРАТЬ ПАПКУ");
         pick.Click += (_, _) =>
         {
-            using var dialog = new System.Windows.Forms.FolderBrowserDialog
+            // .NET 8 даёт штатный WPF-диалог выбора папки: WinForms здесь больше
+            // не нужен, а значит и 21 МБ его сборок в публикации.
+            var dialog = new Microsoft.Win32.OpenFolderDialog
             {
-                Description = "Где искать дубликаты?",
-                UseDescriptionForTitle = true,
+                Title = "Где искать дубликаты?",
             };
-            if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
-            root = dialog.SelectedPath;
+            if (dialog.ShowDialog() != true) return;
+            root = dialog.FolderName;
             status.Text = "сканирую…";
             rows.Children.Clear();
             Task.Run(() =>
@@ -385,6 +386,23 @@ public sealed partial class WidgetWindow
 
         var details = new StackPanel { Margin = new Thickness(0, 12, 0, 0), Visibility = Visibility.Collapsed };
 
+        var compactLamp = new System.Windows.Shapes.Ellipse
+        {
+            Width = 10,
+            Height = 10,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+
+        var compactText = new TextBlock
+        {
+            FontFamily = new FontFamily("Bahnschrift"),
+            FontSize = 11,
+            Foreground = WidgetAdaptive.Ink,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+
         void Refresh()
         {
             Task.Run(() =>
@@ -399,11 +417,19 @@ public sealed partial class WidgetWindow
                         _ => Color.FromRgb(0x3D, 0xDC, 0x84),
                     };
                     lamp.Fill = new SolidColorBrush(color);
+                    compactLamp.Fill = new SolidColorBrush(color);
 
                     headline.Text = light switch
                     {
                         UpdateStatus.Light.Red => "ПЕРЕЗАГРУЗКА ЖДЁТ",
                         UpdateStatus.Light.Yellow => "ОБНОВЛЯЕТСЯ ПРЯМО СЕЙЧАС",
+                        _ => "ВСЁ АКТУАЛЬНО",
+                    };
+
+                    compactText.Text = light switch
+                    {
+                        UpdateStatus.Light.Red => "НУЖНА ПЕРЕЗАГРУЗКА",
+                        UpdateStatus.Light.Yellow => "СТАВИТСЯ СЕЙЧАС",
                         _ => "ВСЁ АКТУАЛЬНО",
                     };
 
@@ -461,11 +487,32 @@ public sealed partial class WidgetWindow
         panel.Children.Add(buttons);
         panel.Children.Add(details);
 
-        _relayout = (_, h) => details.Visibility = h >= 190 ? Visibility.Visible : Visibility.Collapsed;
+        // Полоска: только лампа и статус одной строкой. Кнопки и легенда на высоте
+        // в 50 px — это очередь из обрезанных элементов, а не информация.
+        var compact = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        compact.Children.Add(compactLamp);
+        compact.Children.Add(compactText);
+
+        var host = new Grid();
+        host.Children.Add(compact);
+        host.Children.Add(panel);
+
+        object? current = null;
+
+        _relayout = (w, h) =>
+        {
+            var size = WidgetAdaptive.Of(w, h);
+            var next = size == WidgetSizeClass.Strip ? (UIElement)compact : panel;
+            WidgetAdaptive.Show(host, next, ref current);
+        };
 
         Refresh();
         Timer(60, Refresh);
-        return panel;
+        return host;
     }
 
     /// <summary>Строка легенды «что значит этот цвет».</summary>

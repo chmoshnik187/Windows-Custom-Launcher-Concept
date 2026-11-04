@@ -249,7 +249,7 @@ public sealed partial class WidgetWindow : Window
         "eq" => new MiniEq { MinWidth = 120, MinHeight = 36, IsRunning = true, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch },
         "media" => BuildMedia(),
         "system" => BuildSystem(),
-        "units" => new Units { Margin = new Thickness(6), Interactive = true },
+        "units" => BuildUnits(),
         "settings" => BuildSettings(),
         "clean" => BuildClean(),
         "dupes" => BuildDupes(),
@@ -271,19 +271,81 @@ public sealed partial class WidgetWindow : Window
     /// </summary>
     private UIElement BuildClock()
     {
-        var clock = new SegmentClock { Margin = new Thickness(0, 2, 0, 0) };
+        // Три композиции вместо одной: в полоске нужны только цифры, в квадрате —
+        // ещё дата, в широком прямоугольнике дата уезжает вправо и добавляется день
+        // недели. Раньше часы просто растягивались, и на широком виджете половина
+        // места пустовала.
+        var clockStrip = new SegmentClock { Margin = new Thickness(0) };
+        var clockSmall = new SegmentClock { Margin = new Thickness(0) };
+        var clockWide = new SegmentClock { Margin = new Thickness(0) };
 
-        var panel = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        panel.Children.Add(clock);
+        var dateSmall = WidgetAdaptive.Detail(11);
+        var dateWide = WidgetAdaptive.Caption(string.Empty);
+        var weekday = WidgetAdaptive.Detail(12);
+
+        var stripPanel = new Grid();
+        stripPanel.Children.Add(clockStrip);
+
+        var smallPanel = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        smallPanel.Children.Add(clockSmall);
+        dateSmall.Margin = new Thickness(0, 4, 0, 0);
+        smallPanel.Children.Add(dateSmall);
+
+        var wideRight = new StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(16, 0, 0, 0),
+        };
+        wideRight.Children.Add(dateWide);
+        wideRight.Children.Add(weekday);
+
+        var widePanel = new Grid();
+        widePanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        widePanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        widePanel.Children.Add(clockWide);
+        Grid.SetColumn(wideRight, 1);
+        widePanel.Children.Add(wideRight);
+
+        var host = new Grid();
+        host.Children.Add(stripPanel);
+        host.Children.Add(smallPanel);
+        host.Children.Add(widePanel);
+
+        object? current = null;
+
+        void Refresh()
+        {
+            var now = DateTime.Now;
+            dateSmall.Text = now.ToString("dddd, d MMMM");
+            dateWide.Text = now.ToString("MMMM").ToUpperInvariant();
+            weekday.Text = now.ToString("dddd, d");
+        }
+
+        Refresh();
+        Timer(20_000, Refresh);
 
         _relayout = (w, h) =>
         {
-            clock.Width = Math.Max(80, w);
-            clock.Height = Math.Max(28, Math.Min(h, 130));
+            var size = WidgetAdaptive.Of(w, h);
+            double timeHeight = Math.Max(24, Math.Min(h, 120));
+
+            clockStrip.Height = timeHeight;
+            clockSmall.Height = Math.Max(24, Math.Min(h * 0.62, 96));
+            clockWide.Height = Math.Max(24, Math.Min(h * 0.85, 120));
+            clockStrip.Width = clockSmall.Width = clockWide.Width = Math.Max(80, w);
+
+            var next = size == WidgetSizeClass.Strip
+                ? (UIElement)stripPanel
+                : w > h * 1.55
+                    ? widePanel
+                    : smallPanel;
+
+            WidgetAdaptive.Show(host, next, ref current);
         };
 
-        return panel;
+        return host;
     }
+
     /// <summary>
     /// Плеер, который умеет быть разного размера.
     ///
@@ -709,6 +771,57 @@ public sealed partial class WidgetWindow : Window
     /// Большой — те же полоски плюс проценты, гигабайты и батарея: размер
     /// добавляет информации, а не пустого места.
     /// </summary>
+    /// <summary>
+    /// Юниты: маленький виджет — одно существо, обычный — два, большой — два и
+    /// подпись, чтобы место не пустовало. Тот же принцип, что у плеера: размер
+    /// меняет композицию.
+    /// </summary>
+    private UIElement BuildUnits()
+    {
+        var one = new Controls.Units { Margin = new Thickness(4), Interactive = true, TwoUnits = false };
+        var two = new Controls.Units { Margin = new Thickness(6), Interactive = true };
+        var note = WidgetAdaptive.Detail(10);
+
+        var single = new Grid();
+        single.Children.Add(one);
+
+        var pair = new Grid();
+        pair.Children.Add(two);
+
+        var twoLarge = new Controls.Units { Margin = new Thickness(6), Interactive = true };
+
+        var largePanel = new Grid();
+        largePanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        largePanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        largePanel.Children.Add(twoLarge);
+        note.Text = "следят за мышью, расстраиваются без внимания";
+        note.Margin = new Thickness(0, 6, 0, 0);
+        Grid.SetRow(note, 1);
+        largePanel.Children.Add(note);
+
+        var host = new Grid();
+        host.Children.Add(single);
+        host.Children.Add(pair);
+        host.Children.Add(largePanel);
+
+        object? current = null;
+
+        _relayout = (w, h) =>
+        {
+            var size = WidgetAdaptive.Of(w, h);
+
+            var next = size is WidgetSizeClass.Strip or WidgetSizeClass.Small
+                ? (UIElement)single
+                : size == WidgetSizeClass.Large
+                    ? largePanel
+                    : pair;
+
+            WidgetAdaptive.Show(host, next, ref current);
+        };
+
+        return host;
+    }
+
     private UIElement BuildSystem()
     {
         var stats = ShellServices.Instance.Stats;
@@ -722,20 +835,60 @@ public sealed partial class WidgetWindow : Window
             Margin = new Thickness(0, 0, 0, 3),
         };
 
+        // Полоска: две дорожки без подписей — на высоте в один палец подписи не
+        // помещаются, а сами дорожки читаются.
+        var stripCpu = new DotBar { Height = 8 };
+        var stripRam = new DotBar { Height = 8, Margin = new Thickness(0, 6, 0, 0) };
+        var stripPanel = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        stripPanel.Children.Add(stripCpu);
+        stripPanel.Children.Add(stripRam);
+
+        // Обычный: подписи с процентами и дорожки.
         var cpuLabel = Label("CPU");
         var ramLabel = Label("RAM");
         var cpuBar = new DotBar { Height = 12 };
         var ramBar = new DotBar { Height = 12 };
 
+        var normalPanel = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        normalPanel.Children.Add(cpuLabel);
+        normalPanel.Children.Add(cpuBar);
+        ramLabel.Margin = new Thickness(0, 10, 0, 3);
+        normalPanel.Children.Add(ramLabel);
+        normalPanel.Children.Add(ramBar);
+
+        // Большой: свои дорожки (элемент не может жить в двух панелях сразу —
+        // иначе «уже логический дочерний для другого элемента»).
+        var cpuBarLarge = new DotBar { Height = 16 };
+        var ramBarLarge = new DotBar { Height = 16, Margin = new Thickness(0, 0, 0, 0) };
         var details = new TextBlock
         {
-            FontFamily = new FontFamily("Bahnschrift"),
+            FontFamily = new FontFamily("Segoe UI"),
             FontSize = 10,
             Foreground = ResBrush("DsTextMuted"),
-            Margin = new Thickness(0, 10, 0, 0),
+            Margin = new Thickness(0, 12, 0, 0),
             TextWrapping = TextWrapping.Wrap,
-            Visibility = Visibility.Collapsed,
         };
+
+        var largePanel = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        largePanel.Children.Add(Label("CPU"));
+        largePanel.Children.Add(cpuBarLarge);
+        largePanel.Children.Add(new TextBlock
+        {
+            Text = "ПАМЯТЬ",
+            FontFamily = new FontFamily("Bahnschrift"),
+            FontSize = 9,
+            Foreground = ResBrush("DsTextMuted"),
+            Margin = new Thickness(0, 12, 0, 3),
+        });
+        largePanel.Children.Add(ramBarLarge);
+        largePanel.Children.Add(details);
+
+        var host = new Grid();
+        host.Children.Add(stripPanel);
+        host.Children.Add(normalPanel);
+        host.Children.Add(largePanel);
+
+        object? current = null;
 
         void Refresh()
         {
@@ -743,34 +896,47 @@ public sealed partial class WidgetWindow : Window
                 ? (int)Math.Round((double)stats.UsedMemoryMb / stats.TotalMemoryMb * 100)
                 : 0;
 
-            cpuBar.Value = Math.Clamp(stats.Cpu / 100.0, 0, 1);
-            ramBar.Value = ramPct / 100.0;
+            double cpu = Math.Clamp(stats.Cpu / 100.0, 0, 1);
+            double ram = ramPct / 100.0;
+
+            stripCpu.Value = cpu;
+            stripRam.Value = ram;
+            cpuBar.Value = cpu;
+            ramBar.Value = ram;
+            cpuBarLarge.Value = cpu;
+            ramBarLarge.Value = ram;
 
             cpuLabel.Text = $"CPU · {stats.Cpu:F0}%";
             ramLabel.Text = $"RAM · {ramPct}%";
 
-            var battery = stats.HasBattery
-                ? $"\nбатарея: {stats.Battery}%{(stats.Charging ? " · заряжается" : "")}"
+            string battery = stats.HasBattery
+                ? $"\nбатарея {stats.Battery}%{(stats.Charging ? " · заряжается" : string.Empty)}"
                 : string.Empty;
 
-            details.Text = $"процессор {stats.Cpu:F0}%\n" +
-                           $"память {stats.UsedMemoryMb} из {stats.TotalMemoryMb} МБ · {ramPct}%" +
-                           battery;
+            details.Text = $"{stats.UsedMemoryMb} из {stats.TotalMemoryMb} МБ занято{battery}";
         }
+
         Refresh();
         Timer(2000, Refresh);
 
-        var panel = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        panel.Children.Add(cpuLabel);
-        panel.Children.Add(cpuBar);
-        ramLabel.Margin = new Thickness(0, 10, 0, 3);
-        panel.Children.Add(ramLabel);
-        panel.Children.Add(ramBar);
-        panel.Children.Add(details);
+        _relayout = (w, h) =>
+        {
+            var size = WidgetAdaptive.Of(w, h);
 
-        _relayout = (w, h) => details.Visibility = h >= 130 ? Visibility.Visible : Visibility.Collapsed;
+            var next = size == WidgetSizeClass.Strip
+                ? (UIElement)stripPanel
+                : size == WidgetSizeClass.Large
+                    ? largePanel
+                    : normalPanel;
 
-        return panel;
+            // Дорожки на большом виджете шире: иначе одинокая полоска в 12 px
+            // выглядит как случайная черта.
+            cpuBar.Height = ramBar.Height = 12;
+
+            WidgetAdaptive.Show(host, next, ref current);
+        };
+
+        return host;
     }
 
     /// <summary>

@@ -39,6 +39,12 @@ public sealed class Units : FrameworkElement
     public bool Interactive { get; set; }
 
     /// <summary>
+    /// Два существа или одно. На узком виджете два не помещаются — владелец
+    /// сравнивал с плеером: размер меняет композицию, а не обрезает её.
+    /// </summary>
+    public bool TwoUnits { get; set; } = true;
+
+    /// <summary>
     /// Режим «читает»: юнит не следит за курсором, а водит взглядом по строке
     /// слева направо, как человек, читающий уведомление.
     /// </summary>
@@ -236,8 +242,15 @@ public sealed class Units : FrameworkElement
         // боковым зрением, а не только по зрачкам.
         if (Reading) bounce += Math.Sin(_readPhase * Math.PI * 2) * 0.9;
 
-        DrawUnit(dc, body, eye, new Point(ActualWidth * 0.27, ActualHeight / 2 + bounce), blinking);
-        DrawUnit(dc, body, eye, new Point(ActualWidth * 0.73, ActualHeight / 2 + bounce), blinking);
+        if (TwoUnits)
+        {
+            DrawUnit(dc, body, eye, new Point(ActualWidth * 0.27, ActualHeight / 2 + bounce), blinking);
+            DrawUnit(dc, body, eye, new Point(ActualWidth * 0.73, ActualHeight / 2 + bounce), blinking);
+        }
+        else
+        {
+            DrawUnit(dc, body, eye, new Point(ActualWidth * 0.5, ActualHeight / 2 + bounce), blinking);
+        }
     }
 
     private void DrawUnit(DrawingContext dc, Brush body, Brush eye, Point center, bool blinking)
