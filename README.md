@@ -228,6 +228,7 @@ Wallpaper Engine — берётся из превью текущих обоев 
 | `crash.log` | ошибки (если остров пропал — сначала сюда) |
 
 Большинство настроек есть в окне настроек — в JSON лезть не обязательно.
+Полный справочник полей — [docs/SETTINGS.md](docs/SETTINGS.md).
 Тема — один JSON-файл, пример: [themes/example-nothing-red.json](themes/example-nothing-red.json),
 генератор темы из картинки: `tools/theme_from_image.py`.
 
