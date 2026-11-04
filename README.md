@@ -339,6 +339,6 @@ build.bat installer  :: publish + установщик (нужен Inno Setup 6)
 
 <div align="center">
 
-*Собрано человеком, [Qwen](https://chat.qwen.ai) и [DeepSeek](https://deepseek.com) · [v0.72.0](../../releases/tag/v0.72.0) · остров, который уже живёт на экране*
+*Собрано человеком, [Qwen](https://chat.qwen.ai) и [DeepSeek](https://deepseek.com) · [v0.73.0](../../releases/tag/v0.73.0) · остров, который уже живёт на экране*
 
 </div>

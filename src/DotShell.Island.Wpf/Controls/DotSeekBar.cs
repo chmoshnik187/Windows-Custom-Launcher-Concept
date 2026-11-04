@@ -427,7 +427,8 @@ public sealed class DotSeekBar : FrameworkElement
 
     private static SolidColorBrush AccentBrush()
     {
-        var brush = new SolidColorBrush(ColorPalette.Accent);
+        // Второй акцент: прогресс и ползунки берут его, если он задан.
+        var brush = new SolidColorBrush(ColorPalette.AccentSecond ?? ColorPalette.Accent);
         brush.Freeze();
         return brush;
     }

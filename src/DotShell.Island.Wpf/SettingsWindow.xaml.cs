@@ -66,6 +66,50 @@ public partial class SettingsWindow : Window
             ("dash", "Штрихи"),
         }, vm.DotShapeName);
 
+        FillChoices(AccentFocusBox, new (string Value, string Label)[]
+        {
+            ("all", "Везде"),
+            ("clock", "Только часы и трек"),
+            ("player", "Только плеер"),
+            ("quiet", "Приглушённый везде"),
+        }, vm.AccentFocus);
+
+        AccentFocusBox.SelectionChanged += (_, _) =>
+        {
+            if (AccentFocusBox.SelectedItem is System.Windows.Controls.ComboBoxItem { Tag: string value })
+                vm.AccentFocus = value;
+        };
+
+        FillChoices(AccentSecondBox, new (string Value, string Label)[]
+        {
+            ("", "Выключен"),
+            ("#3D7BFF", "Синий"),
+            ("#3DDC84", "Зелёный"),
+            ("#B26BFF", "Фиолетовый"),
+            ("#FFB020", "Янтарный"),
+        }, vm.AccentSecond);
+
+        AccentSecondBox.SelectionChanged += (_, _) =>
+        {
+            if (AccentSecondBox.SelectedItem is System.Windows.Controls.ComboBoxItem { Tag: string value })
+                vm.AccentSecond = value;
+        };
+
+        FillChoices(DashboardTabsBox, new (string Value, string Label)[]
+        {
+            ("overview,media,perf,weather", "Все четыре"),
+            ("overview,media", "Обзор и медиа"),
+            ("overview,weather", "Обзор и погода"),
+            ("media,perf", "Медиа и производительность"),
+            ("perf,weather", "Производительность и погода"),
+        }, vm.DashboardTabs);
+
+        DashboardTabsBox.SelectionChanged += (_, _) =>
+        {
+            if (DashboardTabsBox.SelectedItem is System.Windows.Controls.ComboBoxItem { Tag: string value })
+                vm.DashboardTabs = value;
+        };
+
         FillChoices(OpenDirectionBox, new (string Value, string Label)[]
         {
             ("center", "Из центра"),

@@ -194,6 +194,12 @@ public sealed class AppSettings
     /// <summary>Где живёт акцент: all, clock, player, quiet.</summary>
     public string AccentFocus { get; set; } = "all";
 
+    /// <summary>Второй акцент для прогресса и активных элементов. Пусто — выключен.</summary>
+    public string AccentSecondHex { get; set; } = "";
+
+    /// <summary>Какие вкладки показывать в панели-обзоре и в каком порядке.</summary>
+    public string DashboardTabs { get; set; } = "overview,media,perf,weather";
+
     /// <summary>Плотность точечного текста: множитель ячейки, 5–7 «точек на глиф».</summary>
     public int DotTextDensity { get; set; } = 6;
 

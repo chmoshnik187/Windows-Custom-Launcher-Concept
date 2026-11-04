@@ -31,6 +31,9 @@ public static class ColorPalette
 
     public static Color Accent { get; private set; } = Color.FromRgb(0xD7, 0x19, 0x20);
 
+    /// <summary>Второй акцент (прогресс, активные элементы). null — не задан.</summary>
+    public static Color? AccentSecond { get; private set; }
+
     /// <summary>Акцент с пониженной прозрачностью — для мигающих элементов.</summary>
     public static Color AccentFaded { get; private set; } = Color.FromArgb(0x40, 0xD7, 0x19, 0x20);
 
@@ -84,12 +87,32 @@ public static class ColorPalette
         Accent = color;
         AccentFaded = Color.FromArgb(0x40, color.R, color.G, color.B);
 
+        // Второй акцент: если задан цвет — прогресс и активные элементы берут его.
+        string second = bus.Settings.AccentSecondHex;
+        AccentSecond = string.IsNullOrWhiteSpace(second) ? null : FromArgb(ParseHex(second));
+
+        // «Где живёт акцент»: soft/ghost — это второстепенные акцентные элементы
+        // (чипы, рамки, фон). В узком режиме они приглушаются, основной акцент цел.
+        byte soft = bus.Settings.AccentFocus switch
+        {
+            "clock" or "player" => 0x2A,
+            "quiet" => 0x1A,
+            _ => 0x44,
+        };
+
+        byte ghost = bus.Settings.AccentFocus switch
+        {
+            "clock" or "player" => 0x14,
+            "quiet" => 0x10,
+            _ => 0x22,
+        };
+
         var res = Application.Current?.Resources;
         if (res is null) return;
 
         res[AccentKey] = new SolidColorBrush(color);
-        res[AccentSoftKey] = new SolidColorBrush(Color.FromArgb(0x44, color.R, color.G, color.B));
-        res[AccentGhostKey] = new SolidColorBrush(Color.FromArgb(0x22, color.R, color.G, color.B));
+        res[AccentSoftKey] = new SolidColorBrush(Color.FromArgb(soft, color.R, color.G, color.B));
+        res[AccentGhostKey] = new SolidColorBrush(Color.FromArgb(ghost, color.R, color.G, color.B));
         res[BackgroundKey] = new SolidColorBrush(Color.FromArgb((byte)(255 * opacity / 100), 0x00, 0x00, 0x00));
         res[GhostDotKey] = new SolidColorBrush(showGhostDots
             ? Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)
@@ -182,5 +205,16 @@ public static class ColorPalette
             (byte)Math.Clamp((rr + m) * 255, 0, 255),
             (byte)Math.Clamp((gg + m) * 255, 0, 255),
             (byte)Math.Clamp((bb + m) * 255, 0, 255));
+    }
+
+    /// <summary>#RRGGBB → uint ARGB с непрозрачностью.</summary>
+    private static uint ParseHex(string hex)
+    {
+        string text = hex.Trim().TrimStart('#');
+        if (text.Length == 6 && uint.TryParse(text, System.Globalization.NumberStyles.HexNumber,
+                System.Globalization.CultureInfo.InvariantCulture, out uint rgb))
+            return 0xFF000000u | rgb;
+
+        return 0xFFD71920u;
     }
 }

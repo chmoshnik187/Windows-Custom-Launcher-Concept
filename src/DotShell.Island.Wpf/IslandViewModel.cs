@@ -209,6 +209,39 @@ public sealed class IslandViewModel : INotifyPropertyChanged
         }
     }
 
+    public string AccentFocus
+    {
+        get => _services.Settings.Current.AccentFocus;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value) || value == _services.Settings.Current.AccentFocus) return;
+            _services.Settings.Update(s => s.AccentFocus = value);
+            RaisePropertyChanged();
+        }
+    }
+
+    public string AccentSecond
+    {
+        get => _services.Settings.Current.AccentSecondHex;
+        set
+        {
+            if (value == _services.Settings.Current.AccentSecondHex) return;
+            _services.Settings.Update(s => s.AccentSecondHex = value ?? string.Empty);
+            RaisePropertyChanged();
+        }
+    }
+
+    public string DashboardTabs
+    {
+        get => _services.Settings.Current.DashboardTabs;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value) || value == _services.Settings.Current.DashboardTabs) return;
+            _services.Settings.Update(s => s.DashboardTabs = value);
+            RaisePropertyChanged();
+        }
+    }
+
     public string OpenDirection
     {
         get => _services.Settings.Current.OpenDirection;

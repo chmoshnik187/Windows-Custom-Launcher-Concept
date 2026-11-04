@@ -106,13 +106,26 @@ public partial class DashboardWindow : Window
     {
         Tabs.Children.Clear();
 
-        var tabs = new (string Id, string Name, Grid Panel)[]
+        var all = new (string Id, string Name, Grid Panel)[]
         {
             ("overview", "ОБЗОР", OverviewPanel),
             ("media", "МЕДИА", MediaPanel),
             ("perf", "ПРОИЗВОДИТЕЛЬНОСТЬ", PerfPanel),
             ("weather", "ПОГОДА", WeatherPanel),
         };
+
+        // Состав и порядок вкладок — из настроек: "media,overview" покажет только
+        // две и в этом порядке.
+        string spec = ShellServices.Instance.Settings.Current.DashboardTabs ?? string.Empty;
+        var wanted = spec.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(part => part.Trim().ToLowerInvariant())
+            .ToList();
+
+        var tabs = wanted.Count == 0
+            ? all
+            : all.Where(tab => wanted.Contains(tab.Id)).OrderBy(tab => wanted.IndexOf(tab.Id)).ToArray();
+
+        if (tabs.Length == 0) tabs = all;
 
         foreach (var tab in tabs)
         {
@@ -138,7 +151,7 @@ public partial class DashboardWindow : Window
             Tabs.Children.Add(text);
         }
 
-        SelectTab("overview");
+        SelectTab(tabs[0].Id);
     }
 
     private string _selected = "overview";

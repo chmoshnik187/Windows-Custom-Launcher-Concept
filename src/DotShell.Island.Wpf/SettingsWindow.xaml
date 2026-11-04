@@ -175,6 +175,15 @@
                             <Slider Style="{StaticResource DsSlider}" Minimum="0.5" Maximum="2"
                                     Value="{Binding AnimSpeed}" />
 
+                            <TextBlock Style="{StaticResource Section}" Text="ГДЕ ЖИВЁТ АКЦЕНТ" />
+                            <ComboBox x:Name="AccentFocusBox" Style="{StaticResource DsCombo}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="ВТОРОЙ АКЦЕНТ (ПРОГРЕСС)" />
+                            <ComboBox x:Name="AccentSecondBox" Style="{StaticResource DsCombo}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="ВКЛАДКИ ОБЗОРА" />
+                            <ComboBox x:Name="DashboardTabsBox" Style="{StaticResource DsCombo}" />
+
                             <TextBlock Style="{StaticResource Section}" Text="ТЕМПЕРАТУРА АКЦЕНТА" />
                             <Slider Style="{StaticResource DsSlider}" Minimum="-30" Maximum="30"
                                     Value="{Binding AccentTemperature}" />
