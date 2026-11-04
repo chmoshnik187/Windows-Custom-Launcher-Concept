@@ -28,6 +28,9 @@ public static class Program
     /// <summary>--settings: сразу открыть окно настроек.</summary>
     public static bool OpenSettingsOnStart { get; private set; }
 
+    /// <summary>--dashboard: открыть панель-обзор при старте (ярлык, проверка вёрстки).</summary>
+    public static bool OpenDashboard { get; private set; }
+
     /// <summary>--chat-demo: пара демонстрационных реплик в чате (снимки, проверка вёрстки).</summary>
     public static bool ChatDemo { get; private set; }
 
@@ -222,6 +225,8 @@ public static class Program
             if (arg.Equals("--keys", StringComparison.OrdinalIgnoreCase)) { OpenKeys = true; continue; }
 
             if (arg.Equals("--settings", StringComparison.OrdinalIgnoreCase)) { OpenSettingsOnStart = true; continue; }
+
+            if (arg.Equals("--dashboard", StringComparison.OrdinalIgnoreCase)) { OpenDashboard = true; continue; }
 
             if (arg.Equals("--chat-demo", StringComparison.OrdinalIgnoreCase)) { ChatDemo = true; continue; }
 

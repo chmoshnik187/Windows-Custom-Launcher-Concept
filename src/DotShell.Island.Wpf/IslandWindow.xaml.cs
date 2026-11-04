@@ -470,6 +470,7 @@ public partial class IslandWindow : Window
             {
                 // Виджеты: открываем витрину с карточками, а не список в меню —
                 // в меню не видно, что ставишь, и нельзя выбрать место на столе.
+                menu.Add("Обзор", () => Dispatcher.BeginInvoke(() => DashboardWindow.Toggle()));
                 menu.Add("Витрина виджетов", () => Dispatcher.BeginInvoke(OpenWidgetGallery));
                 menu.Add("Клавиши и сочетания", () => Dispatcher.BeginInvoke(OpenKeysWindow));
 
@@ -538,6 +539,11 @@ public partial class IslandWindow : Window
         if (Program.OpenKeys)
         {
             Dispatcher.BeginInvoke(OpenKeysWindow);
+        }
+
+        if (Program.OpenDashboard)
+        {
+            Dispatcher.BeginInvoke(() => DashboardWindow.Toggle());
         }
 
         if (string.IsNullOrWhiteSpace(tab)) return;

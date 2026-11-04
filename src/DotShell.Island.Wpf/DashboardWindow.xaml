@@ -1,0 +1,208 @@
+<Window x:Class="DotShell.Island.Wpf.DashboardWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="1000" Height="620"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ShowInTaskbar="False" Topmost="True" ResizeMode="NoResize"
+        WindowStartupLocation="Manual" Visibility="Collapsed" Title="DotShell — обзор">
+    <!--
+      Панель-обзор в духе Linux-шеллов (AGS/Quickshell): выезжает сверху по центру,
+      вкладки сверху, содержимое — карточки без скруглений и без размытия.
+      Цвета и акцент ставятся из кода, чтобы не зависеть от ресурсов чужого окна.
+    -->
+    <Border x:Name="Shell" CornerRadius="16" Background="#0B0B0E"
+            BorderBrush="#26262E" BorderThickness="1">
+        <Grid Margin="24,18,24,22">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Вкладки -->
+            <Grid Grid.Row="0">
+                <StackPanel x:Name="Tabs" Orientation="Horizontal" />
+                <TextBlock x:Name="Hint" Text="ESC — ЗАКРЫТЬ" HorizontalAlignment="Right"
+                           VerticalAlignment="Center" FontFamily="Bahnschrift" FontSize="9"
+                           Foreground="#5C5C66" />
+            </Grid>
+
+            <Border Grid.Row="1" Height="1" Background="#1E1E24" Margin="0,12,0,0" />
+
+            <Grid Grid.Row="2" Margin="0,18,0,0">
+
+                <!-- ОБЗОР -->
+                <Grid x:Name="OverviewPanel">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="392" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" VerticalAlignment="Top">
+                        <TextBlock x:Name="Caption" Text="DOTSHELL" FontFamily="Bahnschrift"
+                                   FontSize="9" Foreground="#8A8A94" />
+                        <TextBlock x:Name="ClockText" Text="00:00" FontFamily="Bahnschrift"
+                                   FontSize="86" FontWeight="SemiBold" Foreground="#ECECEE"
+                                   Margin="0,2,0,0" />
+                        <TextBlock x:Name="DateText" Text="" FontFamily="Bahnschrift"
+                                   FontSize="12" Foreground="#8A8A94" />
+
+                        <Border Height="1" Background="#1E1E24" Margin="0,20,40,16" />
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <TextBlock Text="БАТАРЕЯ" FontFamily="Bahnschrift" FontSize="9"
+                                       Foreground="#5C5C66" Width="120" VerticalAlignment="Center" />
+                            <TextBlock x:Name="BatteryText" Text="—" FontFamily="Segoe UI" FontSize="14"
+                                       Foreground="#ECECEE" />
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <TextBlock Text="CPU" FontFamily="Bahnschrift" FontSize="9"
+                                       Foreground="#5C5C66" Width="120" VerticalAlignment="Center" />
+                            <TextBlock x:Name="CpuText" Text="—" FontFamily="Segoe UI" FontSize="14"
+                                       Foreground="#ECECEE" />
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <TextBlock Text="ПАМЯТЬ" FontFamily="Bahnschrift" FontSize="9"
+                                       Foreground="#5C5C66" Width="120" VerticalAlignment="Center" />
+                            <TextBlock x:Name="RamText" Text="—" FontFamily="Segoe UI" FontSize="14"
+                                       Foreground="#ECECEE" />
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="СЕССИЯ" FontFamily="Bahnschrift" FontSize="9"
+                                       Foreground="#5C5C66" Width="120" VerticalAlignment="Center" />
+                            <TextBlock x:Name="UptimeText" Text="—" FontFamily="Segoe UI" FontSize="14"
+                                       Foreground="#ECECEE" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Календарь -->
+                    <Border Grid.Column="1" BorderBrush="#1E1E24" BorderThickness="1,0,0,0" Padding="24,0,0,0">
+                        <StackPanel>
+                            <Grid>
+                                <TextBlock x:Name="MonthText" Text="" FontFamily="Bahnschrift"
+                                           FontSize="14" Foreground="#ECECEE" />
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <TextBlock x:Name="PrevMonth" Text="‹" FontSize="18" Foreground="#8A8A94"
+                                               Margin="0,0,14,0" Cursor="Hand" />
+                                    <TextBlock x:Name="NextMonth" Text="›" FontSize="18" Foreground="#8A8A94"
+                                               Cursor="Hand" />
+                                </StackPanel>
+                            </Grid>
+
+                            <UniformGrid x:Name="WeekHeader" Rows="1" Margin="0,14,0,6" />
+                            <UniformGrid x:Name="CalGrid" Rows="6" Columns="7" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <!-- МЕДИА -->
+                <Grid x:Name="MediaPanel" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="220" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Width="200" Height="200" Background="#121216" CornerRadius="4"
+                            VerticalAlignment="Top">
+                        <Image x:Name="Cover" Stretch="UniformToFill" />
+                    </Border>
+
+                    <StackPanel Grid.Column="1" Margin="28,0,0,0" VerticalAlignment="Top">
+                        <TextBlock Text="СЕЙЧАС ИГРАЕТ" FontFamily="Bahnschrift" FontSize="9"
+                                   Foreground="#5C5C66" />
+                        <TextBlock x:Name="MediaTitle" Text="Ничего не играет" FontFamily="Bahnschrift"
+                                   FontSize="26" Foreground="#ECECEE" Margin="0,8,0,0"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock x:Name="MediaArtist" Text="" FontFamily="Segoe UI" FontSize="13"
+                                   Foreground="#8A8A94" Margin="0,4,0,0" />
+                        <TextBlock x:Name="MediaAlbum" Text="" FontFamily="Segoe UI" FontSize="12"
+                                   Foreground="#5C5C66" Margin="0,2,0,0" />
+
+                        <Border Height="1" Background="#1E1E24" Margin="0,22,120,18" />
+
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="PrevTrack" Text="◀◀" FontFamily="Segoe UI" FontSize="15"
+                                       Foreground="#8A8A94" Margin="0,0,26,0" Cursor="Hand" />
+                            <TextBlock x:Name="PlayPause" Text="▶" FontFamily="Segoe UI" FontSize="19"
+                                       Foreground="#ECECEE" Margin="0,0,26,0" Cursor="Hand" />
+                            <TextBlock x:Name="NextTrack" Text="▶▶" FontFamily="Segoe UI" FontSize="15"
+                                       Foreground="#8A8A94" Cursor="Hand" />
+                        </StackPanel>
+
+                        <TextBlock x:Name="ProgressText" Text="— / —" FontFamily="Segoe UI" FontSize="11"
+                                   Foreground="#5C5C66" Margin="0,18,0,0" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- ПРОИЗВОДИТЕЛЬНОСТЬ -->
+                <Grid x:Name="PerfPanel" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="CPU" FontFamily="Bahnschrift" FontSize="9" Foreground="#5C5C66" />
+                        <TextBlock x:Name="CpuBig" Text="0%" FontFamily="Bahnschrift" FontSize="64"
+                                   Foreground="#ECECEE" />
+                        <Border Height="6" Background="#16161B" CornerRadius="3" Margin="0,6,60,0">
+                            <Border x:Name="CpuBar" Background="#D71920" CornerRadius="3"
+                                    HorizontalAlignment="Left" Width="0" />
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="ПАМЯТЬ" FontFamily="Bahnschrift" FontSize="9" Foreground="#5C5C66" />
+                        <TextBlock x:Name="RamBig" Text="0%" FontFamily="Bahnschrift" FontSize="64"
+                                   Foreground="#ECECEE" />
+                        <Border Height="6" Background="#16161B" CornerRadius="3" Margin="0,6,60,0">
+                            <Border x:Name="RamBar" Background="#D71920" CornerRadius="3"
+                                    HorizontalAlignment="Left" Width="0" />
+                        </Border>
+                    </StackPanel>
+                </Grid>
+
+                <!-- ПОГОДА -->
+                <Grid x:Name="WeatherPanel" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="320" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0">
+                        <TextBlock x:Name="WeatherCity" Text="—" FontFamily="Bahnschrift" FontSize="9"
+                                   Foreground="#5C5C66" />
+                        <TextBlock x:Name="WeatherTemp" Text="—°" FontFamily="Bahnschrift" FontSize="84"
+                                   Foreground="#ECECEE" />
+                        <TextBlock x:Name="WeatherCondition" Text="" FontFamily="Segoe UI" FontSize="15"
+                                   Foreground="#ECECEE" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" VerticalAlignment="Top" Margin="0,40,0,0">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                            <TextBlock Text="ОЩУЩАЕТСЯ" FontFamily="Bahnschrift" FontSize="9"
+                                       Foreground="#5C5C66" Width="130" />
+                            <TextBlock x:Name="WeatherFeels" Text="—" FontFamily="Segoe UI" FontSize="13"
+                                       Foreground="#ECECEE" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                            <TextBlock Text="ВЕТЕР" FontFamily="Bahnschrift" FontSize="9"
+                                       Foreground="#5C5C66" Width="130" />
+                            <TextBlock x:Name="WeatherWind" Text="—" FontFamily="Segoe UI" FontSize="13"
+                                       Foreground="#ECECEE" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="ВЛАЖНОСТЬ" FontFamily="Bahnschrift" FontSize="9"
+                                       Foreground="#5C5C66" Width="130" />
+                            <TextBlock x:Name="WeatherHumidity" Text="—" FontFamily="Segoe UI" FontSize="13"
+                                       Foreground="#ECECEE" />
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>
