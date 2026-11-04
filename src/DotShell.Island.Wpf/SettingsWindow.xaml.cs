@@ -268,7 +268,21 @@ public partial class SettingsWindow : Window
 
         FillAudioDevices();
 
-        KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
+        KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Escape) return;
+
+            // Esc сначала очищает поиск, и только потом закрывает окно:
+            // иначе после поиска окно закрывалось вместо сброса.
+            if (SearchBox is not null && SearchBox.Text.Length > 0)
+            {
+                SearchBox.Clear();
+                e.Handled = true;
+                return;
+            }
+
+            Close();
+        };
     }
 
     /// <summary>Переключение категорий: показываем ровно одну панель.</summary>
@@ -566,6 +580,8 @@ public partial class SettingsWindow : Window
         {
             int count = Filter(category.Panel, query);
 
+            Tidy(category.Panel);
+
             if (count > bestCount)
             {
                 bestCount = count;
@@ -600,6 +616,53 @@ public partial class SettingsWindow : Window
                 break;
             }
         }
+    }
+
+    /// <summary>
+    /// Вторая проходка после фильтрации: прячет контейнеры, внутри которых не осталось
+    /// ни одной видимой настройки, и подписи разделов, под которыми ничего не видно.
+    /// Без неё вокруг найденного пункта оставались соседние строки.
+    /// </summary>
+    private static void Tidy(DependencyObject node)
+    {
+        var children = Enumerable.ToList<object>(
+            Enumerable.Cast<object>(LogicalTreeHelper.GetChildren(node)));
+
+        foreach (var child in children)
+        {
+            if (child is not UIElement element)
+            {
+                if (child is DependencyObject nested) Tidy(nested);
+                continue;
+            }
+
+            Tidy(element);
+
+            if (IsRow(element) || element is TextBlock || element is DotShell.Island.Wpf.Controls.TrackedText)
+                continue;
+
+            if (element.Visibility == Visibility.Visible && !HasVisibleRow(element))
+                element.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private static bool IsRow(UIElement element) =>
+        element is CheckBox || element is ComboBox || element is Slider
+        || element is TextBox || element is Button;
+
+    private static bool HasVisibleRow(DependencyObject node)
+    {
+        foreach (var child in Enumerable.ToList<object>(
+                     Enumerable.Cast<object>(LogicalTreeHelper.GetChildren(node))))
+        {
+            if (child is not UIElement element || element.Visibility != Visibility.Visible)
+                continue;
+
+            if (IsRow(element)) return true;
+            if (HasVisibleRow(element)) return true;
+        }
+
+        return false;
     }
 
     /// <summary>Текст строки: свой и предыдущего элемента (подписи стоят отдельными TextBlock).</summary>
