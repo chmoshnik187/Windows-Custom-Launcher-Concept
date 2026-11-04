@@ -31,6 +31,12 @@ public static class Program
     /// <summary>--dashboard: открыть панель-обзор при старте (ярлык, проверка вёрстки).</summary>
     public static bool OpenDashboard { get; private set; }
 
+    /// <summary>--widget=media: открыть виджет при старте (снимки, проверка раскладок).</summary>
+    public static string? OpenWidgetType { get; private set; }
+
+    /// <summary>--widget-size=520x112: задать размер открываемого виджета.</summary>
+    public static (int W, int H)? WidgetSize { get; private set; }
+
     /// <summary>--chat-demo: пара демонстрационных реплик в чате (снимки, проверка вёрстки).</summary>
     public static bool ChatDemo { get; private set; }
 
@@ -227,6 +233,22 @@ public static class Program
             if (arg.Equals("--settings", StringComparison.OrdinalIgnoreCase)) { OpenSettingsOnStart = true; continue; }
 
             if (arg.Equals("--dashboard", StringComparison.OrdinalIgnoreCase)) { OpenDashboard = true; continue; }
+
+            if (arg.StartsWith("--widget=", StringComparison.OrdinalIgnoreCase))
+            {
+                OpenWidgetType = arg["--widget=".Length..].Trim().ToLowerInvariant();
+                continue;
+            }
+
+            if (arg.StartsWith("--widget-size=", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = arg["--widget-size=".Length..].ToLowerInvariant().Split('x');
+                if (parts.Length == 2 && int.TryParse(parts[0], out int w) && int.TryParse(parts[1], out int h))
+                {
+                    WidgetSize = (w, h);
+                }
+                continue;
+            }
 
             if (arg.Equals("--chat-demo", StringComparison.OrdinalIgnoreCase)) { ChatDemo = true; continue; }
 

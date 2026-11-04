@@ -546,6 +546,20 @@ public partial class IslandWindow : Window
             Dispatcher.BeginInvoke(() => DashboardWindow.Toggle());
         }
 
+        if (Program.OpenWidgetType is { } widgetType)
+        {
+            Dispatcher.BeginInvoke(() =>
+            {
+                Widgets.WidgetsManager.OpenWidget(widgetType);
+
+                if (Program.WidgetSize is { } size && Widgets.WidgetsManager.Get(widgetType) is { } window)
+                {
+                    window.Width = size.W;
+                    window.Height = size.H;
+                }
+            });
+        }
+
         if (string.IsNullOrWhiteSpace(tab)) return;
 
         Dispatcher.BeginInvoke(() =>
@@ -819,14 +833,12 @@ public partial class IslandWindow : Window
         if (_docked && !_peeked) PeekIn(); // раскрытие из дока сначала вытаскивает остров
 
         var (targetW, targetH) = TargetTabSize(_vm.ActiveTab);
-        ResizeWindowTo(targetW, targetH);
         ExpandedLayer.Width = targetW - 20;
         _expandedH = targetH;
         ExpandedLayer.Height = targetH - 10;
         ExpandedLayer.Visibility = Visibility.Visible;
 
-        Animate(Pill, WidthProperty, targetW);
-        Animate(Pill, HeightProperty, targetH);
+        AnimateShellTo(targetW, targetH);
         Fade(CollapsedRow, to: 0, ms: 120, onComplete: () => CollapsedRow.Visibility = Visibility.Collapsed);
         Fade(ExpandedLayer, to: 1, ms: 220, delayMs: 90);
 
@@ -844,9 +856,7 @@ public partial class IslandWindow : Window
 
         CollapsedRow.Visibility = Visibility.Visible;
 
-        ResizeWindowTo(CollapsedWidth, CollapsedHeight);
-        Animate(Pill, WidthProperty, CollapsedWidth);
-        Animate(Pill, HeightProperty, CollapsedHeight);
+        AnimateShellTo(CollapsedWidth, CollapsedHeight);
         Fade(ExpandedLayer, to: 0, ms: 120, onComplete: () => ExpandedLayer.Visibility = Visibility.Collapsed);
         Fade(CollapsedRow, to: 1, ms: 220, delayMs: 90);
 
@@ -1158,7 +1168,10 @@ public partial class IslandWindow : Window
         if (Math.Abs(extra - _notesExtra) < 6) return;
 
         _notesExtra = extra;
-        ApplyTabSize("notes", animate: false);
+
+        // Рост заметок тоже анимируем: иначе остров «прыгал» в момент, когда
+        // вкладка пересчитывала высоту под содержимое.
+        ApplyTabSize("notes", animate: true);
         Log.Info($"notes: содержимое {extent:F0}, видно {viewport:F0}, обвязка {chrome:F0} → высота {target:F0}");
     }
     private void SetExpandedHeight(double h, bool animate)
@@ -1178,17 +1191,91 @@ public partial class IslandWindow : Window
     /// вместе: иначе получилось бы «широкое окно с узкой колонкой» — ровно
     /// то, на что жаловался владелец.
     /// </summary>
+
+    /// <summary>
+    /// Окно и капсула одним движением. Раньше окно получало новый размер сразу,
+    /// а капсула догоняла его анимацией — из-за этого на раскрытии и на смене
+    /// вкладок виднелась полоса «широкое окно с узкой капсулой».
+    /// </summary>
+    private void AnimateShellTo(double width, double height, int ms = 260)
+    {
+        double winW = Math.Max(CollapsedWidth, width);
+        double winH = Math.Max(CollapsedHeight + 56, height + 12);
+        double centerX = Left + Width / 2;
+
+        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+
+        AnimateTo(this, WidthProperty, winW, ms, ease);
+        AnimateTo(this, HeightProperty, winH, ms, ease);
+        AnimateTo(this, LeftProperty, centerX - winW / 2, ms, ease);
+        AnimateTo(Pill, WidthProperty, width, ms, ease);
+        AnimateTo(Pill, HeightProperty, height, ms, ease);
+    }
+
     private void ApplyTabSize(string tag, bool animate = true)
     {
         if (!_isExpanded) return;
 
         var (width, height) = TargetTabSize(tag);
 
-        ResizeWindowTo(width, height);
-        ExpandedLayer.Width = width - 20;   // по 10 полей слева и справа
-        SetExpandedHeight(height, animate: false);
-        if (animate) Animate(Pill, WidthProperty, width);
-        else Pill.Width = width;
+        double contentW = width - 20;       // по 10 полей слева и справа
+        double contentH = height - 10;
+        double winW = Math.Max(CollapsedWidth, width);
+        double winH = Math.Max(CollapsedHeight + 56, height + 12);
+
+        if (!animate)
+        {
+            ResizeWindowTo(width, height);
+            ExpandedLayer.Width = contentW;
+            ExpandedLayer.Height = contentH;
+            _expandedH = height;
+            Pill.Width = width;
+            Pill.Height = height;
+            return;
+        }
+
+        // Окно, капсула и слой едут одним движением. Раньше окно и слой прыгали
+        // сразу, а капсула догоняла их анимацией — отсюда рваный переход между
+        // вкладками: на миг виднелось «широкое окно с узкой колонкой».
+        const int ms = 260;
+        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+
+        double centerX = Left + Width / 2;
+
+        AnimateTo(this, WidthProperty, winW, ms, ease);
+        AnimateTo(this, HeightProperty, winH, ms, ease);
+        AnimateTo(this, LeftProperty, centerX - winW / 2, ms, ease);
+
+        AnimateTo(Pill, WidthProperty, width, ms, ease);
+        AnimateTo(Pill, HeightProperty, height, ms, ease);
+
+        AnimateTo(ExpandedLayer, WidthProperty, contentW, ms, ease);
+        AnimateTo(ExpandedLayer, HeightProperty, contentH, ms, ease);
+
+        _expandedH = height;
+    }
+
+    /// <summary>
+    /// Анимация свойства с фиксацией конечного значения: без сброса анимации
+    /// следующая мгновенная установка размера (ResizeWindowTo) игнорировалась бы —
+    /// анимация приоритетнее локального значения.
+    /// </summary>
+    private static void AnimateTo(DependencyObject target, DependencyProperty property,
+        double to, int ms, IEasingFunction ease)
+    {
+        var anim = new DoubleAnimation(to, TimeSpan.FromMilliseconds(ms)) { EasingFunction = ease };
+
+        if (target is UIElement element)
+        {
+            anim.Completed += (_, _) =>
+            {
+                element.BeginAnimation(property, null);
+                element.SetValue(property, to);
+            };
+        }
+
+        if (target is UIElement el) el.BeginAnimation(property, anim);
+        else if (target is Window window) window.BeginAnimation(property, anim);
     }
 
     /// <summary>Размер вкладки с поправкой на нижний край экрана.</summary>
@@ -1408,16 +1495,53 @@ public partial class IslandWindow : Window
             return;
         }
     }
+    /// <summary>Вкладка, которая сейчас показана (для кросс-фейда).</summary>
+    private FrameworkElement? _visibleTab;
+
     private void ShowTab(string tag)
     {
-        TabHome.Visibility = tag == "home" ? Visibility.Visible : Visibility.Collapsed;
-        TabNotes.Visibility = tag == "notes" ? Visibility.Visible : Visibility.Collapsed;
-        TabClipboard.Visibility = tag == "clipboard" ? Visibility.Visible : Visibility.Collapsed;
-        TabSystem.Visibility = tag == "system" ? Visibility.Visible : Visibility.Collapsed;
-        TabTheme.Visibility = tag == "theme" ? Visibility.Visible : Visibility.Collapsed;
-        TabChat.Visibility = tag == "chat" ? Visibility.Visible : Visibility.Collapsed;
-        TabShelf.Visibility = tag == "shelf" ? Visibility.Visible : Visibility.Collapsed;
-        TabCmd.Visibility = tag == "cmd" ? Visibility.Visible : Visibility.Collapsed;
+        var next = tag switch
+        {
+            "home" => (FrameworkElement)TabHome,
+            "notes" => TabNotes,
+            "clipboard" => TabClipboard,
+            "system" => TabSystem,
+            "theme" => TabTheme,
+            "chat" => TabChat,
+            "shelf" => TabShelf,
+            "cmd" => TabCmd,
+            _ => TabHome,
+        };
+
+        // Переключение вкладок — не «выключил/включил», а кросс-фейд: старая
+        // гаснет, новая проявляется. Мгновенная подмена и была той рваной
+        // анимацией, которую заметил владелец.
+        var previous = _visibleTab;
+
+        if (previous is not null && !ReferenceEquals(previous, next))
+        {
+            previous.IsHitTestVisible = false;
+            Fade(previous, 0, 90, onComplete: () =>
+            {
+                previous.Visibility = Visibility.Collapsed;
+                previous.Opacity = 1;
+                previous.IsHitTestVisible = true;
+            });
+        }
+
+        if (!ReferenceEquals(previous, next))
+        {
+            next.Visibility = Visibility.Visible;
+            next.Opacity = 0;
+            Fade(next, 1, 160, delayMs: 40);
+        }
+        else
+        {
+            next.Visibility = Visibility.Visible;
+            next.Opacity = 1;
+        }
+
+        _visibleTab = next;
 
         if (tag == "chat") _ = CheckOllamaAsync();
         if (tag == "notes") Dispatcher.BeginInvoke(() => UpdateNotesHeight(false));

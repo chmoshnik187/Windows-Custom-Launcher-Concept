@@ -59,6 +59,30 @@ public sealed class MediaBridge : INotifyPropertyChanged, IAsyncDisposable
     public event PropertyChangedEventHandler? PropertyChanged;
 
     /// <summary>Поднять мост. Безопасно вызывать повторно.</summary>
+
+    /// <summary>
+    /// AUMID вида `com.dotify.app-siw` → «Dotify». В интерфейсе это имя источника,
+    /// и сырая строка там выглядит как мусор.
+    /// </summary>
+    private static string PrettySource(string? aumid)
+    {
+        if (string.IsNullOrWhiteSpace(aumid)) return string.Empty;
+
+        string text = aumid;
+
+        int bang = text.IndexOf('!');
+        if (bang > 0) text = text[..bang];
+
+        if (text.StartsWith("com.", StringComparison.OrdinalIgnoreCase)) text = text[4..];
+        if (text.StartsWith("Microsoft.", StringComparison.OrdinalIgnoreCase)) text = text["Microsoft.".Length..];
+
+        int dot = text.IndexOf('.');
+        if (dot > 0) text = text[..dot];
+
+        if (text.Length == 0) return aumid;
+        return char.ToUpperInvariant(text[0]) + text[1..];
+    }
+
     public async Task StartAsync()
     {
         if (_manager is null)
@@ -133,7 +157,7 @@ public sealed class MediaBridge : INotifyPropertyChanged, IAsyncDisposable
             Title = props.Title ?? string.Empty;
             Artist = props.Artist ?? string.Empty;
             Album = props.AlbumTitle ?? string.Empty;
-            SourceApp = _session.SourceAppUserModelId ?? string.Empty;
+            SourceApp = PrettySource(_session.SourceAppUserModelId);
 
             ArtworkBytes = await ReadThumbnailAsync(props.Thumbnail);
 

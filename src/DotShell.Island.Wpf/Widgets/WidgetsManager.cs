@@ -43,6 +43,9 @@ public static class WidgetsManager
 
     public static bool Has(string type) => Open.ContainsKey(type);
 
+    /// <summary>Открытое окно виджета (нужно для проверки раскладок и снимков).</summary>
+    public static WidgetWindow? Get(string type) => Open.TryGetValue(type, out var window) ? window : null;
+
     public static void Toggle(string type)
     {
         if (Has(type)) Close(type);

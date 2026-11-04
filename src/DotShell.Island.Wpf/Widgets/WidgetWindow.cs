@@ -7,6 +7,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using DotShell.Core;
@@ -292,164 +293,413 @@ public sealed partial class WidgetWindow : Window
     /// Раньше виджет был 244 пикселя навсегда: половина места пустовала,
     /// а нужного (времени, обложки) не было вовсе.
     /// </summary>
+    /// <summary>
+    /// Плеер-виджет в трёх раскладках, как у Dotify:
+    ///
+    ///   полоса   — широкий и низкий: обложка слева, текст, кнопки справа;
+    ///   карточка — обложка сверху во всю ширину, под ней текст и кнопки;
+    ///   обложка  — высокий и близкий к квадрату: картинка во весь виджет,
+    ///              текст поверх неё на градиенте.
+    ///
+    /// Почему так, а не «спрятать лишнее»: размер виджета определяет не количество
+    /// деталей, а композицию. Один каркас на все размеры всегда даёт либо пустое
+    /// место, либо кашу из мелких элементов.
+    /// </summary>
     private UIElement BuildMedia()
     {
         var media = ShellServices.Instance.Media;
 
-        var artwork = new Image { Stretch = Stretch.UniformToFill };
-        var artBox = new Border
-        {
-            Width = 60,
-            Height = 60,
-            CornerRadius = new CornerRadius(12),
-            ClipToBounds = true,
-            VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, 0, 12, 0),
-        };
-        artBox.SetResourceReference(Border.BackgroundProperty, "DsSurfaceAlt");
-        artBox.SetResourceReference(Border.BorderBrushProperty, "DsBorder");
-        artBox.BorderThickness = new Thickness(1);
-        artBox.Child = artwork;
+        var host = new Grid();
 
-        var title = new TextBlock
+        // ---------- общие помощники ----------
+
+        static Image Art() => new() { Stretch = Stretch.UniformToFill };
+
+        var ink = new SolidColorBrush(Color.FromRgb(0xEC, 0xEC, 0xEE));
+        var muted = new SolidColorBrush(Color.FromRgb(0x8A, 0x8A, 0x93));
+
+        // Цвета задаём явно. Через стиль WTitle они приходили чёрными: стиль
+        // лежит в ресурсах окна, а DynamicResource DsText там не разрешался.
+        static TextBlock Line(double size, Brush brush, Thickness margin, bool bold = true) => new()
         {
-            Style = (Style)FindResource("WTitle"),
+            FontFamily = new FontFamily("Segoe UI"),
+            FontSize = size,
+            FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
+            Foreground = brush,
             TextTrimming = TextTrimming.CharacterEllipsis,
-        };
-        var artist = new TextBlock
-        {
-            Style = (Style)FindResource("WSub"),
-            Margin = new Thickness(0, 1, 0, 0),
-            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = margin,
         };
 
-        var progress = new ProgressBar
+        static ProgressBar Bar(double height) => new()
         {
-            Height = 3,
+            Height = height,
             Minimum = 0,
             Maximum = 100,
             BorderThickness = new Thickness(0),
-            Margin = new Thickness(0, 8, 0, 0),
         };
-        progress.SetResourceReference(ProgressBar.ForegroundProperty, "DsAccent");
-        progress.SetResourceReference(ProgressBar.BackgroundProperty, "DsBorder");
 
-        var timing = new TextBlock
+        Border ArtBox(Image image, double radius)
         {
-            Style = (Style)FindResource("WSub"),
+            var box = new Border
+            {
+                CornerRadius = new CornerRadius(radius),
+                ClipToBounds = true,
+                Background = Brushes.Transparent,
+            };
+            box.SetResourceReference(Border.BackgroundProperty, "DsSurfaceAlt");
+            box.Child = image;
+            return box;
+        }
+
+        Button Icon(string glyph, string styleKey, bool accent = false)
+        {
+            var button = new Button
+            {
+                Content = glyph,
+                Style = (Style)FindResource(styleKey),
+                Padding = new Thickness(0),
+            };
+            return button;
+        }
+
+        // ---------- 1. полоса: обложка слева, текст, кнопки справа ----------
+
+        var pillArt = Art();
+        var pillArtBox = ArtBox(pillArt, 12);
+        pillArtBox.Width = pillArtBox.Height = 56;
+        pillArtBox.VerticalAlignment = VerticalAlignment.Center;
+
+        var pillTitle = Line(15, ink, new Thickness(0));
+        var pillArtist = Line(11, muted, new Thickness(0, 1, 0, 0), bold: false);
+
+        var pillText = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 10, 0) };
+        pillText.Children.Add(pillTitle);
+        pillText.Children.Add(pillArtist);
+
+        var pillPrev = Icon("⏮", "WRound");
+        var pillPlay = Icon("▶", "WRoundAccent");
+        var pillNext = Icon("⏭", "WRound");
+        pillPrev.Click += (_, _) => _ = media.PreviousAsync();
+        pillPlay.Click += (_, _) => _ = media.TogglePlayAsync();
+        pillNext.Click += (_, _) => _ = media.NextAsync();
+
+        var pillButtons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 2, 0),
+        };
+        pillButtons.Children.Add(pillPrev);
+        pillButtons.Children.Add(pillPlay);
+        pillButtons.Children.Add(pillNext);
+
+        var pillBar = Bar(2);
+        pillBar.SetResourceReference(ProgressBar.ForegroundProperty, "DsAccent");
+        pillBar.SetResourceReference(ProgressBar.BackgroundProperty, "DsBorder");
+        pillBar.VerticalAlignment = VerticalAlignment.Bottom;
+        // Полоса прогресса идёт через все колонки: раньше она жила в нулевой,
+        // и её отступы раздували колонку с обложкой — текст уезжал от картинки.
+        pillBar.Margin = new Thickness(70, 0, 16, 0);
+
+        var pill = new Grid();
+        pill.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        pill.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        pill.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(pillArtBox, 0);
+        Grid.SetColumn(pillText, 1);
+        Grid.SetColumn(pillButtons, 2);
+        Grid.SetColumnSpan(pillBar, 3);
+        pill.Children.Add(pillBar);
+        pill.Children.Add(pillArtBox);
+        pill.Children.Add(pillText);
+        pill.Children.Add(pillButtons);
+
+        // ---------- 2. карточка: обложка сверху, текст снизу ----------
+
+        var cardArt = Art();
+        var cardArtBox = ArtBox(cardArt, 14);
+        cardArtBox.VerticalAlignment = VerticalAlignment.Stretch;
+
+        var cardTitle = Line(20, ink, new Thickness(0, 12, 0, 0));
+        var cardArtist = Line(12, muted, new Thickness(0, 2, 0, 0), bold: false);
+
+        var cardBar = Bar(3);
+        cardBar.SetResourceReference(ProgressBar.ForegroundProperty, "DsAccent");
+        cardBar.SetResourceReference(ProgressBar.BackgroundProperty, "DsBorder");
+        cardBar.Margin = new Thickness(0, 12, 0, 0);
+
+        var cardTimes = Line(10, muted, new Thickness(0, 4, 0, 0), bold: false);
+
+        var cardPrev = Icon("⏮", "WRound");
+        var cardPlay = Icon("▶", "WRoundAccent");
+        var cardNext = Icon("⏭", "WRound");
+        cardPrev.Click += (_, _) => _ = media.PreviousAsync();
+        cardPlay.Click += (_, _) => _ = media.TogglePlayAsync();
+        cardNext.Click += (_, _) => _ = media.NextAsync();
+
+        var cardButtons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 10, 0, 0),
+        };
+        cardButtons.Children.Add(cardPrev);
+        cardButtons.Children.Add(cardPlay);
+        cardButtons.Children.Add(cardNext);
+
+        var cardInfo = new StackPanel();
+        cardInfo.Children.Add(cardTitle);
+        cardInfo.Children.Add(cardArtist);
+        cardInfo.Children.Add(cardBar);
+        cardInfo.Children.Add(cardTimes);
+        cardInfo.Children.Add(cardButtons);
+
+        var card = new Grid();
+        card.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        card.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetRow(cardArtBox, 0);
+        Grid.SetRow(cardInfo, 1);
+        card.Children.Add(cardArtBox);
+        card.Children.Add(cardInfo);
+
+        // ---------- 3. обложка: картинка фоном, текст на градиенте ----------
+
+        var coverArt = Art();
+        var coverArtBox = ArtBox(coverArt, 14);
+
+        var shade = new Border
+        {
+            CornerRadius = new CornerRadius(14),
+            IsHitTestVisible = false,
+        };
+        var gradient = new LinearGradientBrush
+        {
+            StartPoint = new Point(0, 0.32),
+            EndPoint = new Point(0, 1),
+        };
+        gradient.GradientStops.Add(new GradientStop(Color.FromArgb(0x00, 0x00, 0x00, 0x00), 0));
+        gradient.GradientStops.Add(new GradientStop(Color.FromArgb(0xD0, 0x05, 0x05, 0x07), 1));
+        shade.Background = gradient;
+
+        var coverTitle = Line(22, Brushes.White, new Thickness(0));
+        coverTitle.Foreground = Brushes.White;
+        coverTitle.TextWrapping = TextWrapping.NoWrap;
+
+        var coverArtist = new TextBlock
+        {
+            FontSize = 13,
+            Foreground = new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
+            TextTrimming = TextTrimming.CharacterEllipsis,
             Margin = new Thickness(0, 3, 0, 0),
         };
 
-        var prev = new Button { Style = (Style)FindResource("WRound"), Content = "⏮" };
-        var play = new Button { Style = (Style)FindResource("WRoundAccent"), Content = "▶", Margin = new Thickness(6, 0, 6, 0) };
-        var next = new Button { Style = (Style)FindResource("WRound"), Content = "⏭" };
-        prev.Click += (_, _) => _ = media.PreviousAsync();
-        play.Click += (_, _) => _ = media.TogglePlayAsync();
-        next.Click += (_, _) => _ = media.NextAsync();
+        var coverBar = Bar(2);
+        coverBar.Foreground = Brushes.White;
+        coverBar.Background = new SolidColorBrush(Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
+        coverBar.Margin = new Thickness(0, 12, 0, 0);
 
-        var buttons = new StackPanel
+        var coverTimes = new TextBlock
+        {
+            FontSize = 10,
+            Foreground = new SolidColorBrush(Color.FromArgb(0x99, 0xFF, 0xFF, 0xFF)),
+            Margin = new Thickness(0, 4, 0, 0),
+        };
+
+        var coverPrev = Icon("⏮", "WRound");
+        var coverPlay = Icon("▶", "WRoundAccent");
+        var coverNext = Icon("⏭", "WRound");
+        coverPrev.Click += (_, _) => _ = media.PreviousAsync();
+        coverPlay.Click += (_, _) => _ = media.TogglePlayAsync();
+        coverNext.Click += (_, _) => _ = media.NextAsync();
+
+        var coverButtons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 10, 0, 0),
+            Margin = new Thickness(0, 12, 0, 2),
         };
-        buttons.Children.Add(prev);
-        buttons.Children.Add(play);
-        buttons.Children.Add(next);
+        coverButtons.Children.Add(coverPrev);
+        coverButtons.Children.Add(coverPlay);
+        coverButtons.Children.Add(coverNext);
 
-        var info = new StackPanel();
-        info.Children.Add(title);
-        info.Children.Add(artist);
-        info.Children.Add(progress);
-        info.Children.Add(timing);
-        info.Children.Add(buttons);
-
-        var root = new Grid();
-        root.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        Grid.SetColumn(artBox, 0);
-        Grid.SetColumn(info, 1);
-        root.Children.Add(artBox);
-        root.Children.Add(info);
-
-        // Пересобрать раскладку под текущий размер окна.
-        void Relayout()
+        var coverInfo = new StackPanel
         {
-            double w = ActualWidth > 0 ? ActualWidth : 260;
-            double h = ActualHeight > 0 ? ActualHeight : 120;
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(16, 0, 16, 12),
+        };
+        coverInfo.Children.Add(coverTitle);
+        coverInfo.Children.Add(coverArtist);
+        coverInfo.Children.Add(coverBar);
+        coverInfo.Children.Add(coverTimes);
+        coverInfo.Children.Add(coverButtons);
 
-            bool tiny = h < 118 || w < 235;
-            bool big = h >= 210 && w >= 320;
+        var cover = new Grid();
+        cover.Children.Add(coverArtBox);
+        cover.Children.Add(shade);
+        cover.Children.Add(coverInfo);
 
-            artBox.Visibility = tiny ? Visibility.Collapsed : Visibility.Visible;
-            artBox.Width = artBox.Height = big ? 104 : 60;
-            artBox.Margin = new Thickness(0, 0, big ? 16 : 12, 0);
+        host.Children.Add(pill);
+        host.Children.Add(card);
+        host.Children.Add(cover);
 
-            artist.Visibility = tiny ? Visibility.Collapsed : Visibility.Visible;
-            progress.Visibility = tiny ? Visibility.Collapsed : Visibility.Visible;
-            timing.Visibility = tiny ? Visibility.Collapsed : Visibility.Visible;
+        // ---------- данные ----------
 
-            title.FontSize = big ? 18 : 13;
-            artist.FontSize = big ? 12 : 10;
-            prev.Width = prev.Height = big ? 40 : 30;
-            next.Width = next.Height = big ? 40 : 30;
-            play.Width = play.Height = big ? 46 : 36;
-            timing.FontSize = big ? 11 : 9;
+        void ApplyText(string title, string artist)
+        {
+            foreach (var block in new[] { pillTitle, cardTitle, coverTitle })
+                block.Text = title;
 
-            // Обложку и текст держим по центру: при большой высоте они не должны
-            // липнуть к верху, оставляя пустую простыню снизу.
-            artBox.VerticalAlignment = big ? VerticalAlignment.Center : VerticalAlignment.Top;
-            info.VerticalAlignment = VerticalAlignment.Center;
-            root.VerticalAlignment = VerticalAlignment.Center;
+            foreach (var block in new[] { pillArtist, cardArtist, coverArtist })
+                block.Text = artist;
         }
 
-        void RefreshArtwork()
+        Image[] arts = { pillArt, cardArt, coverArt };
+
+        void ApplyArtwork()
         {
             var bytes = media.ArtworkBytes;
-            if (bytes is null || bytes.Length == 0) { artwork.Source = null; return; }
-            try
+            BitmapImage? bitmap = null;
+
+            if (bytes is { Length: > 0 })
             {
-                var bmp = new BitmapImage();
-                bmp.BeginInit();
-                bmp.CacheOption = BitmapCacheOption.OnLoad;
-                bmp.StreamSource = new MemoryStream(bytes);
-                bmp.EndInit();
-                bmp.Freeze();
-                artwork.Source = bmp;
+                try
+                {
+                    bitmap = new BitmapImage();
+                    bitmap.BeginInit();
+                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    bitmap.StreamSource = new MemoryStream(bytes);
+                    bitmap.EndInit();
+                    bitmap.Freeze();
+                }
+                catch { bitmap = null; }
             }
-            catch { artwork.Source = null; }
+
+            foreach (var art in arts) art.Source = bitmap;
         }
+
+        void ApplyPlaying()
+        {
+            string glyph = media.IsPlaying ? "❚❚" : "▶";
+            pillPlay.Content = glyph;
+            cardPlay.Content = glyph;
+            coverPlay.Content = glyph;
+        }
+
+        // ---------- выбор раскладки по размеру ----------
+
+        string current = "";
+
+        void Relayout()
+        {
+            double w = Math.Max(120, (ActualWidth > 0 ? ActualWidth : 320) - 24);
+            double h = Math.Max(60, (ActualHeight > 0 ? ActualHeight : 132) - 24);
+            double ratio = h / w;
+
+            string mode = h < 170
+                ? "pill"
+                : ratio > 0.85 && h > 240
+                    ? "cover"
+                    : "card";
+
+            if (mode == current)
+            {
+                // Размер мог измениться внутри того же режима — подгоняем габариты.
+                if (mode == "pill")
+                {
+                    pillArtBox.Width = pillArtBox.Height = Math.Clamp(h * 0.42, 40, 72);
+                    pillBar.Margin = new Thickness(pillArtBox.Width + 12, 0, 16, 0);
+                }
+                return;
+            }
+
+            current = mode;
+
+            Dispatcher.BeginInvoke(() => Log.Info(
+                $"media: mode={mode} window={ActualWidth:0}x{ActualHeight:0} " +
+                $"pill={pill.ActualWidth:0}x{pill.ActualHeight:0} " +
+                $"art={pillArtBox.ActualWidth:0} text={pillText.ActualWidth:0} " +
+                $"title='{pillTitle.Text}' fg={(pillTitle.Foreground is null ? "null" : pillTitle.Foreground.ToString())} " +
+                $"but={pillButtons.ActualWidth:0}"));
+
+            pill.Visibility = mode == "pill" ? Visibility.Visible : Visibility.Collapsed;
+            card.Visibility = mode == "card" ? Visibility.Visible : Visibility.Collapsed;
+            cover.Visibility = mode == "cover" ? Visibility.Visible : Visibility.Collapsed;
+
+            if (mode == "pill")
+            {
+                pillArtBox.Width = pillArtBox.Height = Math.Clamp(h * 0.42, 40, 72);
+                pillBar.Margin = new Thickness(pillArtBox.Width + 12, 0, 16, 0);
+            }
+
+            if (mode == "card")
+            {
+                // Кнопки среднего размера: на карточке они не должны занимать
+                // пол-экрана, но и в 30 px промахиваться нельзя.
+                double size = Math.Clamp(w / 12, 30, 40);
+                cardPrev.Width = cardNext.Width = size;
+                cardPrev.Height = cardNext.Height = size;
+                cardPlay.Width = cardPlay.Height = size + 6;
+
+                cardTitle.FontSize = Math.Clamp(w / 18, 16, 24);
+                cardArtist.FontSize = Math.Clamp(w / 28, 10, 14);
+            }
+
+            if (mode == "cover")
+            {
+                coverTitle.FontSize = Math.Clamp(w / 14, 18, 28);
+                coverArtist.FontSize = Math.Clamp(w / 26, 11, 15);
+            }
+
+            // Входящая раскладка появляется плавно: переключение по ресайзу не
+            // должно выглядеть как рывок.
+            var incoming = mode == "pill" ? (UIElement)pill : mode == "card" ? card : cover;
+            incoming.Opacity = 0;
+            var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140));
+            incoming.BeginAnimation(OpacityProperty, fade);
+        }
+
+        // ---------- подписка на данные ----------
 
         System.ComponentModel.PropertyChangedEventHandler handler = (_, e) =>
             Dispatcher.BeginInvoke(() =>
             {
-                title.Text = string.IsNullOrWhiteSpace(media.Title) ? "ничего не играет" : media.Title;
-                artist.Text = string.IsNullOrWhiteSpace(media.Artist) ? media.SourceApp : media.Artist;
-                play.Content = media.IsPlaying ? "❚❚" : "▶";
-                if (e.PropertyName is nameof(media.ArtworkBytes) or null) RefreshArtwork();
+                ApplyText(
+                    string.IsNullOrWhiteSpace(media.Title) ? "ничего не играет" : media.Title,
+                    string.IsNullOrWhiteSpace(media.Artist) ? media.SourceApp : media.Artist);
+
+                ApplyPlaying();
+                if (e.PropertyName is nameof(media.ArtworkBytes) or null) ApplyArtwork();
             });
 
         media.PropertyChanged += handler;
         _mediaUnsubscribe = () => media.PropertyChanged -= handler;
         handler(this, new System.ComponentModel.PropertyChangedEventArgs(null));
-        RefreshArtwork();
+        ApplyArtwork();
 
-        // Позиция меняется часто, но обновлять раз в полсекунды достаточно:
-        // полоса всё равно не читается быстрее.
         Timer(500, () =>
         {
-            var total = media.Duration.TotalSeconds;
-            var now = media.Position.TotalSeconds;
-            progress.Value = total > 0 ? Math.Clamp(now / total * 100, 0, 100) : 0;
+            double total = media.Duration.TotalSeconds;
+            double now = media.Position.TotalSeconds;
+            double percent = total > 0 ? Math.Clamp(now / total * 100, 0, 100) : 0;
+
+            pillBar.Value = percent;
+            cardBar.Value = percent;
+            coverBar.Value = percent;
 
             static string Fmt(TimeSpan t) => t.TotalHours >= 1
                 ? t.ToString(@"h\:mm\:ss")
                 : t.ToString(@"m\:ss");
 
-            timing.Text = total > 0 ? $"{Fmt(media.Position)} / {Fmt(media.Duration)}" : "";
+            string times = total > 0 ? $"{Fmt(media.Position)} / {Fmt(media.Duration)}" : string.Empty;
+            cardTimes.Text = times;
+            coverTimes.Text = times;
         });
 
+        // Размер меняется ручкой — раскладка должна пересчитываться вместе с ним.
+        _relayout = (_, _) => Relayout();
+
         Relayout();
-        return root;
+        Dispatcher.BeginInvoke(Relayout);
+        return host;
     }
 
     /// <summary>
