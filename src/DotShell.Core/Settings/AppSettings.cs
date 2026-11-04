@@ -142,6 +142,15 @@ public sealed class AppSettings
     public string PlayerStyle { get; set; } = "cover";
 
     /// <summary>
+    /// Стиль полосы перемотки: beads, rail, segments, wave, sand, arc, pulse, cassette.
+    /// Владелец выбирал из витрины (--slider-demo).
+    /// </summary>
+    public string SeekStyle { get; set; } = "beads";
+
+    /// <summary>Стиль ползунков (громкость, яркость, размер точки): capsule, blocks, dots.</summary>
+    public string SliderStyle { get; set; } = "capsule";
+
+    /// <summary>
     /// Брать цвет заголовка трека из обложки, а не из обоев.
     /// Общий акцент остаётся от обоев — иначе интерфейс перекрашивался бы
     /// при каждой смене песни.

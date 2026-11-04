@@ -292,14 +292,42 @@ public sealed class IslandBackdrop : FrameworkElement
     private void DrawDotField(DrawingContext dc, Rect rect, Color accent)
     {
         const double pitch = 7;
-        var brush = new SolidColorBrush(WithAlpha(accent, (byte)(120 * _strength)));
+
+        float bass = AudioSpectrum.Current?.Bass ?? 0f;
+
+        // Точки дрожат от баса: размер растёт, а положение смещается волной от
+        // центра. Раньше «реакция» была прозрачностью — снаружи это выглядело как
+        // шторка, а не как живое поле.
+        double size = 1.2 + bass * 2.4;
+        var brush = new SolidColorBrush(WithAlpha(accent, (byte)Math.Clamp(120 * _strength + bass * 90, 0, 255)));
         brush.Freeze();
 
-        // Сетка не «на глазок»: начинаем от левого верхнего угла и держим шаг,
-        // поэтому поле читается как миллиметровка, а не как шум.
+        double cx = rect.Width / 2;
+        double cy = rect.Height / 2;
+
         for (double y = pitch / 2; y < rect.Height; y += pitch)
+        {
             for (double x = pitch / 2; x < rect.Width; x += pitch)
-                dc.DrawRectangle(brush, null, new Rect(x, y, 1.2, 1.2));
+            {
+                double dx = 0, dy = 0;
+
+                if (bass > 0.02f)
+                {
+                    // Кольцевая волна: смещение тем сильнее, чем ближе к фронту волны.
+                    double distance = Math.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+                    double wave = Math.Sin(distance * 0.14 - _phase * 7.0);
+                    double amplitude = bass * 2.2 * wave;
+
+                    double nx = cx - x, ny = cy - y;
+                    double length = Math.Max(0.001, Math.Sqrt(nx * nx + ny * ny));
+
+                    dx = nx / length * amplitude;
+                    dy = ny / length * amplitude;
+                }
+
+                dc.DrawRectangle(brush, null, new Rect(x + dx - size / 2, y + dy - size / 2, size, size));
+            }
+        }
     }
 
     // ------------------------------------------------------------------
@@ -325,8 +353,10 @@ public sealed class IslandBackdrop : FrameworkElement
             _cachedGridSize = rect.Size;
         }
 
-        // Прозрачность задаём слоем, чтобы не пересобирать сетку на каждый тик.
-        dc.PushOpacity(0.42 * _strength);
+        // Прозрачность задаём слоем, чтобы не пересобирать сетку на каждый тик,
+        // а бас поднимает и яркость, и масштаб — сетка «дышит» целиком.
+        float gridBass = AudioSpectrum.Current?.Bass ?? 0f;
+        dc.PushOpacity(Math.Min(1, 0.42 * _strength + gridBass * 0.35));
         dc.DrawDrawing(_cachedGrid);
         dc.Pop();
     }

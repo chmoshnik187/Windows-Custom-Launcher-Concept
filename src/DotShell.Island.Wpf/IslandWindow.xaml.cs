@@ -546,6 +546,11 @@ public partial class IslandWindow : Window
             Dispatcher.BeginInvoke(() => DashboardWindow.Toggle());
         }
 
+        if (Program.OpenSliderDemo)
+        {
+            Dispatcher.BeginInvoke(() => new SliderDemoWindow().Show());
+        }
+
         if (Program.OpenWidgetType is { } widgetType)
         {
             Dispatcher.BeginInvoke(() =>
@@ -1513,33 +1518,51 @@ public partial class IslandWindow : Window
             _ => TabHome,
         };
 
-        // Переключение вкладок — не «выключил/включил», а кросс-фейд: старая
-        // гаснет, новая проявляется. Мгновенная подмена и была той рваной
-        // анимацией, которую заметил владелец.
+        // Переключение вкладок — кросс-фейд, но с явным состоянием: раньше
+        // завершение анимации старой вкладки могло не сработать, и она оставалась
+        // висеть поверх новой (таймер заметок «жил» на всех страницах).
         var previous = _visibleTab;
 
-        if (previous is not null && !ReferenceEquals(previous, next))
+        var all = new FrameworkElement[]
         {
-            previous.IsHitTestVisible = false;
-            Fade(previous, 0, 90, onComplete: () =>
+            TabHome, TabNotes, TabClipboard, TabSystem, TabTheme, TabChat, TabShelf, TabCmd,
+        };
+
+        foreach (var tab in all)
+        {
+            if (ReferenceEquals(tab, next)) continue;
+
+            if (ReferenceEquals(tab, previous) && tab.Visibility == Visibility.Visible)
             {
-                previous.Visibility = Visibility.Collapsed;
-                previous.Opacity = 1;
-                previous.IsHitTestVisible = true;
-            });
+                tab.IsHitTestVisible = false;
+                var anim = new DoubleAnimation(0, TimeSpan.FromMilliseconds(90));
+                anim.Completed += (_, _) =>
+                {
+                    // Если за это время успели переключиться на другую — не трогаем.
+                    if (!ReferenceEquals(_visibleTab, tab)) return;
+
+                    tab.Visibility = Visibility.Collapsed;
+                    tab.BeginAnimation(OpacityProperty, null);
+                    tab.Opacity = 1;
+                    tab.IsHitTestVisible = true;
+                };
+                tab.BeginAnimation(OpacityProperty, anim);
+            }
+            else
+            {
+                // Всё, что не участвует в переходе, гасим сразу и окончательно.
+                tab.BeginAnimation(OpacityProperty, null);
+                tab.Opacity = 1;
+                tab.Visibility = Visibility.Collapsed;
+                tab.IsHitTestVisible = true;
+            }
         }
 
-        if (!ReferenceEquals(previous, next))
-        {
-            next.Visibility = Visibility.Visible;
-            next.Opacity = 0;
-            Fade(next, 1, 160, delayMs: 40);
-        }
-        else
-        {
-            next.Visibility = Visibility.Visible;
-            next.Opacity = 1;
-        }
+        next.BeginAnimation(OpacityProperty, null);
+        next.Visibility = Visibility.Visible;
+        next.Opacity = 0;
+        next.BeginAnimation(OpacityProperty,
+            new DoubleAnimation(1, TimeSpan.FromMilliseconds(160)));
 
         _visibleTab = next;
 

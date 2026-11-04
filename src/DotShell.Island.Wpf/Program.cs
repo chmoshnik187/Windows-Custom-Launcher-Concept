@@ -28,6 +28,9 @@ public static class Program
     /// <summary>--settings: сразу открыть окно настроек.</summary>
     public static bool OpenSettingsOnStart { get; private set; }
 
+    /// <summary>--slider-demo: витрина стилей ползунков и таймлайна.</summary>
+    public static bool OpenSliderDemo { get; private set; }
+
     /// <summary>--dashboard: открыть панель-обзор при старте (ярлык, проверка вёрстки).</summary>
     public static bool OpenDashboard { get; private set; }
 
@@ -233,6 +236,8 @@ public static class Program
             if (arg.Equals("--settings", StringComparison.OrdinalIgnoreCase)) { OpenSettingsOnStart = true; continue; }
 
             if (arg.Equals("--dashboard", StringComparison.OrdinalIgnoreCase)) { OpenDashboard = true; continue; }
+
+            if (arg.Equals("--slider-demo", StringComparison.OrdinalIgnoreCase)) { OpenSliderDemo = true; continue; }
 
             if (arg.StartsWith("--widget=", StringComparison.OrdinalIgnoreCase))
             {

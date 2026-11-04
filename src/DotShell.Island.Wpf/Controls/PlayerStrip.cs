@@ -64,6 +64,12 @@ public sealed class PlayerStrip : Grid
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         _timer.Tick += (_, _) => RefreshProgress();
+
+        // Стиль таймлайна из настроек: витрина (--slider-demo) показывает варианты.
+        if (_progress is not null)
+        {
+            _progress.Variant = ShellServices.Instance.Settings.Current.SeekStyle;
+        }
         Loaded += (_, _) => { _timer.Start(); Refresh(); };
         Unloaded += (_, _) => _timer.Stop();
 
