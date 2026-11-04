@@ -64,7 +64,13 @@ public sealed partial class WidgetWindow : Window
         SetContent(type);
         outer.Children.Add(_root);
 
-        Loaded += (_, _) => KeepOnDesktopLayer();
+        Loaded += (_, _) =>
+        {
+            KeepOnDesktopLayer();
+
+            // Появление виджета: раньше он «возникал» мгновенно.
+            Motion.FadeIn(this, 0);
+        };
 
         // Ручка размера: висит поверх содержимого в правом нижнем углу.
         var grip = new Thumb { Style = (Style)FindResource("WResizeGrip") };

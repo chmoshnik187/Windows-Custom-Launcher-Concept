@@ -354,12 +354,13 @@ public partial class DashboardWindow : Window
         // перекрывает вкладки. 68 px — высота свёрнутой капсулы с запасом.
         Top = area.Top + 68;
 
-        var slide = new DoubleAnimation(-Height * 0.35, 18, TimeSpan.FromMilliseconds(260))
+        // Токены общие: скорость и кривая из настроек теперь влияют и на обзор.
+        var slide = new DoubleAnimation(-Height * 0.35, 18, TimeSpan.FromMilliseconds(Motion.Ms(Motion.Slow)))
         {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            EasingFunction = Motion.Ease(),
         };
 
-        var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200));
+        var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(Motion.Ms(Motion.Normal)));
 
         BeginAnimation(TopProperty, slide);
         BeginAnimation(OpacityProperty, fade);

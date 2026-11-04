@@ -49,6 +49,10 @@ public partial class SettingsWindow : Window
         {
             if (Program.VisualDump) DumpVisualTree();
 
+            // Появление окна: раньше настройки просто «включались» без движения,
+            // хотя обзор и док уже умели появляться.
+            Motion.DropIn(this, 18);
+
             // Масштаб интерфейса: содержимое растягивается, окно — пропорционально.
             UiScale.Apply(this, 820, 600);
             AttachSliderValues(this);
@@ -312,12 +316,31 @@ public partial class SettingsWindow : Window
                     row.Visibility = Visibility.Visible;
         }
 
+        // Новую панель проявляем: мгновенная подмена выглядела как рывок.
+        // При активном поиске анимацию не запускаем — там свои правила видимости.
+        bool animate = SearchBox is null || SearchBox.Text.Length == 0;
+
         PanelLook.Visibility = tag == "look" ? Visibility.Visible : Visibility.Collapsed;
         PanelIsland.Visibility = tag == "island" ? Visibility.Visible : Visibility.Collapsed;
         PanelWindows.Visibility = tag == "windows" ? Visibility.Visible : Visibility.Collapsed;
         PanelNotify.Visibility = tag == "notify" ? Visibility.Visible : Visibility.Collapsed;
         PanelUpdates.Visibility = tag == "updates" ? Visibility.Visible : Visibility.Collapsed;
         PanelData.Visibility = tag == "data" ? Visibility.Visible : Visibility.Collapsed;
+
+        if (animate)
+        {
+            var shown = tag switch
+            {
+                "look" => (FrameworkElement)PanelLook,
+                "island" => PanelIsland,
+                "windows" => PanelWindows,
+                "notify" => PanelNotify,
+                "updates" => PanelUpdates,
+                _ => PanelData,
+            };
+
+            Motion.FadeIn(shown);
+        }
     }
 
     /// <summary>

@@ -403,9 +403,9 @@ public sealed class ControlCenterWindow : Window
         var from = SystemParameters.WorkArea.Right;
         Left = from;
 
-        var slide = new DoubleAnimation(from - Width - 12, TimeSpan.FromMilliseconds(240))
+        var slide = new DoubleAnimation(from - Width - 12, TimeSpan.FromMilliseconds(Motion.Ms(Motion.Slow)))
         {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            EasingFunction = Motion.Ease(),
         };
 
         BeginAnimation(LeftProperty, slide);

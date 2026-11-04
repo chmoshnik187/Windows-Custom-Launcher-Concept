@@ -238,7 +238,13 @@ public sealed class DockWindow : Window
     private void FadeIn()
     {
         Opacity = 0;
-        BeginAnimation(OpacityProperty,
-            new System.Windows.Media.Animation.DoubleAnimation(1, TimeSpan.FromMilliseconds(200)));
+        var fade = new System.Windows.Media.Animation.DoubleAnimation(
+            1,
+            TimeSpan.FromMilliseconds(Motion.Ms(Motion.Normal)))
+        {
+            EasingFunction = Motion.Ease(),
+        };
+
+        BeginAnimation(OpacityProperty, fade);
     }
 }

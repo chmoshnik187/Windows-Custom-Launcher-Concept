@@ -239,6 +239,7 @@ public sealed class WidgetGalleryWindow : Window
             _dragType = null;
             Cursor = Cursors.Arrow;
             card.Opacity = 1;
+        Motion.PopIn(card, 0.98);
 
             if (!_dragging)
             {
