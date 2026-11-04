@@ -159,9 +159,13 @@ public sealed partial class WidgetWindow : Window
     /// <summary>Не выпускаем виджет за пределы экрана после перетаскивания.</summary>
     public void ClampToScreen()
     {
-        var wa = SystemParameters.WorkArea;
-        Left = Math.Clamp(Left, wa.Left - ActualWidth + 80, wa.Right - 80);
-        Top = Math.Clamp(Top, wa.Top, wa.Bottom - 40);
+        // Виртуальный экран, а не основной монитор: иначе виджет, унесённый на второй
+        // монитор, прилипал обратно к основному после отпускания мыши.
+        double vLeft = SystemParameters.VirtualScreenLeft;
+        double vTop = SystemParameters.VirtualScreenTop;
+
+        Left = Math.Clamp(Left, vLeft - ActualWidth + 80, vLeft + SystemParameters.VirtualScreenWidth - 80);
+        Top = Math.Clamp(Top, vTop, vTop + SystemParameters.VirtualScreenHeight - 40);
 
         // Прилипание к сетке: 0 — выкл, 8 или 16 px. Виджеты выстраиваются в ряд
         // без ручной подгонки по пикселям.
@@ -1195,7 +1199,9 @@ public sealed partial class WidgetWindow : Window
         BuildPeriod();
 
         // Правый клик — выбор второй валюты (доллар остаётся первым).
-        var currencyMenu = CurrencyMenu(() => { });
+        // Пустой колбэк означал, что выбор второй валюты ничего не меняет до
+        // пересоздания виджета. Reload пересобирает блоки под новый код.
+        var currencyMenu = CurrencyMenu(Reload);
         root.MouseRightButtonUp += (_, e) =>
         {
             currencyMenu.PlacementTarget = root;

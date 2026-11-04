@@ -246,6 +246,10 @@ public partial class IslandWindow : Window
         }
 
         Loaded += OnWindowLoaded;
+        // Тихий режим: наведение на 5-пиксельную полоску должно вытаскивать остров.
+        // Раньше метод был ни к чему не привязан, и помогало только нажатие.
+        Pill.MouseEnter += (_, _) => OnQuietHover();
+
         Loaded += (_, _) => { if (Program.OpenSettingsOnStart) OpenSettings(); };
         Loaded += (_, _) => ApplyCapsuleGeometry();
 
@@ -694,6 +698,25 @@ public partial class IslandWindow : Window
         });
     }
 
+    /// <summary>
+    /// Где должно быть окно по вертикали для текущей кромки. Для верхней — сохранённая
+    /// «нормаль», для нижней — отсчёт от низа рабочей области. Раньше всё считалось от
+    /// _normalTop, и на нижней кромке остров при каждом сворачивании прыгал наверх.
+    /// </summary>
+    private double EdgeTop(double windowHeight)
+    {
+        var s = ShellServices.Instance.Settings.Current;
+        double offset = Math.Clamp(s.IslandTopOffset, 0, 24);
+
+        if (string.Equals(s.IslandEdge, "bottom", StringComparison.OrdinalIgnoreCase))
+        {
+            var work = SystemParameters.WorkArea;
+            return work.Bottom - windowHeight - offset;
+        }
+
+        return _normalTop;
+    }
+
     /// <summary>Центрируем таблетку по верхнему краю рабочей области основного монитора.</summary>
     private void PositionAtTopCenter()
     {
@@ -870,10 +893,19 @@ public partial class IslandWindow : Window
     /// </summary>
     private void ClampToScreen()
     {
-        var wa = SystemParameters.WorkArea;
-        Left = Math.Clamp(Left, wa.Left - Width + 80, wa.Right - 80);
-        // Выше wa.Top-54 нельзя: это уже полный док (торчит только эквалайзер).
-        Top = Math.Clamp(Top, wa.Top - 54, wa.Bottom - 60);
+        // Клампим по ВИРТУАЛЬНОМУ экрану, а не по основному монитору: иначе остров,
+        // перенесённый на второй монитор, после отпускания мыши утаскивало назад.
+        double vLeft = SystemParameters.VirtualScreenLeft;
+        double vTop = SystemParameters.VirtualScreenTop;
+        double vRight = vLeft + SystemParameters.VirtualScreenWidth;
+        double vBottom = vTop + SystemParameters.VirtualScreenHeight;
+
+        Left = Math.Clamp(Left, vLeft - Width + 80, vRight - 80);
+
+        // Нижняя граница с запасом на док: верхнюю оставляем с минусом, там живёт
+        // «утоплен за кромку» режим.
+        double waTop = SystemParameters.WorkArea.Top;
+        Top = Math.Clamp(Top, Math.Min(waTop, vTop) - 54, vBottom - 60);
     }
 
     /// <summary>Положение переживает перезапуск: пишем в settings.json.</summary>
@@ -1180,6 +1212,16 @@ public partial class IslandWindow : Window
 
         if (_notice is null) return;
 
+        // Если остров уже раскрыли (хоткей, трей), таймер уведомления не имеет права
+        // сжимать капсулу: иначе содержимое обрезалось, а следующий клик «сворачивал»
+        // вместо раскрытия. Убираем только слой уведомления.
+        if (_isExpanded)
+        {
+            try { _notice.Hide(); } catch { }
+            _notice = null;
+            return;
+        }
+
         try
         {
             // Обратный ход: текст гаснет, пасть закрывается, капсула снова сжимается
@@ -1262,7 +1304,7 @@ public partial class IslandWindow : Window
         Width = QuietWidth + 40;
         Height = QuietHeight + 26;
         Left = (SystemParameters.WorkArea.Width - Width) / 2;
-        Top = _normalTop;
+        Top = EdgeTop(Height);
     }
 
     private void ExitQuiet()
@@ -1431,8 +1473,24 @@ public partial class IslandWindow : Window
             };
         }
 
-        if (target is UIElement el) el.BeginAnimation(property, anim);
-        else if (target is Window window) window.BeginAnimation(property, anim);
+        if (target is UIElement el)
+        {
+            el.BeginAnimation(property, anim);
+        }
+        else if (target is Window window)
+        {
+            // Окну анимацию тоже НАДО снимать по завершении: иначе её замороженное
+            // значение продолжает переопределять Width/Height/Left, и прямые
+            // присваивания игнорируются — окно перестаёт расти под содержимое
+            // (обрезался чат, уведомления, «Показать остров» не возвращал позицию).
+            anim.Completed += (_, _) =>
+            {
+                window.BeginAnimation(property, null);
+                window.SetValue(property, to);
+            };
+
+            window.BeginAnimation(property, anim);
+        }
     }
 
     /// <summary>Размер вкладки с поправкой на нижний край экрана.</summary>
@@ -2839,6 +2897,11 @@ private void RebuildPinnedTiles()
     if (PinnedWrap is null) return;
 
     PinnedWrap.Children.Clear();
+
+        // Без этой строки каждая перестройка плиток добавляла записи в _groupDots:
+        // тик раз в секунду опрашивал процессы по удалённым группам, а старые
+        // плитки не освобождались (эллипс держит родителя).
+        _groupDots.Clear();
     var store = ShellServices.Instance.Pinned;
 
     // Группу могли удалить, пока она была открыта.

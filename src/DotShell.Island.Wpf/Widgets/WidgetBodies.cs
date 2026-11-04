@@ -215,7 +215,7 @@ public sealed partial class WidgetWindow
         panel.Children.Add(breakdown);
 
         Rescan();
-        Timer(300, Rescan);
+        Timer(300_000, Rescan); // раз в 5 минут: скан диска каждые 300 мс грел диск постоянно
 
         // Композиция по размеру: полоска — только цифра, маленький — цифра и
         // кнопки, большой — плюс разбивка по зонам. Раньше пряталась одна разбивка,
@@ -543,7 +543,7 @@ public sealed partial class WidgetWindow
         };
 
         Refresh();
-        Timer(60, Refresh);
+        Timer(60_000, Refresh); // раз в минуту: 60 мс молотило Windows Update 16 раз в секунду
         return host;
     }
 

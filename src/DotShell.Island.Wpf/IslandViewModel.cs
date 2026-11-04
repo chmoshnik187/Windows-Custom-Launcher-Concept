@@ -30,6 +30,12 @@ public sealed class IslandViewModel : INotifyPropertyChanged
     private string _activeTab = "home";
     private string _noteText = string.Empty;
     private string _statusLine = "готов";
+
+    /// <summary>
+    /// До этого момента тик не перетирает StatusLine телеметрией: сообщения
+    /// «не удалось запустить» и «это не программа» иначе жили меньше секунды.
+    /// </summary>
+    private DateTime _statusStickyUntil = DateTime.MinValue;
     private string _mediaLine = "НИЧЕГО НЕ ИГРАЕТ";
     private string _cpuText = "CPU 0%";
     private string _batteryText = "";
@@ -55,7 +61,15 @@ public sealed class IslandViewModel : INotifyPropertyChanged
 
     public bool IsExpanded { get => _isExpanded; set => Set(ref _isExpanded, value); }
     public string ActiveTab { get => _activeTab; set => Set(ref _activeTab, value); }
-    public string StatusLine { get => _statusLine; set => Set(ref _statusLine, value); }
+    public string StatusLine
+    {
+        get => _statusLine;
+        set
+        {
+            _statusStickyUntil = DateTime.UtcNow.AddSeconds(3);
+            Set(ref _statusLine, value);
+        }
+    }
 
     public string NoteText
     {
@@ -526,6 +540,7 @@ public sealed class IslandViewModel : INotifyPropertyChanged
 
         foreach (var item in ClipboardItems) item.RefreshAge();
 
+        if (DateTime.UtcNow >= _statusStickyUntil)
         StatusLine =
             $"RAM {_services.Stats.UsedMemoryMb}/{_services.Stats.TotalMemoryMb} МБ   ·   " +
             $"AUTO-COLOR {(AutoAccent ? $"ON ({_services.AccentSampler.LastConfidence:F2})" : "OFF")} · {_services.AccentSampler.Source}   ·   " +
