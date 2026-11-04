@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using DotShell.Core;
 using DotShell.Core.Audio;
 using DotShell.Core.Native;
@@ -22,6 +23,10 @@ public sealed class ControlCenterWindow : Window
     private static ControlCenterWindow? _open;
 
     private readonly SystemVolume _volume = new();
+    private readonly DispatcherTimer _statsTimer;
+    private TextBlock? _statsLine;
+    private TextBlock? _batteryLine;
+    private TextBlock? _clockLine;
     private readonly DotSeekBar _volumeBar;
     private readonly TextBlock _volumeValue;
 
@@ -119,14 +124,98 @@ public sealed class ControlCenterWindow : Window
         power.Children.Add(Chip("ВЫЙТИ", () => Application.Current.Shutdown()));
         root.Children.Add(power);
 
+        // Показатели системы: раньше центр управления показывал только громкость,
+        // и «сколько RAM занято» приходилось смотреть в другом месте.
+        root.Children.Add(Section("СИСТЕМА"));
+
+        _clockLine = new TextBlock
+        {
+            FontFamily = new FontFamily("Bahnschrift"),
+            FontSize = 26,
+            Foreground = new SolidColorBrush(ColorPalette.Accent),
+            Margin = new Thickness(0, 0, 0, 2),
+        };
+        root.Children.Add(_clockLine);
+
+        _statsLine = new TextBlock
+        {
+            FontFamily = new FontFamily("Segoe UI"),
+            FontSize = 11,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x8A, 0x93)),
+            Margin = new Thickness(0, 0, 0, 2),
+        };
+        root.Children.Add(_statsLine);
+
+        _batteryLine = new TextBlock
+        {
+            FontFamily = new FontFamily("Segoe UI"),
+            FontSize = 11,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x8A, 0x93)),
+            Margin = new Thickness(0, 0, 0, 6),
+        };
+        root.Children.Add(_batteryLine);
+
+        var actions = new WrapPanel();
+        actions.Children.Add(Chip("УВЕДОМЛЕНИЯ", () => OpenUri("ms-actioncenter:")));
+        actions.Children.Add(Chip("ДИСПЕТЧЕР", () => OpenUri("taskmgr.exe")));
+        root.Children.Add(actions);
+
         Content = new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+
+        _statsTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        _statsTimer.Tick += (_, _) => RefreshStats();
+        _statsTimer.Start();
+        RefreshStats();
 
         KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
 
         bool activated = false;
         Activated += (_, _) => activated = true;
         Deactivated += (_, _) => { if (activated) Close(); };
-        Closed += (_, _) => { try { _volume.Dispose(); } catch { } if (ReferenceEquals(_open, this)) _open = null; };
+        Closed += (_, _) =>
+        {
+            _statsTimer.Stop();
+            try { _volume.Dispose(); } catch { }
+            if (ReferenceEquals(_open, this)) _open = null;
+        };
+    }
+
+    /// <summary>Часы и показатели системы раз в две секунды.</summary>
+    private void RefreshStats()
+    {
+        if (_clockLine is null) return;
+
+        var now = DateTime.Now;
+        _clockLine.Text = now.ToString("HH:mm");
+
+        var stats = ShellServices.Instance.Stats;
+
+        if (_statsLine is not null)
+        {
+            double totalGb = stats.TotalMemoryMb / 1024.0;
+            double usedGb = stats.UsedMemoryMb / 1024.0;
+
+            _statsLine.Text = $"CPU {stats.Cpu:0}%   ·   RAM {usedGb:0,0} из {totalGb:0,0} ГБ";
+        }
+
+        if (_batteryLine is not null)
+        {
+            _batteryLine.Text = stats.HasBattery
+                ? $"БАТАРЕЯ {(stats.Charging ? "+" : "")}{stats.Battery}%   ·   {now:dd.MM.dddd}"
+                : $"ПИТАНИЕ ОТ СЕТИ   ·   {now:dd.MM.dddd}";
+        }
+    }
+
+    private static void OpenUri(string target)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(target)
+            {
+                UseShellExecute = true,
+            });
+        }
+        catch { }
     }
 
     private void SyncVolume()
