@@ -269,7 +269,7 @@ public sealed partial class WidgetWindow : Window
     private UIElement BuildBody(string type) => type switch
     {
         "clock" => BuildClock(),
-        "eq" => new MiniEq { MinWidth = 120, MinHeight = 36, IsRunning = true, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch },
+        "eq" => BuildEq(),
         "media" => BuildMedia(),
         "system" => BuildSystem(),
         "units" => BuildUnits(),
@@ -794,6 +794,40 @@ public sealed partial class WidgetWindow : Window
     /// Большой — те же полоски плюс проценты, гигабайты и батарея: размер
     /// добавляет информации, а не пустого места.
     /// </summary>
+    /// <summary>
+    /// Эквалайзер: тянется по ширине, но на полоске ему нужен свой режим —
+    /// иначе «сталактиты» в 12 px превращаются в мусор из точек.
+    /// </summary>
+    private UIElement BuildEq()
+    {
+        var eq = new MiniEq
+        {
+            MinWidth = 120,
+            MinHeight = 36,
+            IsRunning = true,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+        };
+
+        _relayout = (w, h) =>
+        {
+            var size = WidgetAdaptive.Of(w, h);
+
+            if (size == WidgetSizeClass.Strip)
+            {
+                eq.MinHeight = 10;
+                eq.Margin = new Thickness(0, 2, 0, 2);
+            }
+            else
+            {
+                eq.MinHeight = 36;
+                eq.Margin = new Thickness(6);
+            }
+        };
+
+        return eq;
+    }
+
     /// <summary>
     /// Юниты: маленький виджет — одно существо, обычный — два, большой — два и
     /// подпись, чтобы место не пустовало. Тот же принцип, что у плеера: размер
