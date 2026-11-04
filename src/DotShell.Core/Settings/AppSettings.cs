@@ -170,6 +170,9 @@ public sealed class AppSettings
     /// <summary>Отступ острова от верхнего края монитора, px.</summary>
     public int IslandTopOffset { get; set; } = 10;
 
+    /// <summary>Кромка, к которой прилипает остров: top или bottom.</summary>
+    public string IslandEdge { get; set; } = "top";
+
     /// <summary>Радиус капсулы: 0 — прямоугольник, 23 — «таблетка».</summary>
     public int IslandRadius { get; set; } = 23;
 

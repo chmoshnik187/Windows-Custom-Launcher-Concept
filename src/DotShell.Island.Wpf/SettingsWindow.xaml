@@ -167,6 +167,9 @@
                             <Slider Style="{StaticResource DsSlider}" Minimum="36" Maximum="64"
                                     Value="{Binding CapsuleHeight}" />
 
+                            <TextBlock Style="{StaticResource Section}" Text="КРОМКА" />
+                            <ComboBox x:Name="IslandEdgeBox" Style="{StaticResource DsCombo}" />
+
                             <TextBlock Style="{StaticResource Section}" Text="ОТСТУП ОТ КРАЯ" />
                             <Slider Style="{StaticResource DsSlider}" Minimum="0" Maximum="24"
                                     Value="{Binding TopOffset}" />

@@ -209,6 +209,17 @@ public sealed class IslandViewModel : INotifyPropertyChanged
         }
     }
 
+    public string IslandEdge
+    {
+        get => _services.Settings.Current.IslandEdge;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value) || value == _services.Settings.Current.IslandEdge) return;
+            _services.Settings.Update(s => s.IslandEdge = value);
+            RaisePropertyChanged();
+        }
+    }
+
     public string AccentFocus
     {
         get => _services.Settings.Current.AccentFocus;

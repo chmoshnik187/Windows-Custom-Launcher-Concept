@@ -28,8 +28,14 @@ public static class Program
     /// <summary>--settings: сразу открыть окно настроек.</summary>
     public static bool OpenSettingsOnStart { get; private set; }
 
+    /// <summary>--dot-demo: витрина «размер точки и зазор».</summary>
+    public static bool OpenDotDemo { get; private set; }
+
     /// <summary>--slider-demo: витрина стилей ползунков и таймлайна.</summary>
     public static bool OpenSliderDemo { get; private set; }
+
+    /// <summary>--control-center: открыть центр управления при старте.</summary>
+    public static bool OpenControlCenter { get; private set; }
 
     /// <summary>--dashboard: открыть панель-обзор при старте (ярлык, проверка вёрстки).</summary>
     public static bool OpenDashboard { get; private set; }
@@ -237,7 +243,11 @@ public static class Program
 
             if (arg.Equals("--dashboard", StringComparison.OrdinalIgnoreCase)) { OpenDashboard = true; continue; }
 
+            if (arg.Equals("--control-center", StringComparison.OrdinalIgnoreCase)) { OpenControlCenter = true; continue; }
+
             if (arg.Equals("--slider-demo", StringComparison.OrdinalIgnoreCase)) { OpenSliderDemo = true; continue; }
+
+            if (arg.Equals("--dot-demo", StringComparison.OrdinalIgnoreCase)) { OpenDotDemo = true; continue; }
 
             if (arg.StartsWith("--widget=", StringComparison.OrdinalIgnoreCase))
             {

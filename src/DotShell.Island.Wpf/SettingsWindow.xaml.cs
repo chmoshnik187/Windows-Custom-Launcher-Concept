@@ -66,6 +66,18 @@ public partial class SettingsWindow : Window
             ("dash", "Штрихи"),
         }, vm.DotShapeName);
 
+        FillChoices(IslandEdgeBox, new (string Value, string Label)[]
+        {
+            ("top", "Верхняя"),
+            ("bottom", "Нижняя"),
+        }, vm.IslandEdge);
+
+        IslandEdgeBox.SelectionChanged += (_, _) =>
+        {
+            if (IslandEdgeBox.SelectedItem is System.Windows.Controls.ComboBoxItem { Tag: string value })
+                vm.IslandEdge = value;
+        };
+
         FillChoices(AccentFocusBox, new (string Value, string Label)[]
         {
             ("all", "Везде"),

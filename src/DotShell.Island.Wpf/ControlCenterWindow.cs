@@ -1,0 +1,252 @@
+namespace DotShell.Island.Wpf;
+
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using DotShell.Core;
+using DotShell.Core.Audio;
+using DotShell.Core.Native;
+using DotShell.Island.Wpf.Controls;
+
+/// <summary>
+/// Центр управления: выезжает справа, как в Linux-шеллах из видео владельца.
+///
+/// Внутри — то, ради чего обычно лезут в трей Windows: громкость, быстрые
+/// переключатели, питание и вход в настройки. Сделано на тех же контролах, что и
+/// остров (DotSeekBar), поэтому стиль общий, а не «ещё одно окно».
+/// </summary>
+public sealed class ControlCenterWindow : Window
+{
+    private static ControlCenterWindow? _open;
+
+    private readonly SystemVolume _volume = new();
+    private readonly DotSeekBar _volumeBar;
+    private readonly TextBlock _volumeValue;
+
+    public static void Toggle()
+    {
+        if (_open is not null)
+        {
+            _open.Close();
+            return;
+        }
+
+        var window = new ControlCenterWindow();
+        _open = window;
+        window.Show();
+        window.Activate();
+        window.SlideIn();
+    }
+
+    public ControlCenterWindow()
+    {
+        Title = "DotShell — центр управления";
+        WindowStyle = WindowStyle.None;
+        AllowsTransparency = true;
+        Background = new SolidColorBrush(Color.FromRgb(0x0B, 0x0B, 0x0E));
+        ShowInTaskbar = false;
+        Topmost = true;
+        ResizeMode = ResizeMode.NoResize;
+        Width = 340;
+        Height = 520;
+
+        var area = SystemParameters.WorkArea;
+        Left = area.Right - Width - 12;
+        Top = area.Top + 24;
+
+        var root = new StackPanel { Margin = new Thickness(20, 18, 20, 18) };
+
+        root.Children.Add(new TextBlock
+        {
+            Text = "ЦЕНТР УПРАВЛЕНИЯ",
+            FontFamily = new FontFamily("Bahnschrift"),
+            FontSize = 9,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x8A, 0x93)),
+            Margin = new Thickness(0, 0, 0, 14),
+        });
+
+        // --- громкость ---
+        root.Children.Add(Section("ГРОМКОСТЬ"));
+
+        _volumeValue = new TextBlock
+        {
+            Text = "—",
+            FontFamily = new FontFamily("Bahnschrift"),
+            FontSize = 22,
+            Foreground = new SolidColorBrush(ColorPalette.Accent),
+            Margin = new Thickness(0, 0, 0, 6),
+        };
+        root.Children.Add(_volumeValue);
+
+        _volumeBar = new DotSeekBar
+        {
+            Variant = ShellServices.Instance.Settings.Current.SliderStyle,
+            Height = 26,
+            ShowTimeHint = false,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+        _volumeBar.SeekRequested += fraction => SetVolume(fraction);
+        root.Children.Add(_volumeBar);
+
+        _volume.Changed += () => Dispatcher.BeginInvoke(SyncVolume);
+        SyncVolume();
+
+        // --- переключатели ---
+        root.Children.Add(Section("БЫСТРО"));
+
+        var toggles = new WrapPanel { Margin = new Thickness(0, 0, 0, 6) };
+        toggles.Children.Add(Toggle("ТЁМНЫЕ ЗАГОЛОВКИ", () => ShellServices.Instance.Settings.Current.SystemStyleFull,
+            value => ShellServices.Instance.Settings.Update(s => s.SystemStyleFull = value)));
+        toggles.Children.Add(Toggle("СПРЯТАТЬ СТОЛ", () => ShellServices.Instance.Settings.Current.HideDesktopIcons,
+            value => ShellServices.Instance.Settings.Update(s => s.HideDesktopIcons = value)));
+        toggles.Children.Add(Toggle("НЕ МЕШАТЬ", () => ShellServices.Instance.Settings.Current.QuietThreshold != "off",
+            value => ShellServices.Instance.Settings.Update(s => s.QuietThreshold = value ? "maximized" : "off")));
+        toggles.Children.Add(Toggle("ЗВУК", () => !_volume.Muted, value => _volume.SetMute(!value)));
+
+        root.Children.Add(toggles);
+
+        // --- питание и настройки ---
+        root.Children.Add(Section("ПИТАНИЕ"));
+
+        var power = new WrapPanel();
+        power.Children.Add(Chip("ЗАБЛОКИРОВАТЬ", () => { Win32.LockWorkStation(); Close(); }));
+        power.Children.Add(Chip("СОН", () => { Win32.SetSuspendState(false, true, false); Close(); }));
+        power.Children.Add(Chip("НАСТРОЙКИ", () => { Close(); OpenSettings(); }));
+        power.Children.Add(Chip("ВЫЙТИ", () => Application.Current.Shutdown()));
+        root.Children.Add(power);
+
+        Content = new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+
+        KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
+
+        bool activated = false;
+        Activated += (_, _) => activated = true;
+        Deactivated += (_, _) => { if (activated) Close(); };
+        Closed += (_, _) => { try { _volume.Dispose(); } catch { } if (ReferenceEquals(_open, this)) _open = null; };
+    }
+
+    private void SyncVolume()
+    {
+        if (!_volume.Available)
+        {
+            _volumeValue.Text = "нет устройства";
+            _volumeBar.IsEnabled = false;
+            return;
+        }
+
+        _volumeBar.Value = _volume.Level * 100;
+        _volumeValue.Text = $"{_volume.Level * 100:0}%";
+    }
+
+    private void SetVolume(double fraction)
+    {
+        try
+        {
+            _volume.SetLevel((float)Math.Clamp(fraction, 0, 1));
+            _volumeValue.Text = $"{fraction * 100:0}%";
+        }
+        catch { }
+    }
+
+    private static void OpenSettings()
+    {
+        try
+        {
+            var island = IslandWindow.Current;
+            if (island is not null) island.OpenSettings();
+        }
+        catch { }
+    }
+
+    // ---------------------------------------------------------------- мелочи
+
+    private static TextBlock Section(string text) => new()
+    {
+        Text = text,
+        FontFamily = new FontFamily("Bahnschrift"),
+        FontSize = 9,
+        Foreground = new SolidColorBrush(Color.FromRgb(0x5C, 0x5C, 0x66)),
+        Margin = new Thickness(0, 14, 0, 6),
+    };
+
+    private static Border Chip(string text, Action action)
+    {
+        var label = new TextBlock
+        {
+            Text = text,
+            FontFamily = new FontFamily("Bahnschrift"),
+            FontSize = 10,
+            Foreground = new SolidColorBrush(Color.FromRgb(0xEC, 0xEC, 0xEE)),
+        };
+
+        var border = new Border
+        {
+            Padding = new Thickness(10, 8, 10, 8),
+            Margin = new Thickness(0, 0, 6, 6),
+            CornerRadius = new CornerRadius(2),
+            Background = new SolidColorBrush(Color.FromRgb(0x17, 0x17, 0x1A)),
+            Child = label,
+            Cursor = Cursors.Hand,
+        };
+
+        border.MouseLeftButtonUp += (_, _) => action();
+        return border;
+    }
+
+    /// <summary>Переключатель: акцентная рамка и цвет текста, когда включён.</summary>
+    private static Border Toggle(string text, Func<bool> read, Action<bool> write)
+    {
+        var label = new TextBlock
+        {
+            Text = text,
+            FontFamily = new FontFamily("Bahnschrift"),
+            FontSize = 9,
+        };
+
+        var border = new Border
+        {
+            Padding = new Thickness(9, 7, 9, 7),
+            Margin = new Thickness(0, 0, 6, 6),
+            CornerRadius = new CornerRadius(2),
+            BorderThickness = new Thickness(1),
+            Child = label,
+            Cursor = Cursors.Hand,
+        };
+
+        void Render()
+        {
+            bool on = read();
+            var accent = ColorPalette.Accent;
+
+            border.BorderBrush = new SolidColorBrush(on ? accent : Color.FromRgb(0x26, 0x26, 0x2B));
+            border.Background = new SolidColorBrush(on
+                ? Color.FromArgb(0x22, accent.R, accent.G, accent.B)
+                : Color.FromRgb(0x12, 0x12, 0x14));
+            label.Foreground = new SolidColorBrush(on ? accent : Color.FromRgb(0x8A, 0x8A, 0x93));
+        }
+
+        border.MouseLeftButtonUp += (_, _) =>
+        {
+            write(!read());
+            Render();
+        };
+
+        Render();
+        return border;
+    }
+
+    private void SlideIn()
+    {
+        var from = SystemParameters.WorkArea.Right;
+        Left = from;
+
+        var slide = new DoubleAnimation(from - Width - 12, TimeSpan.FromMilliseconds(240))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+        };
+
+        BeginAnimation(LeftProperty, slide);
+    }
+}

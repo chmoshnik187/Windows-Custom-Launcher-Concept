@@ -501,6 +501,7 @@ public partial class IslandWindow : Window
             {
                 // Виджеты: открываем витрину с карточками, а не список в меню —
                 // в меню не видно, что ставишь, и нельзя выбрать место на столе.
+                menu.Add("Центр управления", () => Dispatcher.BeginInvoke(() => ControlCenterWindow.Toggle()));
                 menu.Add("Обзор", () => Dispatcher.BeginInvoke(() => DashboardWindow.Toggle()));
                 menu.Add("Витрина виджетов", () => Dispatcher.BeginInvoke(OpenWidgetGallery));
                 menu.Add("Клавиши и сочетания", () => Dispatcher.BeginInvoke(OpenKeysWindow));
@@ -573,12 +574,31 @@ public partial class IslandWindow : Window
         double liveHeight = _isExpanded ? Math.Max(height, _expandedH) : height;
 
         Pill.CornerRadius = new CornerRadius(Math.Min(radius, liveHeight / 2));
-        Pill.Margin = new Thickness(0, offset, 0, 0);
+
+        bool bottom = string.Equals(settings.IslandEdge, "bottom", StringComparison.OrdinalIgnoreCase);
+
+        // Капсула прижимается к своей кромке: сверху — верхний отступ, снизу — нижний.
+        Pill.VerticalAlignment = bottom ? VerticalAlignment.Bottom : VerticalAlignment.Top;
+        Pill.Margin = bottom
+            ? new Thickness(0, 0, 0, offset)
+            : new Thickness(0, offset, 0, 0);
 
         if (!_isExpanded && Math.Abs(Pill.Height - height) > 0.5)
         {
             Pill.Height = height;
             ResizeWindowTo(CollapsedWidth, height);
+        }
+
+        // Ставим окно к выбранной кромке (сверху или снизу).
+        var work = SystemParameters.WorkArea;
+
+        if (bottom)
+        {
+            Top = work.Bottom - Math.Max(Height, height + 56) - offset;
+        }
+        else if (Top < work.Top || Top > work.Bottom - 40)
+        {
+            Top = work.Top + offset - 10;
         }
     }
 
@@ -599,6 +619,11 @@ public partial class IslandWindow : Window
         if (Program.OpenDashboard)
         {
             Dispatcher.BeginInvoke(() => DashboardWindow.Toggle());
+        }
+
+        if (Program.OpenControlCenter)
+        {
+            Dispatcher.BeginInvoke(() => ControlCenterWindow.Toggle());
         }
 
         if (Program.OpenSliderDemo)
@@ -849,6 +874,14 @@ public partial class IslandWindow : Window
         Width = width;
         Height = height;
         Left = centerX - width / 2;
+
+        // Нижняя кромка: остров растёт вверх, поэтому при изменении высоты
+        // пересчитываем Top от низа рабочей области.
+        if (ShellServices.Instance.Settings.Current.IslandEdge == "bottom")
+        {
+            var wa = SystemParameters.WorkArea;
+            Top = wa.Bottom - height - Math.Clamp(ShellServices.Instance.Settings.Current.IslandTopOffset, 0, 24);
+        }
     }
 
     private void OnDockHitClick(object sender, MouseButtonEventArgs e)
