@@ -386,6 +386,21 @@ public partial class IslandWindow : Window
                 e.Handled = true;
             }
         };
+
+        // Esc сворачивает раскрытый остров. Раньше этот обработчик висел только на
+        // PickerSearch (поле поиска программ), поэтому Esc срабатывал лишь когда
+        // фокус был внутри этого поля — почти никогда. Остров при клике становится
+        // foreground-окном (проверено через GetForegroundWindow), поэтому Esc
+        // долетает до окна, если слушать его здесь, а не на внутреннем поле.
+        PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape && _isExpanded)
+            {
+                Collapse();
+                e.Handled = true;
+            }
+        };
+
         WidgetsManager.Changed += () => Dispatcher.BeginInvoke(RefreshWidgetsLabel);
 
         // Алхимия буфера: плашки умных действий перестраиваются при каждой копии
@@ -512,6 +527,12 @@ public partial class IslandWindow : Window
 
     private void OnWindowLoaded(object? sender, RoutedEventArgs e)
     {
+        // Сначала ширина свёрнутой пилюли, потом позиция. ResizeWindowTo сохраняет
+        // центр окна, а стартовая ширина XAML (700) шире свёрнутой (440): если
+        // сначала восстановить Left из настроек, а потом подогнать размер, остров
+        // на каждом перезапуске уезжал вправо на (700−440)/2 = 130 DIP (~163 px).
+        Width = CollapsedWidth;
+
         PositionAtTopCenter();
 
         // Окно острова = ровно таблетка, без прозрачных полей: иначе невидимая
@@ -1579,7 +1600,19 @@ public partial class IslandWindow : Window
     private double MaxExpandedHeight()
     {
         var wa = SystemParameters.WorkArea;
-        return Math.Clamp(wa.Bottom - 16 - (Top + 10), ExpandedHeight, 1400);
+
+        // Нижняя кромка: остров растёт вверх, поэтому запас — это место над ним
+        // (от верхнего края рабочей области до его низа), а не под ним. Раньше
+        // здесь всегда считалось «место под Top», и на нижней кромке раскрытие
+        // ужималось до минимальных 306 DIP — главная вкладка обрезалась.
+        bool bottom = string.Equals(
+            ShellServices.Instance.Settings.Current.IslandEdge, "bottom", StringComparison.OrdinalIgnoreCase);
+
+        double headroom = bottom
+            ? (wa.Bottom - wa.Top) - Math.Clamp(ShellServices.Instance.Settings.Current.IslandTopOffset, 0, 24) - 10
+            : wa.Bottom - 16 - (Top + 10);
+
+        return Math.Clamp(headroom, ExpandedHeight, 1400);
     }
 
     private void ScheduleGrowChat()

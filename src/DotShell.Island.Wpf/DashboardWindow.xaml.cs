@@ -355,7 +355,10 @@ public partial class DashboardWindow : Window
         Top = area.Top + 68;
 
         // Токены общие: скорость и кривая из настроек теперь влияют и на обзор.
-        var slide = new DoubleAnimation(-Height * 0.35, 18, TimeSpan.FromMilliseconds(Motion.Ms(Motion.Slow)))
+        // Конечная позиция обязана совпадать с Top выше: раньше стояло «18», и
+        // окно заканчивало выезд на 18 px от края — поверх свёрнутой капсулы,
+        // хотя чуть выше мы явно отодвинули его на 68 px, чтобы НЕ перекрывать остров.
+        var slide = new DoubleAnimation(-Height * 0.35, area.Top + 68, TimeSpan.FromMilliseconds(Motion.Ms(Motion.Slow)))
         {
             EasingFunction = Motion.Ease(),
         };
