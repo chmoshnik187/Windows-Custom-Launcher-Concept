@@ -42,6 +42,36 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         DataContext = vm;
 
+        // Пачка 1 кастомизации: кривая движения и форма точки. Списки собираем
+        // кодом — так проще держать значения и подписи рядом.
+        FillChoices(CurveBox, new (string Value, string Label)[]
+        {
+            ("out", "Плавное торможение"),
+            ("inout", "Туда-обратно"),
+            ("linear", "Линейно"),
+            ("spring", "Пружина"),
+        }, vm.AnimCurve);
+
+        CurveBox.SelectionChanged += (_, _) =>
+        {
+            if (CurveBox.SelectedItem is System.Windows.Controls.ComboBoxItem { Tag: string value })
+                vm.AnimCurve = value;
+        };
+
+        FillChoices(DotShapeBox, new (string Value, string Label)[]
+        {
+            ("circle", "Круглые"),
+            ("square", "Квадратные"),
+            ("diamond", "Ромбы"),
+            ("dash", "Штрихи"),
+        }, vm.DotShapeName);
+
+        DotShapeBox.SelectionChanged += (_, _) =>
+        {
+            if (DotShapeBox.SelectedItem is System.Windows.Controls.ComboBoxItem { Tag: string value })
+                vm.DotShapeName = value;
+        };
+
         // Город погоды: список частых + возможность вписать свой.
         foreach (var city in new[] { "Москва", "Санкт-Петербург", "Иркутск", "Новосибирск", "Екатеринбург", "Казань", "Владивосток" })
             CityBox.Items.Add(city);
@@ -241,5 +271,22 @@ public partial class SettingsWindow : Window
         _vm.WindowsAccentOn = false;
         _vm.CustomCursorOn = false;
         StatusText.Text = "оформление Windows выключено: заголовки, акцент и курсоры системные";
+    }
+
+    /// <summary>Заполнить комбобокс подписями и выбрать текущее значение.</summary>
+    private static void FillChoices(System.Windows.Controls.ComboBox box, (string Value, string Label)[] items, string current)
+    {
+        box.Items.Clear();
+
+        foreach (var (value, label) in items)
+        {
+            var item = new System.Windows.Controls.ComboBoxItem { Content = label, Tag = value };
+            box.Items.Add(item);
+
+            if (string.Equals(value, current, StringComparison.OrdinalIgnoreCase))
+                box.SelectedItem = item;
+        }
+
+        box.SelectedItem ??= box.Items[0];
     }
 }

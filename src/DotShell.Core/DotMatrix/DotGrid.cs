@@ -12,8 +12,23 @@ namespace DotShell.Core.DotMatrix;
 /// доли миллисекунды. Если позже захочешь точки на весь экран (обои) — этот же
 /// алгоритм переносится в pixel shader один в один, формула расстояния та же.
 /// </summary>
+/// <summary>Форма точки для всей точечной графики.</summary>
+public enum DotShape
+{
+    Circle,
+    Square,
+    Diamond,
+    Dash,
+}
+
 public static class DotGrid
 {
+    /// <summary>Форма точек: ставится из настроек (ThemeBus → DotStyle).</summary>
+    public static DotShape Shape { get; set; } = DotShape.Circle;
+
+    /// <summary>Шахматный сдвиг строк — «сетка» вместо «миллиметровки».</summary>
+    public static bool Stagger { get; set; }
+
     public readonly record struct Geometry(int Cols, int Rows, int Width, int Height, int Pitch)
     {
         /// <summary>Сколько ячеек влезет в заданную ширину/высоту.</summary>
@@ -76,17 +91,33 @@ public static class DotGrid
                 if (!on && !ghost) continue;
 
                 double dxCenter = px + 0.5 - (cx * geo.Pitch + halfPitch);
+
+                // Шахматка: нечётные строки сдвинуты на полшага — поле читается
+                // как «сетка», а не как миллиметровка.
+                if (Stagger && (cy & 1) == 1) dxCenter += halfPitch;
+
                 double dist = Math.Sqrt(dxCenter * dxCenter + dyCenter * dyCenter);
+
+                // Форма точки: круг — радиус, квадрат — максимум координат,
+                // ромб — сумма, штрих — вытянутый по вертикали.
+                double shapeDistance = Shape switch
+                {
+                    DotShape.Square => Math.Max(Math.Abs(dxCenter), Math.Abs(dyCenter)),
+                    DotShape.Diamond => Math.Abs(dxCenter) + Math.Abs(dyCenter),
+                    DotShape.Dash => Math.Max(Math.Abs(dxCenter) * 1.9, Math.Abs(dyCenter) * 0.62),
+                    _ => dist,
+                };
+
 
                 // Радиус: полная точка при яркости >= 0.55, дальше уменьшается.
                 double factor = on
                     ? minRadiusFactor + (1.0 - minRadiusFactor) * Math.Clamp(v / 0.55, 0, 1)
                     : minRadiusFactor * 0.65;
                 double radius = halfPitch * factor;
-                if (dist > radius) continue;
+                if (shapeDistance > radius) continue;
 
                 // Антиалиасинг: мягкий край в 1 px, чтобы точки не "звенели".
-                double edge = Math.Clamp(radius - dist, 0, 1);
+                double edge = Math.Clamp(radius - shapeDistance, 0, 1);
                 double coverage = edge;
 
                 // "Горящие" точки дополнительно гаснут вместе с яркостью источника.

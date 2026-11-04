@@ -134,6 +134,58 @@ public sealed class IslandViewModel : INotifyPropertyChanged
     }
 
     /// <summary>Прозрачность чёрной подложки острова, 30..100 %. Акцент не трогает.</summary>
+    public double Radius
+    {
+        get => _services.Settings.Current.IslandRadius;
+        set { _services.Settings.Update(s => s.IslandRadius = (int)Math.Clamp(value, 0, 24)); RaisePropertyChanged(); }
+    }
+
+    public double CapsuleHeight
+    {
+        get => _services.Settings.Current.CollapsedHeight;
+        set { _services.Settings.Update(s => s.CollapsedHeight = (int)Math.Clamp(value, 36, 64)); RaisePropertyChanged(); }
+    }
+
+    public double TopOffset
+    {
+        get => _services.Settings.Current.IslandTopOffset;
+        set { _services.Settings.Update(s => s.IslandTopOffset = (int)Math.Clamp(value, 0, 24)); RaisePropertyChanged(); }
+    }
+
+    public string AnimCurve
+    {
+        get => _services.Settings.Current.AnimationCurve;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value) || value == _services.Settings.Current.AnimationCurve) return;
+            _services.Settings.Update(s => s.AnimationCurve = value);
+            RaisePropertyChanged();
+        }
+    }
+
+    public string DotShapeName
+    {
+        get => _services.Settings.Current.DotShape;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value) || value == _services.Settings.Current.DotShape) return;
+            _services.Settings.Update(s => s.DotShape = value);
+            RaisePropertyChanged();
+        }
+    }
+
+    public bool DotStagger
+    {
+        get => _services.Settings.Current.DotStagger;
+        set { _services.Settings.Update(s => s.DotStagger = value); RaisePropertyChanged(); }
+    }
+
+    public double AnimSpeed
+    {
+        get => _services.Settings.Current.AnimationSpeed;
+        set { _services.Settings.Update(s => s.AnimationSpeed = Math.Clamp(value, 0.5, 2)); RaisePropertyChanged(); }
+    }
+
     public double IslandOpacity
     {
         get => _islandOpacity;

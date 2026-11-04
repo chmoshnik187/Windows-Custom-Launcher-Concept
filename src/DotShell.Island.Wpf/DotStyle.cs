@@ -28,6 +28,16 @@ public static class DotStyle
     {
         var cell = Math.Clamp(bus.Settings.CellSize, 2, 10);
         var gap = Math.Clamp(bus.Settings.Gap, 0, 8);
+        // Форма точек и шахматка живут в ядре (их читает растеризатор текста).
+        DotShell.Core.DotMatrix.DotGrid.Shape = bus.Settings.DotShape switch
+        {
+            "square" => DotShell.Core.DotMatrix.DotShape.Square,
+            "diamond" => DotShell.Core.DotMatrix.DotShape.Diamond,
+            "dash" => DotShell.Core.DotMatrix.DotShape.Dash,
+            _ => DotShell.Core.DotMatrix.DotShape.Circle,
+        };
+        DotShell.Core.DotMatrix.DotGrid.Stagger = bus.Settings.DotStagger;
+
         if (cell == Cell && gap == Gap) return;
         Cell = cell;
         Gap = gap;

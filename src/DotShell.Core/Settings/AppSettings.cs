@@ -170,6 +170,24 @@ public sealed class AppSettings
     /// <summary>Отступ острова от верхнего края монитора, px.</summary>
     public int IslandTopOffset { get; set; } = 10;
 
+    /// <summary>Радиус капсулы: 0 — прямоугольник, 23 — «таблетка».</summary>
+    public int IslandRadius { get; set; } = 23;
+
+    /// <summary>Высота свёрнутой капсулы: 36 — тонкая полоска, 64 — заметная плашка.</summary>
+    public int CollapsedHeight { get; set; } = 46;
+
+    /// <summary>Множитель длительности анимаций: 0.5 — вдвое быстрее, 2 — вдвое медленнее.</summary>
+    public double AnimationSpeed { get; set; } = 1.0;
+
+    /// <summary>Кривая движения: out, inout, linear, spring.</summary>
+    public string AnimationCurve { get; set; } = "out";
+
+    /// <summary>Форма точки во всей точечной графике: circle, square, diamond, dash.</summary>
+    public string DotShape { get; set; } = "circle";
+
+    /// <summary>Шахматный сдвиг строк в точечной сетке.</summary>
+    public bool DotStagger { get; set; }
+
     /// <summary>Последнее положение окна острова (-32000 = "не задано, центрировать").</summary>
     public int IslandLeft { get; set; } = -32000;
 

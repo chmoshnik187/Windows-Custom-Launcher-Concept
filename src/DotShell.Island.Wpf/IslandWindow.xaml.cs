@@ -47,10 +47,34 @@ public partial class IslandWindow : Window
 {
     // ---- геометрия таблетки (совпадает со стартовыми значениями в XAML) ----
     private const double CollapsedWidth = 440;
-    private const double CollapsedHeight = 46;
+    /// <summary>
+    /// Высота свёрнутой капсулы: живёт в настройках (36…64), поэтому не const.
+    /// </summary>
+    private static double CollapsedHeight =>
+        Math.Clamp(ShellServices.Instance.Settings.Current.CollapsedHeight, 36, 64);
     private const double ExpandedWidth = 640;   // 620 содержимое + поля
     private const double ExpandedHeight = 306;  // 10 отступ + 296 содержимое
-    private const int AnimationMs = 300;
+    /// <summary>Длительность анимаций с поправкой на пользовательскую скорость.</summary>
+    private static int AnimationMs
+    {
+        get
+        {
+            double speed = Math.Clamp(ShellServices.Instance.Settings.Current.AnimationSpeed, 0.5, 2);
+            return (int)Math.Clamp(300 / speed, 100, 900);
+        }
+    }
+
+    /// <summary>Кривая движения из настроек: out / inout / linear / spring.</summary>
+    private static IEasingFunction? Ease()
+    {
+        return ShellServices.Instance.Settings.Current.AnimationCurve switch
+        {
+            "linear" => null,
+            "inout" => new CubicEase { EasingMode = EasingMode.EaseInOut },
+            "spring" => new BackEase { Amplitude = 0.4, EasingMode = EasingMode.EaseOut },
+            _ => new CubicEase { EasingMode = EasingMode.EaseOut },
+        };
+    }
 
     /// <summary>
     /// Размер раскрытого острова под задачу вкладки.
@@ -204,6 +228,11 @@ public partial class IslandWindow : Window
 
         Loaded += OnWindowLoaded;
         Loaded += (_, _) => { if (Program.OpenSettingsOnStart) OpenSettings(); };
+        Loaded += (_, _) => ApplyCapsuleGeometry();
+
+        // Настройки меняются ползунками в другом окне — капсула должна
+        // подхватывать это сразу, а не после перезапуска.
+        ShellServices.Instance.Theme.SettingsChanged += _ => Dispatcher.BeginInvoke(ApplyCapsuleGeometry);
 
         // Слой уведомлений добавляем в капсулу из кода: правки разметки острова
         // по номерам строк четыре раза ломали XAML, и это уже не смешно.
@@ -527,6 +556,30 @@ public partial class IslandWindow : Window
 
     /// <summary>Раскрыть остров на конкретной вкладке (флаг --tab=…).
     /// Вызывается после Show(): окно уже существует и умеет анимироваться.</summary>
+    /// <summary>
+    /// Радиус и отступ капсулы из настроек. Радиус не больше половины высоты —
+    /// иначе WPF рисует «скругление с изломом».
+    /// </summary>
+    private void ApplyCapsuleGeometry()
+    {
+        var settings = ShellServices.Instance.Settings.Current;
+
+        double height = Math.Clamp(settings.CollapsedHeight, 36, 64);
+        double radius = Math.Clamp(settings.IslandRadius, 0, 24);
+        double offset = Math.Clamp(settings.IslandTopOffset, 0, 24);
+
+        double liveHeight = _isExpanded ? Math.Max(height, _expandedH) : height;
+
+        Pill.CornerRadius = new CornerRadius(Math.Min(radius, liveHeight / 2));
+        Pill.Margin = new Thickness(0, offset, 0, 0);
+
+        if (!_isExpanded && Math.Abs(Pill.Height - height) > 0.5)
+        {
+            Pill.Height = height;
+            ResizeWindowTo(CollapsedWidth, height);
+        }
+    }
+
     public void OpenStartupTab()
     {
         var tab = Program.StartupTab;
@@ -1359,9 +1412,9 @@ public partial class IslandWindow : Window
     {
         var anim = new DoubleAnimation(to, TimeSpan.FromMilliseconds(AnimationMs))
         {
-            // EaseOut на раскрытии даёт ощущение "выпрыгивания", как у оригинального
-            // Dynamic Island; одно и то же сглаживание на оба направления упрощает код.
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            // Кривая и скорость берутся из настроек: раньше они были зашиты, и
+            // «пружины» с «линейно» владелец выбрать не мог.
+            EasingFunction = Ease(),
         };
         el.BeginAnimation(prop, anim);
     }

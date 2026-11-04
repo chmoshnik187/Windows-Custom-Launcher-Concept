@@ -157,6 +157,34 @@
                             <TextBlock Style="{StaticResource Section}" Text="ЗАЗОР" />
                             <Slider Style="{StaticResource DsSlider}" Minimum="0" Maximum="8"
                                     Value="{Binding Gap}" />
+
+                            <!-- Пачка 1 кастомизации: форма капсулы и движение -->
+                            <TextBlock Style="{StaticResource Section}" Text="РАДИУС КАПСУЛЫ" />
+                            <Slider Style="{StaticResource DsSlider}" Minimum="0" Maximum="24"
+                                    Value="{Binding Radius}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="ВЫСОТА КАПСУЛЫ" />
+                            <Slider Style="{StaticResource DsSlider}" Minimum="36" Maximum="64"
+                                    Value="{Binding CapsuleHeight}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="ОТСТУП ОТ КРАЯ" />
+                            <Slider Style="{StaticResource DsSlider}" Minimum="0" Maximum="24"
+                                    Value="{Binding TopOffset}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="СКОРОСТЬ АНИМАЦИЙ" />
+                            <Slider Style="{StaticResource DsSlider}" Minimum="0.5" Maximum="2"
+                                    Value="{Binding AnimSpeed}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="КРИВАЯ ДВИЖЕНИЯ" />
+                            <ComboBox x:Name="CurveBox" Style="{StaticResource DsCombo}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="ФОРМА ТОЧКИ" />
+                            <ComboBox x:Name="DotShapeBox" Style="{StaticResource DsCombo}" />
+
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Шахматный сдвиг строк"
+                                      IsChecked="{Binding DotStagger}"
+                                      Margin="0,8,0,0" />
                         </StackPanel>
 
                         <!-- ОСТРОВ -->
