@@ -147,6 +147,12 @@ public sealed class AppSettings
     /// </summary>
     public string SeekStyle { get; set; } = "beads";
 
+    /// <summary>
+    /// Насколько сильно рисунок фона реагирует на бас: 0 — не реагирует, 1 — как было
+    /// в первой версии (перекрывало текст). По умолчанию мягко.
+    /// </summary>
+    public double BassVisualization { get; set; } = 0.35;
+
     /// <summary>Стиль ползунков (громкость, яркость, размер точки): capsule, blocks, dots.</summary>
     public string SliderStyle { get; set; } = "capsule";
 

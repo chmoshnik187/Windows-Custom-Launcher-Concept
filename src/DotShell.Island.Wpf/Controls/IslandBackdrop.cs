@@ -116,9 +116,11 @@ public sealed class IslandBackdrop : FrameworkElement
 
     protected override void OnRender(DrawingContext dc)
     {
-        // Яркость рисунка пляшет с басом: 1.0 в тишине, до ~1.8 на ударе.
+        // Рисунок остаётся фоном: реакция на бас ограничена настройкой (0..1),
+        // и даже на максимуме не поднимает яркость выше ~1.35 — текст важнее.
         double bass = AudioSpectrum.Current?.Bass ?? 0f;
-        double strength = Math.Min(1.8, _strength * (1 + bass * 0.75));
+        double sensitivity = Math.Clamp(ShellServices.Instance.Settings.Current.BassVisualization, 0, 1);
+        double strength = Math.Min(1.35, _strength * (1 + bass * sensitivity * 0.5));
 
         if (ActualWidth < 8 || ActualHeight < 8) return;
         // В высококонтрастной теме Windows любой рисунок только мешает читать текст.
@@ -298,8 +300,10 @@ public sealed class IslandBackdrop : FrameworkElement
         // Точки дрожат от баса: размер растёт, а положение смещается волной от
         // центра. Раньше «реакция» была прозрачностью — снаружи это выглядело как
         // шторка, а не как живое поле.
-        double size = 1.2 + bass * 2.4;
-        var brush = new SolidColorBrush(WithAlpha(accent, (byte)Math.Clamp(120 * _strength + bass * 90, 0, 255)));
+        double sensitivity = Math.Clamp(ShellServices.Instance.Settings.Current.BassVisualization, 0, 1);
+        double size = 1.2 + bass * sensitivity * 2.4;
+        var brush = new SolidColorBrush(WithAlpha(accent,
+            (byte)Math.Clamp(120 * _strength * (1 - sensitivity * 0.35) + bass * sensitivity * 90, 0, 235)));
         brush.Freeze();
 
         double cx = rect.Width / 2;
@@ -316,7 +320,7 @@ public sealed class IslandBackdrop : FrameworkElement
                     // Кольцевая волна: смещение тем сильнее, чем ближе к фронту волны.
                     double distance = Math.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
                     double wave = Math.Sin(distance * 0.14 - _phase * 7.0);
-                    double amplitude = bass * 2.2 * wave;
+                                double amplitude = bass * sensitivity * 2.2 * wave;
 
                     double nx = cx - x, ny = cy - y;
                     double length = Math.Max(0.001, Math.Sqrt(nx * nx + ny * ny));

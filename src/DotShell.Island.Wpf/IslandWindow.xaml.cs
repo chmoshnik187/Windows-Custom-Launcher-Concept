@@ -1380,9 +1380,22 @@ public partial class IslandWindow : Window
     /// Клик по "пустому" месту таблетки = раскрыть/свернуть.
     /// Клик по кнопке, вкладке, полю ввода и т.п. игнорируем — у них своё поведение.
     /// </summary>
+    // Чем был нажат пилюль: кнопкой внутри или пустым местом. Проверять это
+    // только на MouseUp нельзя: обработчик кнопки (например, смена темы) успевает
+    // пересобрать содержимое, элемент отваливается от дерева, IsInteractive
+    // возвращает false — и остров сворачивался вместо действия кнопки.
+    private bool _pressWasInteractive;
+
     private void OnPillClick(object sender, MouseButtonEventArgs e)
     {
         if (_dragMoved) return;              // это было перетаскивание
+
+        if (_pressWasInteractive)
+        {
+            _pressWasInteractive = false;
+            return;
+        }
+
         if (IsInteractive(e.OriginalSource as DependencyObject)) return;
         ToggleExpanded();
     }
@@ -1395,7 +1408,8 @@ public partial class IslandWindow : Window
 
     private void OnDragCandidateDown(object sender, MouseButtonEventArgs e)
     {
-        if (IsInteractive(e.OriginalSource as DependencyObject)) { _dragArmed = false; return; }
+        _pressWasInteractive = IsInteractive(e.OriginalSource as DependencyObject);
+        if (_pressWasInteractive) { _dragArmed = false; return; }
 
         _dragArmed = true;
         _dragMoved = false;

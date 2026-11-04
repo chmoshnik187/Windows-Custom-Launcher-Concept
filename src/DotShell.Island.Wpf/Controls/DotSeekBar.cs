@@ -252,7 +252,12 @@ public sealed class DotSeekBar : FrameworkElement
         var track = new Pen(muted, 2);
         track.Freeze();
 
-        var progress = new Pen(accent, 3)
+        // Толщина дуги дышит с басом: это и есть объединение стилей 8 и 10 —
+        // кольцо показывает прогресс и одновременно реагирует на удар.
+        float bass = AudioSpectrum.Current?.Bass ?? 0f;
+        double thickness = 3 + bass * 2.4;
+
+        var progress = new Pen(accent, thickness)
         {
             StartLineCap = PenLineCap.Round,
             EndLineCap = PenLineCap.Round,
@@ -281,6 +286,10 @@ public sealed class DotSeekBar : FrameworkElement
 
         geo.Freeze();
         dc.DrawGeometry(null, progress, geo);
+
+        // Голова дуги — точка, чтобы было видно, где именно «сейчас».
+        var head = PointOnCircle(centre, radius, angle - 90);
+        dc.DrawEllipse(accent, null, head, thickness * 1.1 + 1, thickness * 1.1 + 1);
     }
 
     /// <summary>Кассета: две катушки и лента между ними.</summary>

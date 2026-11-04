@@ -150,10 +150,44 @@ public sealed class PlayerStrip : Grid
         ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        var art = Artwork(96);
-        art.VerticalAlignment = VerticalAlignment.Stretch;
-        SetColumn(art, 0);
-        Children.Add(art);
+        bool arcStyle = ShellServices.Instance.Settings.Current.SeekStyle == "arc";
+
+        if (arcStyle)
+        {
+            // Стиль 8+10: обложка внутри кольца, кольцо — и прогресс, и пульс.
+            var cover = Artwork(96);
+            cover.CornerRadius = new CornerRadius(48);
+            cover.VerticalAlignment = VerticalAlignment.Center;
+            cover.Margin = new Thickness(6);
+
+            var ring = new DotSeekBar
+            {
+                Variant = "arc",
+                Width = 112,
+                Height = 112,
+                ShowTimeHint = false,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+
+            ring.SeekRequested += fraction =>
+                _ = _media.SeekAsync(TimeSpan.FromSeconds(_media.Duration.TotalSeconds * fraction));
+
+            _progress = ring;
+
+            var stack = new Grid { Width = 112, Height = 112, VerticalAlignment = VerticalAlignment.Center };
+            stack.Children.Add(cover);
+            stack.Children.Add(ring);
+
+            SetColumn(stack, 0);
+            Children.Add(stack);
+        }
+        else
+        {
+            var art = Artwork(96);
+            art.VerticalAlignment = VerticalAlignment.Stretch;
+            SetColumn(art, 0);
+            Children.Add(art);
+        }
 
         var content = new Grid { Margin = new Thickness(16, 2, 0, 2), VerticalAlignment = VerticalAlignment.Center };
         content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -216,10 +250,13 @@ public sealed class PlayerStrip : Grid
         line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        _progress = Progress();
-        _progress.Margin = new Thickness(0, 0, 10, 0);
-        _progress.VerticalAlignment = VerticalAlignment.Center;
-        line.Children.Add(_progress);
+        if (!arcStyle)
+        {
+            _progress = Progress();
+            _progress.Margin = new Thickness(0, 0, 10, 0);
+            _progress.VerticalAlignment = VerticalAlignment.Center;
+            line.Children.Add(_progress);
+        }
 
         _clock = Clock(9);
         SetColumn(_clock, 1);
