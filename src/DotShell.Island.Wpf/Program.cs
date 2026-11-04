@@ -31,6 +31,9 @@ public static class Program
     /// <summary>--dot-demo: витрина «размер точки и зазор».</summary>
     public static bool OpenDotDemo { get; private set; }
 
+    /// <summary>--unit-demo: витрина настроений юнита.</summary>
+    public static bool OpenUnitDemo { get; private set; }
+
     /// <summary>--software-render: программная отрисовка вместо GPU (диагностика артефактов).</summary>
     public static bool SoftwareRender { get; private set; }
 
@@ -267,6 +270,8 @@ public static class Program
             if (arg.Equals("--slider-demo", StringComparison.OrdinalIgnoreCase)) { OpenSliderDemo = true; continue; }
 
             if (arg.Equals("--dot-demo", StringComparison.OrdinalIgnoreCase)) { OpenDotDemo = true; continue; }
+
+            if (arg.Equals("--unit-demo", StringComparison.OrdinalIgnoreCase)) { OpenUnitDemo = true; continue; }
 
             if (arg.Equals("--visual-dump", StringComparison.OrdinalIgnoreCase)) { VisualDump = true; continue; }
 

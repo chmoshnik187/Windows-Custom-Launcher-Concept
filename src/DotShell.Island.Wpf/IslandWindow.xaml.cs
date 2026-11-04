@@ -693,6 +693,11 @@ public partial class IslandWindow : Window
             Dispatcher.BeginInvoke(() => new DotDemoWindow().Show());
         }
 
+        if (Program.OpenUnitDemo)
+        {
+            Dispatcher.BeginInvoke(() => new UnitDemoWindow().Show());
+        }
+
         if (Program.OpenWidgetType is { } widgetType)
         {
             Dispatcher.BeginInvoke(() =>
@@ -1730,7 +1735,9 @@ public partial class IslandWindow : Window
         {
             switch (node)
             {
-                case ButtonBase or TextBox or Slider or Selector or ScrollBar:
+                // Юнит — тоже интерактивный: клик по нему гладит персонажа,
+                // а не сворачивает остров.
+                case ButtonBase or TextBox or Slider or Selector or ScrollBar or Controls.UnitCharacter:
                     return true;
             }
             node = VisualTreeHelper.GetParent(node) ?? LogicalTreeHelper.GetParent(node);
