@@ -175,6 +175,21 @@
                             <Slider Style="{StaticResource DsSlider}" Minimum="0.5" Maximum="2"
                                     Value="{Binding AnimSpeed}" />
 
+                            <TextBlock Style="{StaticResource Section}" Text="ТЕМПЕРАТУРА АКЦЕНТА" />
+                            <Slider Style="{StaticResource DsSlider}" Minimum="-30" Maximum="30"
+                                    Value="{Binding AccentTemperature}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="НАСЫЩЕННОСТЬ АКЦЕНТА" />
+                            <Slider Style="{StaticResource DsSlider}" Minimum="0" Maximum="100"
+                                    Value="{Binding AccentSaturation}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="ПЛОТНОСТЬ ТОЧЕЧНОГО ТЕКСТА" />
+                            <Slider Style="{StaticResource DsSlider}" Minimum="5" Maximum="7"
+                                    Value="{Binding DotDensity}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="ЖИВОСТЬ ТОЧЕК" />
+                            <ComboBox x:Name="LivelinessBox" Style="{StaticResource DsCombo}" />
+
                             <TextBlock Style="{StaticResource Section}" Text="КРИВАЯ ДВИЖЕНИЯ" />
                             <ComboBox x:Name="CurveBox" Style="{StaticResource DsCombo}" />
 
@@ -186,6 +201,16 @@
                                       IsChecked="{Binding DotStagger}"
                                       Margin="0,8,0,0" />
                         </StackPanel>
+
+                            <TextBlock Style="{StaticResource Section}" Text="КУДА ПОКАЗЫВАТЬ УВЕДОМЛЕНИЯ" />
+                            <ComboBox x:Name="NotifyModeBox" Style="{StaticResource DsCombo}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="СКОЛЬКО ВИСИТ (СЕК)" />
+                            <Slider Style="{StaticResource DsSlider}" Minimum="3" Maximum="10"
+                                    Value="{Binding NotifySeconds}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="ЗВУК УВЕДОМЛЕНИЯ" />
+                            <ComboBox x:Name="NotifySoundBox" Style="{StaticResource DsCombo}" />
 
                         <!-- ОСТРОВ -->
                         <StackPanel x:Name="PanelIsland" Visibility="Collapsed">

@@ -38,10 +38,22 @@ public static class NotificationHub
     {
         if (!Enabled) return false;
 
-        var island = IslandWindow.Current;
-        if (island is not null)
+        // Куда показывать — настройка: капсула, карточка в углу, системный тост
+        // или «только точка» (тихий режим без окна).
+        string mode = ShellServices.Instance?.Settings.Current.NotifyMode ?? "capsule";
+
+        if (mode == "toast") return false;   // вызывающий покажет системный тост
+
+        if (mode == "dot")
         {
-            try { if (island.ShowNotification(title, message)) return true; }
+            PlaySound();
+            return true;                     // намеренно ничего не показываем
+        }
+
+        var island = IslandWindow.Current;
+        if (mode != "card" && island is not null)
+        {
+            try { if (island.ShowNotification(title, message)) { PlaySound(); return true; } }
             catch { }
         }
 
@@ -67,6 +79,7 @@ public static class NotificationHub
             Live.Add(window);
             window.Show();
             Reposition();
+            PlaySound();
             return true;
         }
         catch { return false; }
@@ -204,5 +217,23 @@ public static class NotificationHub
             }
             catch { }
         }
+    }
+
+    /// <summary>Звук уведомления из настроек: тишина, короткий «тик» или системный.</summary>
+    private static void PlaySound()
+    {
+        try
+        {
+            switch (ShellServices.Instance?.Settings.Current.NotifySound)
+            {
+                case "tick":
+                    System.Media.SystemSounds.Beep.Play();
+                    break;
+                case "system":
+                    System.Media.SystemSounds.Asterisk.Play();
+                    break;
+            }
+        }
+        catch { }
     }
 }

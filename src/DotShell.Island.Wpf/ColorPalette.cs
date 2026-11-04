@@ -80,7 +80,7 @@ public static class ColorPalette
         var argb = bus.AccentArgb;
         var showGhostDots = bus.ShowGhostDots;
         var opacity = Math.Clamp(bus.Settings.IslandOpacity, 30, 100);
-        var color = FromArgb(argb);
+        var color = ApplyTint(FromArgb(argb), bus.Settings.AccentTemperature, bus.Settings.AccentSaturation);
         Accent = color;
         AccentFaded = Color.FromArgb(0x40, color.R, color.G, color.B);
 
@@ -125,5 +125,62 @@ public static class ColorPalette
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher is null || dispatcher.CheckAccess()) action();
         else dispatcher.BeginInvoke(action);
+    }
+
+    /// <summary>
+    /// Сдвиг оттенка и насыщенности акцента: «температура» и «насыщенность» из
+    /// настроек. Работаем в HSV, чтобы не портить яркость.
+    /// </summary>
+    private static Color ApplyTint(Color color, int temperature, int saturation)
+    {
+        double h = 0, s = 0, v = 0;
+
+        double r = color.R / 255.0, g = color.G / 255.0, b = color.B / 255.0;
+        double max = Math.Max(r, Math.Max(g, b));
+        double min = Math.Min(r, Math.Min(g, b));
+        double delta = max - min;
+
+        v = max;
+        s = max <= 0 ? 0 : delta / max;
+
+        if (delta <= 0)
+        {
+            h = 0;
+        }
+        else if (max == r)
+        {
+            h = 60 * (((g - b) / delta) % 6);
+        }
+        else if (max == g)
+        {
+            h = 60 * ((b - r) / delta + 2);
+        }
+        else
+        {
+            h = 60 * ((r - g) / delta + 4);
+        }
+
+        if (h < 0) h += 360;
+
+        h = (h + Math.Clamp(temperature, -30, 30) + 360) % 360;
+        s = Math.Clamp(s * Math.Clamp(saturation, 0, 100) / 100.0, 0, 1);
+
+        // Обратно в RGB.
+        double c = v * s;
+        double x = c * (1 - Math.Abs((h / 60) % 2 - 1));
+        double m = v - c;
+
+        double rr, gg, bb;
+        if (h < 60) { rr = c; gg = x; bb = 0; }
+        else if (h < 120) { rr = x; gg = c; bb = 0; }
+        else if (h < 180) { rr = 0; gg = c; bb = x; }
+        else if (h < 240) { rr = 0; gg = x; bb = c; }
+        else if (h < 300) { rr = x; gg = 0; bb = c; }
+        else { rr = c; gg = 0; bb = x; }
+
+        return Color.FromRgb(
+            (byte)Math.Clamp((rr + m) * 255, 0, 255),
+            (byte)Math.Clamp((gg + m) * 255, 0, 255),
+            (byte)Math.Clamp((bb + m) * 255, 0, 255));
     }
 }

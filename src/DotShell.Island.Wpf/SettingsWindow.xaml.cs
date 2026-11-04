@@ -66,6 +66,46 @@ public partial class SettingsWindow : Window
             ("dash", "Штрихи"),
         }, vm.DotShapeName);
 
+        FillChoices(LivelinessBox, new (string Value, string Label)[]
+        {
+            ("off", "Без движения"),
+            ("rare", "Редкое мерцание"),
+            ("bass", "Дышит с басом"),
+        }, vm.DotLiveliness);
+
+        LivelinessBox.SelectionChanged += (_, _) =>
+        {
+            if (LivelinessBox.SelectedItem is System.Windows.Controls.ComboBoxItem { Tag: string value })
+                vm.DotLiveliness = value;
+        };
+
+        FillChoices(NotifyModeBox, new (string Value, string Label)[]
+        {
+            ("capsule", "В капсуле острова"),
+            ("card", "Карточка в углу"),
+            ("toast", "Системный тост Windows"),
+            ("dot", "Только точка (тихо)"),
+        }, vm.NotifyMode);
+
+        NotifyModeBox.SelectionChanged += (_, _) =>
+        {
+            if (NotifyModeBox.SelectedItem is System.Windows.Controls.ComboBoxItem { Tag: string value })
+                vm.NotifyMode = value;
+        };
+
+        FillChoices(NotifySoundBox, new (string Value, string Label)[]
+        {
+            ("none", "Без звука"),
+            ("tick", "Короткий тик"),
+            ("system", "Системный звук"),
+        }, vm.NotifySound);
+
+        NotifySoundBox.SelectionChanged += (_, _) =>
+        {
+            if (NotifySoundBox.SelectedItem is System.Windows.Controls.ComboBoxItem { Tag: string value })
+                vm.NotifySound = value;
+        };
+
         DotShapeBox.SelectionChanged += (_, _) =>
         {
             if (DotShapeBox.SelectedItem is System.Windows.Controls.ComboBoxItem { Tag: string value })

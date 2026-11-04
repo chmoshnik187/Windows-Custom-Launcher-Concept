@@ -185,6 +185,30 @@ public sealed class AppSettings
     /// <summary>Форма точки во всей точечной графике: circle, square, diamond, dash.</summary>
     public string DotShape { get; set; } = "circle";
 
+    /// <summary>Сдвиг оттенка акцента: −30 тёплый, +30 холодный.</summary>
+    public int AccentTemperature { get; set; }
+
+    /// <summary>Насыщенность акцента, 0–100 %.</summary>
+    public int AccentSaturation { get; set; } = 100;
+
+    /// <summary>Где живёт акцент: all, clock, player, quiet.</summary>
+    public string AccentFocus { get; set; } = "all";
+
+    /// <summary>Плотность точечного текста: множитель ячейки, 5–7 «точек на глиф».</summary>
+    public int DotTextDensity { get; set; } = 6;
+
+    /// <summary>Живость точек: off, rare, bass.</summary>
+    public string DotLiveliness { get; set; } = "bass";
+
+    /// <summary>Куда показывать уведомления: capsule, card, toast, dot.</summary>
+    public string NotifyMode { get; set; } = "capsule";
+
+    /// <summary>Сколько секунд висит уведомление.</summary>
+    public int NotifySeconds { get; set; } = 6;
+
+    /// <summary>Звук уведомления: none, tick, system.</summary>
+    public string NotifySound { get; set; } = "none";
+
     /// <summary>Шахматный сдвиг строк в точечной сетке.</summary>
     public bool DotStagger { get; set; }
 

@@ -150,6 +150,7 @@ public partial class DotText : UserControl
     public void RequestRender()
     {
         var signature = string.Join("|", Text, CellSize, Gap, SourceFontSize, FixedColumns,
+            ShellServices.Instance.Settings.Current.DotTextDensity,
             DotColor.ToString(), GhostColor.ToString());
         if (signature == _lastSignature && DotsImage.Source is not null) return;
         _lastSignature = signature;
@@ -170,7 +171,10 @@ public partial class DotText : UserControl
         {
             double scale = GetDpiScale();
 
-            int cellPx = Math.Max(2, (int)Math.Round(CellSize * scale));
+            // Плотность: 5–7 «точек на глиф». Меньше ячейка — больше точек на букву,
+            // поэтому множитель обратный (6 — нейтраль).
+            double density = Math.Clamp(ShellServices.Instance.Settings.Current.DotTextDensity, 5, 7);
+            int cellPx = Math.Max(2, (int)Math.Round(CellSize * scale * 6.0 / density));
             int gapPx = (int)Math.Round(Gap * scale);
             int pitch = cellPx + gapPx;
 

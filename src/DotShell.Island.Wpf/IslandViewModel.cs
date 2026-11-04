@@ -152,6 +152,63 @@ public sealed class IslandViewModel : INotifyPropertyChanged
         set { _services.Settings.Update(s => s.IslandTopOffset = (int)Math.Clamp(value, 0, 24)); RaisePropertyChanged(); }
     }
 
+    public double AccentTemperature
+    {
+        get => _services.Settings.Current.AccentTemperature;
+        set { _services.Settings.Update(s => s.AccentTemperature = (int)Math.Clamp(value, -30, 30)); RaisePropertyChanged(); }
+    }
+
+    public double AccentSaturation
+    {
+        get => _services.Settings.Current.AccentSaturation;
+        set { _services.Settings.Update(s => s.AccentSaturation = (int)Math.Clamp(value, 0, 100)); RaisePropertyChanged(); }
+    }
+
+    public double DotDensity
+    {
+        get => _services.Settings.Current.DotTextDensity;
+        set { _services.Settings.Update(s => s.DotTextDensity = (int)Math.Clamp(value, 5, 7)); RaisePropertyChanged(); }
+    }
+
+    public double NotifySeconds
+    {
+        get => _services.Settings.Current.NotifySeconds;
+        set { _services.Settings.Update(s => s.NotifySeconds = (int)Math.Clamp(value, 3, 10)); RaisePropertyChanged(); }
+    }
+
+    public string DotLiveliness
+    {
+        get => _services.Settings.Current.DotLiveliness;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value) || value == _services.Settings.Current.DotLiveliness) return;
+            _services.Settings.Update(s => s.DotLiveliness = value);
+            RaisePropertyChanged();
+        }
+    }
+
+    public string NotifyMode
+    {
+        get => _services.Settings.Current.NotifyMode;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value) || value == _services.Settings.Current.NotifyMode) return;
+            _services.Settings.Update(s => s.NotifyMode = value);
+            RaisePropertyChanged();
+        }
+    }
+
+    public string NotifySound
+    {
+        get => _services.Settings.Current.NotifySound;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value) || value == _services.Settings.Current.NotifySound) return;
+            _services.Settings.Update(s => s.NotifySound = value);
+            RaisePropertyChanged();
+        }
+    }
+
     public string AnimCurve
     {
         get => _services.Settings.Current.AnimationCurve;

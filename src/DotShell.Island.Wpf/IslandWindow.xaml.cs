@@ -1035,9 +1035,11 @@ public partial class IslandWindow : Window
 
             _ = PlayNoticeAsync(target);
 
+            int seconds = Math.Clamp(ShellServices.Instance.Settings.Current.NotifySeconds, 3, 10);
+
             _noticeTimer = new System.Windows.Threading.DispatcherTimer
             {
-                Interval = TimeSpan.FromSeconds(6),
+                Interval = TimeSpan.FromSeconds(seconds),
             };
             _noticeTimer.Tick += (_, _) => HideNotification();
             _noticeTimer.Start();

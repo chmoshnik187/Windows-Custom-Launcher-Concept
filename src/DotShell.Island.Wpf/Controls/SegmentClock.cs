@@ -80,7 +80,16 @@ public sealed class SegmentClock : FrameworkElement
         double pitch = Math.Min(w / (cellsW + 0.4), h / (DigitH + 0.8));
         if (pitch <= 0.5) return;
 
-        double radius = Math.Max(0.6, pitch * 0.35);
+        // Живость: часы дышат с басом или мерцают редко — по настройке.
+        string liveliness = ShellServices.Instance.Settings.Current.DotLiveliness;
+        double alive = liveliness switch
+        {
+            "bass" => 1 + (DotShell.Core.Audio.AudioSpectrum.Current?.Bass ?? 0f) * 0.45,
+            "rare" => 1 + 0.12 * Math.Sin(DateTime.Now.TimeOfDay.TotalSeconds * 0.8),
+            _ => 1,
+        };
+
+        double radius = Math.Max(0.6, pitch * 0.35 * alive);
         double totalW = cellsW * pitch;
         double totalH = DigitH * pitch;
         double x0 = (w - totalW) / 2;
