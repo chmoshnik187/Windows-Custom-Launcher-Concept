@@ -31,6 +31,12 @@ public static class Program
     /// <summary>--dot-demo: витрина «размер точки и зазор».</summary>
     public static bool OpenDotDemo { get; private set; }
 
+    /// <summary>--software-render: программная отрисовка вместо GPU (диагностика артефактов).</summary>
+    public static bool SoftwareRender { get; private set; }
+
+    /// <summary>--visual-dump: сохранить визуальное дерево окна настроек в файл (отладка).</summary>
+    public static bool VisualDump { get; private set; }
+
     /// <summary>--slider-demo: витрина стилей ползунков и таймлайна.</summary>
     public static bool OpenSliderDemo { get; private set; }
 
@@ -58,6 +64,14 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        // Диагностика артефактов отрисовки: программный режим вместо GPU.
+        if (args.Any(a => a.Equals("--software-render", StringComparison.OrdinalIgnoreCase))
+            || Environment.GetEnvironmentVariable("DOTSHELL_SOFTWARE_RENDER") == "1")
+        {
+            System.Windows.Media.RenderOptions.ProcessRenderMode =
+                System.Windows.Interop.RenderMode.SoftwareOnly;
+        }
+
         // Самопроверка: --selftest. Запускается в CI/перед релизом, ничего не меняет
         // в системе, печатает результат и возвращает код (0 — всё в порядке).
         if (args.Any(a => a.StartsWith("--selftest", StringComparison.OrdinalIgnoreCase)))
@@ -253,6 +267,10 @@ public static class Program
             if (arg.Equals("--slider-demo", StringComparison.OrdinalIgnoreCase)) { OpenSliderDemo = true; continue; }
 
             if (arg.Equals("--dot-demo", StringComparison.OrdinalIgnoreCase)) { OpenDotDemo = true; continue; }
+
+            if (arg.Equals("--visual-dump", StringComparison.OrdinalIgnoreCase)) { VisualDump = true; continue; }
+
+            if (arg.Equals("--software-render", StringComparison.OrdinalIgnoreCase)) { SoftwareRender = true; continue; }
 
             if (arg.StartsWith("--widget=", StringComparison.OrdinalIgnoreCase))
             {

@@ -95,8 +95,10 @@
         </ResourceDictionary>
     </Window.Resources>
 
+    <!-- Фон карточки непрозрачный: сквозь полупрозрачную «материю» острова проступала
+         сжатая строка подписей — читалось как двоящийся текст поверх первого пункта. -->
     <Border x:Name="Card" Margin="16" CornerRadius="16" BorderThickness="1" ClipToBounds="True"
-            Background="{DynamicResource DsBackground}" BorderBrush="{DynamicResource DsBorder}">
+            Background="#0B0B0E" BorderBrush="{DynamicResource DsBorder}">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />

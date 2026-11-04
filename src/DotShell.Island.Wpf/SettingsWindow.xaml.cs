@@ -47,6 +47,8 @@ public partial class SettingsWindow : Window
         // видел числа: «плотность рисунка» или «радиус капсулы» приходилось угадывать.
         Loaded += (_, _) =>
         {
+            if (Program.VisualDump) DumpVisualTree();
+
             // Масштаб интерфейса: содержимое растягивается, окно — пропорционально.
             UiScale.Apply(this, 820, 600);
             AttachSliderValues(this);
@@ -901,5 +903,61 @@ public partial class SettingsWindow : Window
         }
 
         return count;
+    }
+
+    /// <summary>
+    /// Сохранить визуальное дерево окна с координатами: нужно, чтобы найти источник
+    /// «призрачной» строки, которую не видно в логическом дереве.
+    /// </summary>
+    private void DumpVisualTree()
+    {
+        try
+        {
+            var path = System.IO.Path.Combine(AppSettings.SettingsDirectory, "visual-dump.txt");
+            var lines = new List<string>();
+
+            void Walk(DependencyObject node, int depth)
+            {
+                if (depth > 30) return;
+
+                int count = VisualTreeHelper.GetChildrenCount(node);
+
+                for (int i = 0; i < count; i++)
+                {
+                    var child = VisualTreeHelper.GetChild(node, i);
+                    if (child is not FrameworkElement element) { Walk(child, depth + 1); continue; }
+
+                    double x = 0, y = 0;
+                    try
+                    {
+                        var point = element.TranslatePoint(new Point(0, 0), this);
+                        x = point.X;
+                        y = point.Y;
+                    }
+                    catch { }
+
+                    string text = element switch
+                    {
+                        System.Windows.Controls.TextBlock tb => tb.Text,
+                        System.Windows.Controls.ContentControl cc when cc.Content is string s => s,
+                        _ => string.Empty,
+                    };
+
+                    lines.Add($"{depth:00} {element.GetType().Name,-22} x={x,7:0.0} y={y,7:0.0} " +
+                              $"w={element.ActualWidth,6:0.0} h={element.ActualHeight,6:0.0} " +
+                              $"{element.Visibility,-9} {(string.IsNullOrEmpty(text) ? "" : $"«{text}»")}");
+
+                    Walk(element, depth + 1);
+                }
+            }
+
+            Walk(this, 0);
+            System.IO.File.WriteAllLines(path, lines);
+            Log.Info($"visual dump: {lines.Count} строк -> {path}");
+        }
+        catch (Exception ex)
+        {
+            Log.Info($"visual dump не удался: {ex.Message}");
+        }
     }
 }
