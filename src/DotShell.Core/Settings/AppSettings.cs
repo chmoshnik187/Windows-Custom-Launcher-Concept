@@ -176,6 +176,9 @@ public sealed class AppSettings
     /// <summary>Масштаб интерфейса для окон (настройки, обзор, центр управления), 0.8–1.4.</summary>
     public double InterfaceScale { get; set; } = 1.0;
 
+    /// <summary>Яркость экрана через гамму: 0.3–1.0 (1.0 — как есть).</summary>
+    public double ScreenBrightness { get; set; } = 1.0;
+
     /// <summary>Показывать док слева при старте.</summary>
     public bool DockEnabled { get; set; }
 

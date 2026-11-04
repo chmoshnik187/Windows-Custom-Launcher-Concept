@@ -125,6 +125,41 @@ public sealed class ControlCenterWindow : Window
         power.Children.Add(Chip("ВЫЙТИ", () => Application.Current.Shutdown()));
         root.Children.Add(power);
 
+        // --- яркость ---
+        root.Children.Add(Section("ЯРКОСТЬ"));
+
+        var brightnessValue = new TextBlock
+        {
+            FontFamily = new FontFamily("Bahnschrift"),
+            FontSize = 22,
+            Foreground = new SolidColorBrush(ColorPalette.Accent),
+            Margin = new Thickness(0, 0, 0, 6),
+        };
+        root.Children.Add(brightnessValue);
+
+        var brightnessBar = new DotSeekBar
+        {
+            Variant = ShellServices.Instance.Settings.Current.SliderStyle,
+            Height = 26,
+            ShowTimeHint = false,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+
+        double initial = Math.Clamp(ShellServices.Instance.Settings.Current.ScreenBrightness, 0.3, 1.0);
+        brightnessBar.Value = (initial - 0.3) / 0.7 * 100;
+        brightnessValue.Text = $"{initial * 100:0}%";
+
+        brightnessBar.SeekRequested += fraction =>
+        {
+            // 0 % ползунка = 30 % гаммы: полностью чёрный экран — не «яркость», а поломка.
+            double value = 0.3 + Math.Clamp(fraction, 0, 1) * 0.7;
+            DotShell.Core.Native.DisplayBrightness.Set(value);
+
+            brightnessValue.Text = $"{value * 100:0}%";
+            ShellServices.Instance.Settings.Update(s => s.ScreenBrightness = value);
+        };
+        root.Children.Add(brightnessBar);
+
         // Показатели системы: раньше центр управления показывал только громкость,
         // и «сколько RAM занято» приходилось смотреть в другом месте.
         root.Children.Add(Section("СИСТЕМА"));
@@ -176,6 +211,10 @@ public sealed class ControlCenterWindow : Window
         Closed += (_, _) =>
         {
             _statsTimer.Stop();
+
+            // Гамму возвращаем, чтобы не оставить рабочий стол тёмным.
+            DotShell.Core.Native.DisplayBrightness.Set(
+                Math.Clamp(ShellServices.Instance.Settings.Current.ScreenBrightness, 0.3, 1.0));
             try { _volume.Dispose(); } catch { }
             if (ReferenceEquals(_open, this)) _open = null;
         };

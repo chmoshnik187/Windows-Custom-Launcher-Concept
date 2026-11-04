@@ -291,6 +291,8 @@ public partial class IslandWindow : Window
         // и остров оставался в координатах старого экрана.
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged += (_, _) =>
             Dispatcher.BeginInvoke(OnDisplayChanged);
+        Closed += (_, _) => DotShell.Core.Native.DisplayBrightness.Restore();
+
         Closed += (_, _) => { _tickTimer.Stop(); _topmostWatchdog.Stop(); _pinHotkeys?.Dispose(); _tray?.Dispose(); };
 
         // Перетаскивание: подписываемся вручную (а не в XAML), чтобы контролировать
@@ -652,6 +654,13 @@ public partial class IslandWindow : Window
         if (Program.OpenControlCenter)
         {
             Dispatcher.BeginInvoke(() => ControlCenterWindow.Toggle());
+        }
+
+        // Яркость из прошлого запуска.
+        double savedBrightness = Math.Clamp(ShellServices.Instance.Settings.Current.ScreenBrightness, 0.3, 1.0);
+        if (savedBrightness < 0.99)
+        {
+            DotShell.Core.Native.DisplayBrightness.Set(savedBrightness);
         }
 
         // Док слева: либо по флагу, либо потому что был включён в прошлый раз.
