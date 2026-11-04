@@ -211,7 +211,9 @@ public sealed class PlayerStrip : Grid
             SourceFontSize = 32,
             CellSize = 2,
             Gap = 1,
-            FixedColumns = 90,
+            // Колонки считаются по длине строки в SetTrack: при жёстких 90
+            // названия короче «РАЗБИВАЙ М» обрезались на середине слова.
+            FixedColumns = 24,
             Height = 50,
             DotColor = ColorPalette.Accent,
             GhostColor = Colors.Transparent,
@@ -582,7 +584,12 @@ public sealed class PlayerStrip : Grid
 
         if (_dots is not null)
         {
-            _dots.Text = string.IsNullOrWhiteSpace(_media.Title) ? "НЕТ ТРЕКА" : _media.Title.ToUpperInvariant();
+            var title = string.IsNullOrWhiteSpace(_media.Title) ? "НЕТ ТРЕКА" : _media.Title.ToUpperInvariant();
+            _dots.Text = title;
+
+            // Колонки по фактической длине: иначе фиксированные 90 режут короткие
+            // названия на середине слова, а длинные вылезают за блок.
+            _dots.FixedColumns = DotColumnsFor(title, _dots.SourceFontSize);
             _dots.RequestRender();
         }
 
