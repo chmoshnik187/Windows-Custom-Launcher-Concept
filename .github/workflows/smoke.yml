@@ -1,0 +1,56 @@
+name: smoke
+
+# Проверка сборки на каждый пуш и пулл-реквест: собираем exe, гоняем самопроверку,
+# ищем FATAL в логе. Раньше это делалось только руками, и регрессия могла уехать в
+# релиз — ровно так и случилось с кнопками на главной.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: dotshell
+
+    steps:
+      - name: Забрать код
+        uses: actions/checkout@v4
+
+      - name: Поставить .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Проверить, что версия в props читается
+        shell: pwsh
+        run: |
+          [xml]$props = Get-Content Directory.Build.props
+          $version = $props.Project.PropertyGroup.Version
+          Write-Host "версия проекта: $version"
+          if (-not $version) { throw "в Directory.Build.props нет Version" }
+
+      - name: Собрать
+        shell: pwsh
+        run: dotnet build src/DotShell.Island.Wpf/DotShell.Island.Wpf.csproj -c Release -v q --nologo
+
+      - name: Прогнать smoke-тест
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/smoke.ps1 -SkipBuild
+
+      - name: Показать лог, если что-то упало
+        if: failure()
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:LOCALAPPDATA 'DotShell\crash.log'
+          if (Test-Path $log) {
+            Write-Host '--- последние строки crash.log ---'
+            Get-Content $log -Tail 60
+          } else {
+            Write-Host 'crash.log не создан'
+          }
