@@ -98,6 +98,17 @@ public sealed partial class WidgetWindow
         // ContextMenu в этом окне перехватывало меню окна («Убрать виджет»).
         root.MouseRightButtonUp += (_, e) => OpenMenu(menu, root, e);
 
+        // Полоска: только значки, без шапки «ТРЕЙ» и счётчика — в 46 px шапка съедает
+        // половину высоты, а значки и есть ответ. Маленький: шапка возвращается.
+        _relayout = (w, h) =>
+        {
+            var size = WidgetAdaptive.Of(w, h);
+            head.Visibility = size == WidgetSizeClass.Strip ? Visibility.Collapsed : Visibility.Visible;
+            tiles.Margin = size == WidgetSizeClass.Strip
+                ? new Thickness(4, 2, 4, 2)
+                : new Thickness(6, 2, 6, 6);
+        };
+
         return root;
     }
 

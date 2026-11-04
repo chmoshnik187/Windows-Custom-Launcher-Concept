@@ -1014,6 +1014,19 @@ public sealed partial class WidgetWindow
         body.Children.Add(left);
         body.Children.Add(right);
 
+        // Узкому виджету колонка устройств не нужна: остаётся список приложений,
+        // в котором и так видно, куда что играет через подпись устройства.
+        _relayout = (w, h) =>
+        {
+            var size = WidgetAdaptive.Of(w, h);
+            right.Visibility = size >= WidgetSizeClass.Normal && w >= 300
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            body.Orientation = size >= WidgetSizeClass.Normal && w >= 300
+                ? Orientation.Horizontal
+                : Orientation.Vertical;
+        };
+
         RedrawApps();
         RedrawDevices();
 
