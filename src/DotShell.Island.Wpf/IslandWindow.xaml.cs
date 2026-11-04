@@ -1044,6 +1044,11 @@ public partial class IslandWindow : Window
 
     private void ExpandAndGoToTab(string tag)
     {
+        // Неизвестный тег (например, `--tab=media`: такой вкладки нет) раньше доезжал
+        // до ApplyTabSize, размер брался по умолчанию, и домашняя страница обрезалась
+        // поперёк плиток — выглядело как ряд пустых прямоугольников.
+        if (!TabSizes.ContainsKey(tag)) tag = "home";
+
         Expand();
 
         // Вкладки лежат внутри StackPanel, а не прямо в TabsRow: раньше здесь
