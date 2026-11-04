@@ -35,6 +35,12 @@ public sealed class MediaBridge : INotifyPropertyChanged, IAsyncDisposable
     private bool _isPlaying;
     private bool _hasSession;
     private TimeSpan _position;
+    // SMTC присылает позицию редко (некоторые плееры — раз в секунду, некоторые
+    // только при смене трека). Поэтому храним «якорь» и считаем позицию сами:
+    // иначе ползунок стоит на месте, а музыка играет.
+    private TimeSpan _anchorPosition;
+    private TimeSpan _lastReported;
+    private DateTime _anchorStamp = DateTime.MinValue;
     private TimeSpan _duration;
     private byte[]? _artworkBytes;
 
@@ -51,6 +57,23 @@ public sealed class MediaBridge : INotifyPropertyChanged, IAsyncDisposable
     public bool HasSession { get => _hasSession; private set => Set(ref _hasSession, value); }
 
     public TimeSpan Position { get => _position; private set => Set(ref _position, value); }
+
+    /// <summary>
+    /// Позиция с учётом времени, прошедшего с последнего ответа плеера. Это то,
+    /// что должно показывать ползунок и часы: настоящее «сейчас», а не снимок.
+    /// </summary>
+    public TimeSpan LivePosition
+    {
+        get
+        {
+            if (!IsPlaying || _anchorStamp == DateTime.MinValue) return _position;
+
+            var position = _anchorPosition + (DateTime.UtcNow - _anchorStamp);
+            if (position < TimeSpan.Zero) position = TimeSpan.Zero;
+            if (Duration > TimeSpan.Zero && position > Duration) position = Duration;
+            return position;
+        }
+    }
     public TimeSpan Duration { get => _duration; private set => Set(ref _duration, value); }
 
     /// <summary>Сырые байты обложки (обычно JPEG/PNG). null, если обложки нет.</summary>
@@ -142,7 +165,7 @@ public sealed class MediaBridge : INotifyPropertyChanged, IAsyncDisposable
         IsPlaying = info?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
 
         var timeline = _session.GetTimelineProperties();
-        Position = timeline.Position;
+        Anchor(timeline.Position);
         Duration = timeline.EndTime;
     }
 
@@ -162,7 +185,7 @@ public sealed class MediaBridge : INotifyPropertyChanged, IAsyncDisposable
             ArtworkBytes = await ReadThumbnailAsync(props.Thumbnail);
 
             var timeline = _session.GetTimelineProperties();
-            Position = timeline.Position;
+            Anchor(timeline.Position);
             Duration = timeline.EndTime;
             IsPlaying = _session.GetPlaybackInfo()?.PlaybackStatus ==
                         GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
@@ -214,15 +237,30 @@ public sealed class MediaBridge : INotifyPropertyChanged, IAsyncDisposable
     {
         if (_session is null) return;
         try { await _session.TryChangePlaybackPositionAsync(to.Ticks); } catch { }
-        Position = to;
+        Anchor(to);
     }
 
     /// <summary>Таймер в UI может дёргать это раз в секунду, чтобы ползунок ехал.</summary>
     public void Tick()
     {
         if (_session is null || !IsPlaying || Duration == TimeSpan.Zero) return;
+
         var timeline = _session.GetTimelineProperties();
-        Position = timeline.Position;
+
+        // Часть плееров (например, Dotify) отдаёт позицию 0 всё время, пока играет.
+        // Сравнивать с расчётной позицией нельзя: тогда мы будем обнулять счётчик
+        // каждую секунду и ползунок будет вечно стоять на нуле. Поэтому реагируем
+        // только на ИЗМЕНЕНИЕ того, что прислал плеер.
+        if ((timeline.Position - _lastReported).Duration() > TimeSpan.FromMilliseconds(500))
+            Anchor(timeline.Position);
+    }
+
+    private void Anchor(TimeSpan position)
+    {
+        _anchorPosition = position;
+        _lastReported = position;
+        _anchorStamp = DateTime.UtcNow;
+        Position = position;
     }
 
     private void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)

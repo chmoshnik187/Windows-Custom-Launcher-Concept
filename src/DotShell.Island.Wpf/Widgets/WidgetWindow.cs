@@ -740,7 +740,7 @@ public sealed partial class WidgetWindow : Window
         Timer(500, () =>
         {
             double total = media.Duration.TotalSeconds;
-            double now = media.Position.TotalSeconds;
+            double now = media.LivePosition.TotalSeconds;
             double percent = total > 0 ? Math.Clamp(now / total * 100, 0, 100) : 0;
 
             pillBar.Value = percent;
@@ -751,7 +751,7 @@ public sealed partial class WidgetWindow : Window
                 ? t.ToString(@"h\:mm\:ss")
                 : t.ToString(@"m\:ss");
 
-            string times = total > 0 ? $"{Fmt(media.Position)} / {Fmt(media.Duration)}" : string.Empty;
+            string times = total > 0 ? $"{Fmt(media.LivePosition)} / {Fmt(media.Duration)}" : string.Empty;
             cardTimes.Text = times;
             coverTimes.Text = times;
         });

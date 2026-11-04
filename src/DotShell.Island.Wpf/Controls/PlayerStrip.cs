@@ -659,11 +659,13 @@ public sealed class PlayerStrip : Grid
         if (_progress is null) return;
 
         double total = _media.Duration.TotalSeconds;
-        double now = _media.Position.TotalSeconds;
+        double now = _media.LivePosition.TotalSeconds;
         _progress.Value = total > 0 ? Math.Clamp(now / total * 100, 0, 100) : 0;
+        _progress.Duration = _media.Duration;
+
 
         if (_clock is not null)
-            _clock.Text = total > 0 ? $"{Format(_media.Position)} / {Format(_media.Duration)}" : string.Empty;
+            _clock.Text = total > 0 ? $"{Format(_media.LivePosition)} / {Format(_media.Duration)}" : string.Empty;
 
         static string Format(TimeSpan t) => t.TotalHours >= 1
             ? t.ToString(@"h\:mm\:ss")

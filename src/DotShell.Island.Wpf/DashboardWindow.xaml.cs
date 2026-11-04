@@ -212,7 +212,7 @@ public partial class DashboardWindow : Window
         MediaAlbum.Text = string.IsNullOrWhiteSpace(media.Album) ? media.SourceApp : media.Album;
         PlayPause.Text = media.IsPlaying ? "❚❚" : "▶";
 
-        ProgressText.Text = $"{Format(media.Position)} / {Format(media.Duration)}";
+        ProgressText.Text = $"{Format(media.LivePosition)} / {Format(media.Duration)}";
 
         if (media.ArtworkBytes is { Length: > 0 } bytes)
         {

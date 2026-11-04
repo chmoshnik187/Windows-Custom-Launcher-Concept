@@ -2,6 +2,7 @@ namespace DotShell.Island.Wpf.Controls;
 
 using System.Windows;
 using System.Windows.Media;
+using DotShell.Core.Audio;
 using System.Windows.Threading;
 
 /// <summary>
@@ -75,6 +76,7 @@ public sealed class IslandBackdrop : FrameworkElement
         };
 
         ColorPalette.PaletteChanged += () => Dispatcher.BeginInvoke(InvalidateVisual);
+        Loaded += (_, _) => StartPulseLoop();
         SizeChanged += (_, _) => InvalidateVisual();
         Unloaded += (_, _) => _timer.Stop();
         Loaded += (_, _) => SyncTimer();
@@ -87,13 +89,42 @@ public sealed class IslandBackdrop : FrameworkElement
         else if (!animate && _timer.IsEnabled) _timer.Stop();
     }
 
+    // Дыхание под музыку: нижние полосы спектра двигают яркость рисунка.
+    // Тема остаётся темой, меняется только её интенсивность — как индикатор
+    // уровня в железе, а не «цветомузыка».
+    private EventHandler? _pulseFrame;
+    private DateTime _lastPulse = DateTime.MinValue;
+
+    /// <summary>Реагировать ли яркостью на низкие частоты.</summary>
+    public bool PulseWithAudio { get; set; } = true;
+
+    private void StartPulseLoop()
+    {
+        if (_pulseFrame is not null) return;
+
+        _pulseFrame = (_, _) =>
+        {
+            if (!PulseWithAudio) return;
+            if (DateTime.UtcNow - _lastPulse < TimeSpan.FromMilliseconds(33)) return;
+            _lastPulse = DateTime.UtcNow;
+
+            if (AudioSpectrum.Current is { Bass: > 0.01f }) InvalidateVisual();
+        };
+
+        System.Windows.Media.CompositionTarget.Rendering += _pulseFrame;
+    }
+
     protected override void OnRender(DrawingContext dc)
     {
+        // Яркость рисунка пляшет с басом: 1.0 в тишине, до ~1.8 на ударе.
+        double bass = AudioSpectrum.Current?.Bass ?? 0f;
+        double strength = Math.Min(1.8, _strength * (1 + bass * 0.75));
+
         if (ActualWidth < 8 || ActualHeight < 8) return;
         // В высококонтрастной теме Windows любой рисунок только мешает читать текст.
         if (SystemParameters.HighContrast) return;
 
-        if (_style == "none" || _strength <= 0.01) return;
+        if (_style == "none" || strength <= 0.01) return;
 
         var accent = ColorPalette.Accent;
         var rect = new Rect(0, 0, ActualWidth, ActualHeight);
@@ -103,8 +134,8 @@ public sealed class IslandBackdrop : FrameworkElement
         // Базовая «материя»: мягкое свечение сверху. Даже без рисунка она
         // убирает ощущение крашеного в чёрный прямоугольника.
         var wash = new LinearGradientBrush(
-            WithAlpha(accent, (byte)(14 * _strength)),
-            WithAlpha(accent, (byte)(4 * _strength)),
+            WithAlpha(accent, (byte)(14 * strength)),
+            WithAlpha(accent, (byte)(4 * strength)),
             90);
         wash.Freeze();
         dc.DrawRectangle(wash, null, rect);

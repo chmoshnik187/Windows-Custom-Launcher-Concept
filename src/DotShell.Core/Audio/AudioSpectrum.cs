@@ -57,6 +57,12 @@ public sealed class AudioSpectrum : IDisposable
     /// <summary>В системе сейчас что-то звучит (порог по громкости с удержанием).</summary>
     public bool HasSignal => _hasSignal;
 
+    /// <summary>
+    /// Нижние полосы (бас и бочка) одной величиной 0..1. По ней дышит акцент:
+    /// визуализация в пилюле уже есть, а тема на музыку не реагировала.
+    /// </summary>
+    public float Bass { get; private set; }
+
     /// <summary>Почему захват не стартовал (null = всё хорошо).</summary>
     public string? Error { get; private set; }
 
@@ -304,6 +310,14 @@ public sealed class AudioSpectrum : IDisposable
         }
 
         _levels = _smooth; // подмена ссылки: читатели видят согласованный снимок
+
+        float low = 0;
+        int lowCount = Math.Min(6, _smooth.Length);
+        for (int i = 0; i < lowCount; i++) low += _smooth[i];
+        low /= Math.Max(1, lowCount);
+
+        // Быстро вверх, медленно вниз: так «удар» виден, а дрожание не мешает.
+        Bass = low > Bass ? low : Bass * 0.86f;
     }
 
     public void Dispose()
