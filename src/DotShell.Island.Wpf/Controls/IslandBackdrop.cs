@@ -93,6 +93,9 @@ public sealed class IslandBackdrop : FrameworkElement
     // Тема остаётся темой, меняется только её интенсивность — как индикатор
     // уровня в железе, а не «цветомузыка».
     private EventHandler? _pulseFrame;
+
+    /// <summary>Бас текущего кадра с учётом настройки: 0 — реакции нет.</summary>
+    private double _liveBass;
     private DateTime _lastPulse = DateTime.MinValue;
 
     /// <summary>Реагировать ли яркостью на низкие частоты.</summary>
@@ -120,7 +123,12 @@ public sealed class IslandBackdrop : FrameworkElement
         // и даже на максимуме не поднимает яркость выше ~1.35 — текст важнее.
         double bass = AudioSpectrum.Current?.Bass ?? 0f;
         double sensitivity = Math.Clamp(ShellServices.Instance.Settings.Current.BassVisualization, 0, 1);
-        double strength = Math.Min(1.35, _strength * (1 + bass * sensitivity * 0.5));
+
+        // Один множитель на весь кадр: его читают все рисунки — волны, топо, лучи,
+        // аврора, сетка и точки. Раньше бас был только у точек.
+        _liveBass = bass * sensitivity;
+
+        double strength = Math.Min(1.35, _strength * (1 + _liveBass * 0.5));
 
         if (ActualWidth < 8 || ActualHeight < 8) return;
         // В высококонтрастной теме Windows любой рисунок только мешает читать текст.
@@ -168,9 +176,12 @@ public sealed class IslandBackdrop : FrameworkElement
         {
             double t = (double)i / Math.Max(1, lines - 1);
             double baseY = h * (0.22 + t * 0.74);
-            double amp = 2.5 + t * 7;
+            // Бас поднимает и амплитуду, и яркость линии: волны «набухают» на ударе.
+            double boost = 1 + _liveBass * 1.4;
+            double amp = (2.5 + t * 7) * boost;
 
-            var pen = new Pen(new SolidColorBrush(WithAlpha(accent, (byte)(58 * _strength * (0.45 + t * 0.55)))), 1);
+            var pen = new Pen(new SolidColorBrush(WithAlpha(accent,
+                (byte)Math.Clamp(_strength * (0.45 + t * 0.55) * (58 + _liveBass * 54), 0, 255))), 1);
             pen.Freeze();
 
             var geo = new StreamGeometry();
@@ -206,7 +217,8 @@ public sealed class IslandBackdrop : FrameworkElement
         {
             double radius = ring * unit;
             var pen = new Pen(
-                new SolidColorBrush(WithAlpha(accent, (byte)(58 * _strength * (1.05 - ring * 0.1)))),
+                new SolidColorBrush(WithAlpha(accent,
+                    (byte)Math.Clamp(_strength * (1.05 - ring * 0.1) * (58 + _liveBass * 46), 0, 255))),
                 1);
             pen.Freeze();
 
@@ -216,8 +228,9 @@ public sealed class IslandBackdrop : FrameworkElement
                 for (int step = 0; step <= 64; step++)
                 {
                     double angle = step / 64.0 * Math.PI * 2;
-                    double wobble = 1
-                        + 0.14 * Math.Sin(angle * 3 + ring * 0.9)
+                    // Бас «дышит» кольцами: контур сильнее гуляет и слегка раздувается.
+                    double wobble = 1 + _liveBass * 0.10
+                        + (0.14 + _liveBass * 0.10) * Math.Sin(angle * 3 + ring * 0.9 + _phase * _liveBass * 2)
                         + 0.07 * Math.Sin(angle * 5 - ring * 1.7);
                     var point = new Point(
                         center.X + Math.Cos(angle) * radius * wobble * 1.5,
@@ -243,11 +256,12 @@ public sealed class IslandBackdrop : FrameworkElement
         for (int i = 0; i < 5; i++)
         {
             double offset = (i * w / 5.0 + _phase * 9) % (w + h) - h;
-            double width = 14 + i * 4;
+            // Луч на ударе шире и ярче — как вспышка прожектора.
+            double width = (14 + i * 4) * (1 + _liveBass * 0.9);
 
             var brush = new LinearGradientBrush(
                 WithAlpha(accent, 0),
-                WithAlpha(accent, (byte)(34 * _strength)),
+                WithAlpha(accent, (byte)Math.Clamp(_strength * (34 + _liveBass * 60), 0, 255)),
                 new Point(0, 0),
                 new Point(1, 0));
             brush.Freeze();
@@ -282,9 +296,12 @@ public sealed class IslandBackdrop : FrameworkElement
             dc.DrawEllipse(brush, null, new Point(cx, cy), radius, radius * 0.8);
         }
 
-        double drift = Math.Sin(_phase * 0.7) * w * 0.05;
-        Blob(w * 0.25 + drift, h * 0.15, Math.Max(w, h) * 0.5, 52);
-        Blob(w * 0.8 - drift, h * 0.85, Math.Max(w, h) * 0.42, 40);
+        // Бас ускоряет дрейф и раздувает пятна.
+        double drift = Math.Sin(_phase * (0.7 + _liveBass * 1.2)) * w * (0.05 + _liveBass * 0.03);
+        double grow = 1 + _liveBass * 0.18;
+
+        Blob(w * 0.25 + drift, h * 0.15, Math.Max(w, h) * 0.5 * grow, 52 + _liveBass * 44);
+        Blob(w * 0.8 - drift, h * 0.85, Math.Max(w, h) * 0.42 * grow, 40 + _liveBass * 34);
     }
 
     // ------------------------------------------------------------------
@@ -359,9 +376,21 @@ public sealed class IslandBackdrop : FrameworkElement
 
         // Прозрачность задаём слоем, чтобы не пересобирать сетку на каждый тик,
         // а бас поднимает и яркость, и масштаб — сетка «дышит» целиком.
-        float gridBass = AudioSpectrum.Current?.Bass ?? 0f;
-        dc.PushOpacity(Math.Min(1, 0.42 * _strength + gridBass * 0.35));
-        dc.DrawDrawing(_cachedGrid);
+        // Сетка не только ярче: на ударе она слегка раздувается от центра.
+        dc.PushOpacity(Math.Min(1, 0.42 * _strength + _liveBass * 0.30));
+
+        if (_liveBass > 0.02)
+        {
+            double grow = 1 + _liveBass * 0.06;
+            dc.PushTransform(new ScaleTransform(grow, grow, rect.Width / 2, rect.Height / 2));
+            dc.DrawDrawing(_cachedGrid);
+            dc.Pop();
+        }
+        else
+        {
+            dc.DrawDrawing(_cachedGrid);
+        }
+
         dc.Pop();
     }
 

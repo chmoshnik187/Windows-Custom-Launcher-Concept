@@ -551,6 +551,11 @@ public partial class IslandWindow : Window
             Dispatcher.BeginInvoke(() => new SliderDemoWindow().Show());
         }
 
+        if (Program.OpenDotDemo)
+        {
+            Dispatcher.BeginInvoke(() => new DotDemoWindow().Show());
+        }
+
         if (Program.OpenWidgetType is { } widgetType)
         {
             Dispatcher.BeginInvoke(() =>
@@ -1579,6 +1584,30 @@ public partial class IslandWindow : Window
             new DoubleAnimation(1, TimeSpan.FromMilliseconds(160)));
 
         _visibleTab = next;
+
+        // Guard: 300 ms after a switch everything except the active tab must be
+        // hidden. Otherwise a fast switch leaves the previous tab as a translucent
+        // ghost above the new one.
+        var guard = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(300),
+        };
+        guard.Tick += (_, _) =>
+        {
+            guard.Stop();
+
+            foreach (var tab in all)
+            {
+                if (ReferenceEquals(tab, _visibleTab)) continue;
+                if (tab.Visibility != Visibility.Visible) continue;
+
+                tab.BeginAnimation(OpacityProperty, null);
+                tab.Opacity = 1;
+                tab.Visibility = Visibility.Collapsed;
+                tab.IsHitTestVisible = true;
+            }
+        };
+        guard.Start();
 
         if (tag == "chat") _ = CheckOllamaAsync();
         if (tag == "notes") Dispatcher.BeginInvoke(() => UpdateNotesHeight(false));
