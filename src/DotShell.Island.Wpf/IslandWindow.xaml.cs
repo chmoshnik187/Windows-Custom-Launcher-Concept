@@ -250,6 +250,8 @@ public partial class IslandWindow : Window
         // Раньше метод был ни к чему не привязан, и помогало только нажатие.
         Pill.MouseEnter += (_, _) => OnQuietHover();
 
+        Pill.MouseLeftButtonDown += OnPillDoubleDown;
+
         Loaded += (_, _) => { if (Program.OpenSettingsOnStart) OpenSettings(); };
         Loaded += (_, _) => ApplyCapsuleGeometry();
 
@@ -1646,9 +1648,21 @@ public partial class IslandWindow : Window
     // возвращает false — и остров сворачивался вместо действия кнопки.
     private bool _pressWasInteractive;
 
+    /// <summary>После двойного клика (Down свернул) Up не должен раскрывать обратно.</summary>
+    private bool _suppressNextPillClick;
+
     private void OnPillClick(object sender, MouseButtonEventArgs e)
     {
         if (_dragMoved) return;              // это было перетаскивание
+
+        // Up после двойного Down: остров уже свёрнут, раскрывать обратно нельзя.
+        // ClickCount у Up почти всегда 1, поэтому опираемся на флаг, а не на счётчик.
+        if (_suppressNextPillClick)
+        {
+            _suppressNextPillClick = false;
+            return;
+        }
+
 
         if (_pressWasInteractive)
         {
@@ -1684,6 +1698,23 @@ public partial class IslandWindow : Window
                 ToggleExpanded();
                 break;
         }
+    }
+
+    /// <summary>
+    /// Двойной клик по пустому месту раскрытого острова сворачивает его.
+    ///
+    /// Ловим на MouseDown: у MouseUp ClickCount почти всегда 1, поэтому проверка
+    /// в OnPillClick не срабатывала (проверено тестом — остров оставался раскрытым).
+    /// </summary>
+    private void OnPillDoubleDown(object sender, MouseButtonEventArgs e)
+    {
+        if (!_isExpanded) return;
+        if (e.ClickCount < 2) return;
+        if (IsInteractive(e.OriginalSource as DependencyObject)) return;
+
+        _suppressNextPillClick = true;
+        Collapse();
+        e.Handled = true;
     }
 
     private void OnPillRightClick(object sender, MouseButtonEventArgs e)
