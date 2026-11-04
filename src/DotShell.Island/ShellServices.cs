@@ -30,6 +30,9 @@ public sealed class ShellServices : IAsyncDisposable
     public MediaBridge Media { get; }
     public WindowWatcher WindowWatcher { get; }
     public AccentSampler AccentSampler { get; }
+
+    /// <summary>Закреплённые программы и группы: нужны доку и лаунчеру.</summary>
+    public PinnedStore Pinned { get; }
     public SystemStats Stats { get; }
 
     /// <summary>HWND окон, которые сэмплер цвета должен игнорировать (иначе цвет закольцуется сам на себя).</summary>

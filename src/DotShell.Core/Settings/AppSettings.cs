@@ -173,6 +173,9 @@ public sealed class AppSettings
     /// <summary>Кромка, к которой прилипает остров: top или bottom.</summary>
     public string IslandEdge { get; set; } = "top";
 
+    /// <summary>Показывать док слева при старте.</summary>
+    public bool DockEnabled { get; set; }
+
     /// <summary>Радиус капсулы: 0 — прямоугольник, 23 — «таблетка».</summary>
     public int IslandRadius { get; set; } = 23;
 

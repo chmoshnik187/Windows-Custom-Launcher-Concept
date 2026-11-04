@@ -34,6 +34,9 @@ public static class Program
     /// <summary>--slider-demo: витрина стилей ползунков и таймлайна.</summary>
     public static bool OpenSliderDemo { get; private set; }
 
+    /// <summary>--dock: показать док слева при старте.</summary>
+    public static bool OpenDock { get; private set; }
+
     /// <summary>--control-center: открыть центр управления при старте.</summary>
     public static bool OpenControlCenter { get; private set; }
 
@@ -244,6 +247,8 @@ public static class Program
             if (arg.Equals("--dashboard", StringComparison.OrdinalIgnoreCase)) { OpenDashboard = true; continue; }
 
             if (arg.Equals("--control-center", StringComparison.OrdinalIgnoreCase)) { OpenControlCenter = true; continue; }
+
+            if (arg.Equals("--dock", StringComparison.OrdinalIgnoreCase)) { OpenDock = true; continue; }
 
             if (arg.Equals("--slider-demo", StringComparison.OrdinalIgnoreCase)) { OpenSliderDemo = true; continue; }
 
