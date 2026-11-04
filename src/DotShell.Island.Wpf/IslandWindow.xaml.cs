@@ -52,6 +52,23 @@ public partial class IslandWindow : Window
     /// </summary>
     private System.Windows.Threading.DispatcherTimer? _autoHideTimer;
 
+    /// <summary>Таймер автоскрытия: подписка на тик живёт вместе с окном, а не с каждым раскрытием.</summary>
+    private System.Windows.Threading.DispatcherTimer CreateAutoHideTimer()
+    {
+        var timer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(30),
+        };
+
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            if (_isExpanded && !IsMouseOver) Collapse();
+        };
+
+        return timer;
+    }
+
     private static double CollapsedHeight =>
         Math.Clamp(ShellServices.Instance.Settings.Current.CollapsedHeight, 36, 64);
     private const double ExpandedWidth = 640;   // 620 содержимое + поля
@@ -968,17 +985,10 @@ public partial class IslandWindow : Window
 
         if (ShellServices.Instance.Settings.Current.AutoHide == "timer")
         {
-            _autoHideTimer ??= new System.Windows.Threading.DispatcherTimer
-            {
-                Interval = TimeSpan.FromSeconds(30),
-            };
-
-            _autoHideTimer.Tick += (_, _) =>
-            {
-                _autoHideTimer?.Stop();
-                if (_isExpanded && !IsMouseOver) Collapse();
-            };
-
+            // Обработчик подписывается ОДИН раз в конструкторе. Раньше += стоял здесь,
+            // и каждый Expand добавлял ещё одну подписку: таймер срабатывал N раз за
+            // тик, а старые обработчики держали окно в памяти.
+            _autoHideTimer ??= CreateAutoHideTimer();
             _autoHideTimer.Start();
         }
     }
@@ -1242,7 +1252,10 @@ public partial class IslandWindow : Window
 
         Pill.Width = QuietWidth;
         Pill.Height = QuietHeight;
-        Pill.CornerRadius = new CornerRadius(3);
+        // В тихом режиме капсула становится почти прямоугольной, но не спорит с
+        // настройкой: если радиус меньше 3, оставляем настройку.
+        double quietRadius = Math.Min(ShellServices.Instance.Settings.Current.IslandRadius, 3);
+        Pill.CornerRadius = new CornerRadius(quietRadius);
         Pill.Opacity = 0.9;
 
         // Окно подгоняем вручную: ResizeWindowTo держит минимальную ширину пилюли.
@@ -1261,11 +1274,13 @@ public partial class IslandWindow : Window
         QuietLine.Visibility = Visibility.Collapsed;
 
         Pill.Width = CollapsedWidth;
-        Pill.Height = CollapsedHeight;
-        Pill.CornerRadius = new CornerRadius(23);
         Pill.Opacity = 1;
 
-        ResizeWindowTo(CollapsedWidth, CollapsedHeight);
+        // Возвращаем геометрию из настроек, а не «как было зашито»: раньше здесь
+        // стоял радиус 23 и высота 46, и после выхода из «не мешать» остров
+        // переставал соответствовать настройкам (радиус 4 «прыгал» на 23).
+        ApplyCapsuleGeometry();
+        ResizeWindowTo(CollapsedWidth, Pill.Height);
     }
 
     /// <summary>Наведение на полоску: показать остров и не сжиматься, пока курсор рядом.</summary>
