@@ -200,8 +200,14 @@ public sealed partial class WidgetWindow
         rescan.Click += (_, _) => Rescan();
         buttons.Children.Add(rescan);
 
+        var caption = new TextBlock
+        {
+            Style = (Style)FindResource("WSub"),
+            Text = "ЗАШЛАКОВАННОСТЬ",
+        };
+
         var panel = new StackPanel();
-        panel.Children.Add(new TextBlock { Style = (Style)FindResource("WSub"), Text = "ЗАШЛАКОВАННОСТЬ" });
+        panel.Children.Add(caption);
         panel.Children.Add(total);
         panel.Children.Add(detail);
         panel.Children.Add(buttons);
@@ -211,7 +217,23 @@ public sealed partial class WidgetWindow
         Rescan();
         Timer(300, Rescan);
 
-        _relayout = (_, h) => breakdown.Visibility = h >= 210 ? Visibility.Visible : Visibility.Collapsed;
+        // Композиция по размеру: полоска — только цифра, маленький — цифра и
+        // кнопки, большой — плюс разбивка по зонам. Раньше пряталась одна разбивка,
+        // и на полоске оставались кнопки, которые некуда нажать.
+        _relayout = (w, h) =>
+        {
+            var size = WidgetAdaptive.Of(w, h);
+
+            // На полоске видна только цифра: подпись и размер занимают её место.
+            caption.Visibility = size == WidgetSizeClass.Strip ? Visibility.Collapsed : Visibility.Visible;
+            total.Visibility = Visibility.Visible;
+            detail.Visibility = size == WidgetSizeClass.Strip ? Visibility.Collapsed : Visibility.Visible;
+            buttons.Visibility = size >= WidgetSizeClass.Normal ? Visibility.Visible : Visibility.Collapsed;
+            status.Visibility = size >= WidgetSizeClass.Normal ? Visibility.Visible : Visibility.Collapsed;
+            breakdown.Visibility = size == WidgetSizeClass.Large ? Visibility.Visible : Visibility.Collapsed;
+
+            total.FontSize = size == WidgetSizeClass.Strip ? 22 : 30;
+        };
 
         return panel;
     }
@@ -343,6 +365,16 @@ public sealed partial class WidgetWindow
         panel.Children.Add(pick);
         panel.Children.Add(status);
         panel.Children.Add(scroll);
+
+        // Полоска — только статус, маленький — плюс кнопка выбора папки, дальше
+        // уже список: у списков «композиция» и есть «сводка против списка».
+        _relayout = (w, h) =>
+        {
+            var size = WidgetAdaptive.Of(w, h);
+            pick.Visibility = size == WidgetSizeClass.Strip ? Visibility.Collapsed : Visibility.Visible;
+            scroll.Visibility = size >= WidgetSizeClass.Normal ? Visibility.Visible : Visibility.Collapsed;
+        };
+
         return panel;
     }
 
@@ -665,6 +697,13 @@ public sealed partial class WidgetWindow
         Grid.SetColumn(previewBox, 1);
         outer.Children.Add(left);
         outer.Children.Add(previewBox);
+
+        // Маленькому виджету превью не нужно: список окон и так занимает всё
+        // место, а превью делает его нечитаемым.
+        _relayout = (_, h) =>
+        {
+            previewBox.Visibility = h >= 190 ? Visibility.Visible : Visibility.Collapsed;
+        };
 
         Refresh();
         Timer(15000, Refresh);
