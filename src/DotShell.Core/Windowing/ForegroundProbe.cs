@@ -84,4 +84,40 @@ public static class ForegroundProbe
         try { return IsZoomed(GetForegroundWindow()); }
         catch { return false; }
     }
+
+    /// <summary>
+    /// «Любое крупное чужое окно» — мягкий порог для режима «не мешать»:
+    /// достаточно, чтобы окно занимало больше 70 % рабочей области.
+    /// </summary>
+    public static bool IsForegroundCovering()
+    {
+        try
+        {
+            var foreground = GetForegroundWindow();
+            if (foreground == IntPtr.Zero) return false;
+
+            GetWindowThreadProcessId(foreground, out uint pid);
+            if (pid == (uint)Environment.ProcessId) return false;
+            if (IsIconic(foreground)) return false;
+
+            var cls = new System.Text.StringBuilder(64);
+            GetClassName(foreground, cls, cls.Capacity);
+            var name = cls.ToString();
+
+            if (name is "Progman" or "WorkerW" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd") return false;
+
+            var area = Monitors.ForWindow(foreground);
+            if (area is null) return false;
+            if (!GetWindowRect(foreground, out var rect)) return false;
+
+            double windowArea = Math.Max(0, rect.Right - rect.Left) * (double)Math.Max(0, rect.Bottom - rect.Top);
+            double workArea = Math.Max(1, (area.Value.Right - area.Value.Left) * (double)(area.Value.Bottom - area.Value.Top));
+
+            return windowArea / workArea >= 0.7;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 }

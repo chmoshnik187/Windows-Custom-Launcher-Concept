@@ -454,12 +454,22 @@ public sealed class PlayerStrip : Grid
     private Border Artwork(double size)
     {
         _art = new Image { Stretch = Stretch.UniformToFill };
+        // Форма обложки из настроек: квадрат, скругление или круг.
+        string shape = ShellServices.Instance.Settings.Current.CoverShape;
+        double radius = shape switch
+        {
+            "square" => 0,
+            "circle" => size / 2,
+            _ => Math.Max(2, size * 0.08),
+        };
+
         var box = new Border
         {
             Width = size,
             Height = size,
             Background = Res("DsSurfaceAlt"),
             ClipToBounds = true,
+            CornerRadius = new CornerRadius(radius),
             VerticalAlignment = VerticalAlignment.Center,
         };
         box.Child = _art;

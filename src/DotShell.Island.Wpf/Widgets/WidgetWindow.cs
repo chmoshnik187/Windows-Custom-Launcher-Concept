@@ -148,6 +148,15 @@ public sealed partial class WidgetWindow : Window
         var wa = SystemParameters.WorkArea;
         Left = Math.Clamp(Left, wa.Left - ActualWidth + 80, wa.Right - 80);
         Top = Math.Clamp(Top, wa.Top, wa.Bottom - 40);
+
+        // Прилипание к сетке: 0 — выкл, 8 или 16 px. Виджеты выстраиваются в ряд
+        // без ручной подгонки по пикселям.
+        int grid = Math.Clamp(ShellServices.Instance.Settings.Current.WidgetGrid, 0, 16);
+        if (grid > 0)
+        {
+            Left = Math.Round(Left / grid) * grid;
+            Top = Math.Round(Top / grid) * grid;
+        }
     }
 
     private DispatcherTimer Timer(int ms, Action tick)

@@ -209,6 +209,78 @@ public sealed class IslandViewModel : INotifyPropertyChanged
         }
     }
 
+    public string OpenDirection
+    {
+        get => _services.Settings.Current.OpenDirection;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value) || value == _services.Settings.Current.OpenDirection) return;
+            _services.Settings.Update(s => s.OpenDirection = value);
+            RaisePropertyChanged();
+        }
+    }
+
+    public string TabTransition
+    {
+        get => _services.Settings.Current.TabTransition;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value) || value == _services.Settings.Current.TabTransition) return;
+            _services.Settings.Update(s => s.TabTransition = value);
+            RaisePropertyChanged();
+        }
+    }
+
+    public string AutoHide
+    {
+        get => _services.Settings.Current.AutoHide;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value) || value == _services.Settings.Current.AutoHide) return;
+            _services.Settings.Update(s => s.AutoHide = value);
+            RaisePropertyChanged();
+        }
+    }
+
+    public string QuietThreshold
+    {
+        get => _services.Settings.Current.QuietThreshold;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value) || value == _services.Settings.Current.QuietThreshold) return;
+            _services.Settings.Update(s => s.QuietThreshold = value);
+            RaisePropertyChanged();
+        }
+    }
+
+    public string ClickAction
+    {
+        get => _services.Settings.Current.ClickAction;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value) || value == _services.Settings.Current.ClickAction) return;
+            _services.Settings.Update(s => s.ClickAction = value);
+            RaisePropertyChanged();
+        }
+    }
+
+    public string CoverShape
+    {
+        get => _services.Settings.Current.CoverShape;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value) || value == _services.Settings.Current.CoverShape) return;
+            _services.Settings.Update(s => s.CoverShape = value);
+            RaisePropertyChanged();
+        }
+    }
+
+    public double WidgetGrid
+    {
+        get => _services.Settings.Current.WidgetGrid;
+        set { _services.Settings.Update(s => s.WidgetGrid = (int)Math.Clamp(value, 0, 16)); RaisePropertyChanged(); }
+    }
+
     public string AnimCurve
     {
         get => _services.Settings.Current.AnimationCurve;

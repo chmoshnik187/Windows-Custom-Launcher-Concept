@@ -50,6 +50,8 @@ public partial class IslandWindow : Window
     /// <summary>
     /// Высота свёрнутой капсулы: живёт в настройках (36…64), поэтому не const.
     /// </summary>
+    private System.Windows.Threading.DispatcherTimer? _autoHideTimer;
+
     private static double CollapsedHeight =>
         Math.Clamp(ShellServices.Instance.Settings.Current.CollapsedHeight, 36, 64);
     private const double ExpandedWidth = 640;   // 620 содержимое + поля
@@ -909,6 +911,25 @@ public partial class IslandWindow : Window
         UpdateMiniEq();
         if (_vm.ActiveTab == "chat") ScheduleGrowChat();
         _vm.Tick();
+
+        // Автоскрытие: если включено, раскрытый остров уходит сам через 30 секунд.
+        _autoHideTimer?.Stop();
+
+        if (ShellServices.Instance.Settings.Current.AutoHide == "timer")
+        {
+            _autoHideTimer ??= new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(30),
+            };
+
+            _autoHideTimer.Tick += (_, _) =>
+            {
+                _autoHideTimer?.Stop();
+                if (_isExpanded && !IsMouseOver) Collapse();
+            };
+
+            _autoHideTimer.Start();
+        }
     }
 
     private void Collapse()
@@ -1134,7 +1155,10 @@ public partial class IslandWindow : Window
     }
     private void UpdateQuietMode()
     {
-        if (!_services.Settings.Current.QuietOnMaximized)
+        // Порог: только развёрнутые окна, любые крупные, или совсем выкл.
+        string threshold = _services.Settings.Current.QuietThreshold;
+
+        if (threshold == "off")
         {
             if (_quiet) ExitQuiet();
             return;
@@ -1150,7 +1174,9 @@ public partial class IslandWindow : Window
         // будет уворачиваться от собственной мыши.
         if (IsMouseOver || _quietRestoreTimer?.IsEnabled == true) return;
 
-        bool busy = DotShell.Core.Windowing.ForegroundProbe.IsForegroundMaximized();
+        bool busy = threshold == "any"
+            ? DotShell.Core.Windowing.ForegroundProbe.IsForegroundCovering()
+            : DotShell.Core.Windowing.ForegroundProbe.IsForegroundMaximized();
         if (busy && !_quiet) EnterQuiet();
         else if (!busy && _quiet) ExitQuiet();
     }
@@ -1457,7 +1483,20 @@ public partial class IslandWindow : Window
         }
 
         if (IsInteractive(e.OriginalSource as DependencyObject)) return;
-        ToggleExpanded();
+
+        // Действие клика — настройка: раскрыть, лаунчер или панель-обзор.
+        switch (ShellServices.Instance.Settings.Current.ClickAction)
+        {
+            case "launcher":
+                _ = Dispatcher.BeginInvoke(LauncherHost.Toggle);
+                break;
+            case "dashboard":
+                _ = Dispatcher.BeginInvoke(() => DashboardWindow.Toggle());
+                break;
+            default:
+                ToggleExpanded();
+                break;
+        }
     }
 
     private void OnPillRightClick(object sender, MouseButtonEventArgs e)
@@ -1632,11 +1671,47 @@ public partial class IslandWindow : Window
             }
         }
 
+        string transition = ShellServices.Instance.Settings.Current.TabTransition;
+
         next.BeginAnimation(OpacityProperty, null);
+        next.RenderTransform = null;
         next.Visibility = Visibility.Visible;
-        next.Opacity = 0;
-        next.BeginAnimation(OpacityProperty,
-            new DoubleAnimation(1, TimeSpan.FromMilliseconds(160)));
+
+        if (transition == "none")
+        {
+            next.Opacity = 1;
+        }
+        else if (transition == "slide")
+        {
+            var shift = new TranslateTransform(38, 0);
+            next.RenderTransform = shift;
+            next.Opacity = 1;
+
+            shift.BeginAnimation(TranslateTransform.XProperty,
+                new DoubleAnimation(0, TimeSpan.FromMilliseconds(220))
+                {
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+                });
+        }
+        else if (transition == "curtain")
+        {
+            var scale = new ScaleTransform(1, 0.82);
+            next.RenderTransform = scale;
+            next.RenderTransformOrigin = new Point(0.5, 0);
+            next.Opacity = 1;
+
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty,
+                new DoubleAnimation(1, TimeSpan.FromMilliseconds(200))
+                {
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+                });
+        }
+        else
+        {
+            next.Opacity = 0;
+            next.BeginAnimation(OpacityProperty,
+                new DoubleAnimation(1, TimeSpan.FromMilliseconds(160)));
+        }
 
         _visibleTab = next;
 

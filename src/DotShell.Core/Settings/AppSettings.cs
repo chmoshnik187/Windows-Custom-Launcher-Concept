@@ -203,6 +203,27 @@ public sealed class AppSettings
     /// <summary>Куда показывать уведомления: capsule, card, toast, dot.</summary>
     public string NotifyMode { get; set; } = "capsule";
 
+    /// <summary>Откуда раскрывается остров: center, left, right, down.</summary>
+    public string OpenDirection { get; set; } = "center";
+
+    /// <summary>Переход между вкладками: fade, slide, curtain, none.</summary>
+    public string TabTransition { get; set; } = "fade";
+
+    /// <summary>Автоскрытие: never, fullscreen, timer.</summary>
+    public string AutoHide { get; set; } = "never";
+
+    /// <summary>Порог режима «не мешать»: maximized, any, off.</summary>
+    public string QuietThreshold { get; set; } = "maximized";
+
+    /// <summary>Что делает клик по капсуле: expand, launcher, dashboard.</summary>
+    public string ClickAction { get; set; } = "expand";
+
+    /// <summary>Прилипание виджетов: 0 — выкл, иначе шаг в пикселях (8 или 16).</summary>
+    public int WidgetGrid { get; set; }
+
+    /// <summary>Форма обложки: square, rounded, circle.</summary>
+    public string CoverShape { get; set; } = "rounded";
+
     /// <summary>Сколько секунд висит уведомление.</summary>
     public int NotifySeconds { get; set; } = 6;
 

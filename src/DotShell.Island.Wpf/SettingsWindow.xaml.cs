@@ -66,6 +66,85 @@ public partial class SettingsWindow : Window
             ("dash", "Штрихи"),
         }, vm.DotShapeName);
 
+        FillChoices(OpenDirectionBox, new (string Value, string Label)[]
+        {
+            ("center", "Из центра"),
+            ("left", "Слева"),
+            ("right", "Справа"),
+            ("down", "Сверху вниз"),
+        }, vm.OpenDirection);
+
+        OpenDirectionBox.SelectionChanged += (_, _) =>
+        {
+            if (OpenDirectionBox.SelectedItem is System.Windows.Controls.ComboBoxItem { Tag: string value })
+                vm.OpenDirection = value;
+        };
+
+        FillChoices(TabTransitionBox, new (string Value, string Label)[]
+        {
+            ("fade", "Растворение"),
+            ("slide", "Сдвиг"),
+            ("curtain", "Шторка"),
+            ("none", "Без анимации"),
+        }, vm.TabTransition);
+
+        TabTransitionBox.SelectionChanged += (_, _) =>
+        {
+            if (TabTransitionBox.SelectedItem is System.Windows.Controls.ComboBoxItem { Tag: string value })
+                vm.TabTransition = value;
+        };
+
+        FillChoices(CoverShapeBox, new (string Value, string Label)[]
+        {
+            ("square", "Квадрат"),
+            ("rounded", "Скругление"),
+            ("circle", "Круг"),
+        }, vm.CoverShape);
+
+        CoverShapeBox.SelectionChanged += (_, _) =>
+        {
+            if (CoverShapeBox.SelectedItem is System.Windows.Controls.ComboBoxItem { Tag: string value })
+                vm.CoverShape = value;
+        };
+
+        FillChoices(ClickActionBox, new (string Value, string Label)[]
+        {
+            ("expand", "Раскрыть остров"),
+            ("launcher", "Открыть поиск"),
+            ("dashboard", "Открыть обзор"),
+        }, vm.ClickAction);
+
+        ClickActionBox.SelectionChanged += (_, _) =>
+        {
+            if (ClickActionBox.SelectedItem is System.Windows.Controls.ComboBoxItem { Tag: string value })
+                vm.ClickAction = value;
+        };
+
+        FillChoices(AutoHideBox, new (string Value, string Label)[]
+        {
+            ("never", "Не скрывать"),
+            ("timer", "Через 30 секунд"),
+        }, vm.AutoHide);
+
+        AutoHideBox.SelectionChanged += (_, _) =>
+        {
+            if (AutoHideBox.SelectedItem is System.Windows.Controls.ComboBoxItem { Tag: string value })
+                vm.AutoHide = value;
+        };
+
+        FillChoices(QuietBox, new (string Value, string Label)[]
+        {
+            ("maximized", "Только развёрнутые окна"),
+            ("any", "Любое крупное окно"),
+            ("off", "Выключено"),
+        }, vm.QuietThreshold);
+
+        QuietBox.SelectionChanged += (_, _) =>
+        {
+            if (QuietBox.SelectedItem is System.Windows.Controls.ComboBoxItem { Tag: string value })
+                vm.QuietThreshold = value;
+        };
+
         FillChoices(LivelinessBox, new (string Value, string Label)[]
         {
             ("off", "Без движения"),

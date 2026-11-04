@@ -193,6 +193,19 @@
                             <TextBlock Style="{StaticResource Section}" Text="КРИВАЯ ДВИЖЕНИЯ" />
                             <ComboBox x:Name="CurveBox" Style="{StaticResource DsCombo}" />
 
+                            <TextBlock Style="{StaticResource Section}" Text="ОТКУДА РАСКРЫВАЕТСЯ" />
+                            <ComboBox x:Name="OpenDirectionBox" Style="{StaticResource DsCombo}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="ПЕРЕХОД МЕЖДУ ВКЛАДКАМИ" />
+                            <ComboBox x:Name="TabTransitionBox" Style="{StaticResource DsCombo}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="ФОРМА ОБЛОЖКИ" />
+                            <ComboBox x:Name="CoverShapeBox" Style="{StaticResource DsCombo}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="СЕТКА ВИДЖЕТОВ (PX, 0 — ВЫКЛ)" />
+                            <Slider Style="{StaticResource DsSlider}" Minimum="0" Maximum="16"
+                                    Value="{Binding WidgetGrid}" />
+
                             <TextBlock Style="{StaticResource Section}" Text="ФОРМА ТОЧКИ" />
                             <ComboBox x:Name="DotShapeBox" Style="{StaticResource DsCombo}" />
 
@@ -214,6 +227,15 @@
 
                         <!-- ОСТРОВ -->
                         <StackPanel x:Name="PanelIsland" Visibility="Collapsed">
+
+                            <TextBlock Style="{StaticResource Section}" Text="КЛИК ПО КАПСУЛЕ" />
+                            <ComboBox x:Name="ClickActionBox" Style="{StaticResource DsCombo}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="АВТОСКРЫТИЕ" />
+                            <ComboBox x:Name="AutoHideBox" Style="{StaticResource DsCombo}" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="ПОРОГ «НЕ МЕШАТЬ»" />
+                            <ComboBox x:Name="QuietBox" Style="{StaticResource DsCombo}" />
                             <CheckBox Style="{StaticResource DsToggle}"
                                       Content="Прятать в полноэкранном режиме (игры, видео)"
                                       IsChecked="{Binding HideInFullscreen}" />
