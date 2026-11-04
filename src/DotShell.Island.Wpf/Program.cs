@@ -77,6 +77,12 @@ public static class Program
 
         // Самопроверка: --selftest. Запускается в CI/перед релизом, ничего не меняет
         // в системе, печатает результат и возвращает код (0 — всё в порядке).
+        if (args.Any(a => a.Equals("--unit-selftest", StringComparison.OrdinalIgnoreCase)))
+        {
+            try { Console.OutputEncoding = System.Text.Encoding.UTF8; } catch { }
+            return Controls.UnitSelfTest.Run();
+        }
+
         if (args.Any(a => a.StartsWith("--selftest", StringComparison.OrdinalIgnoreCase)))
         {
             // Консоль Windows по умолчанию не в UTF-8 — русский текст в отчёте

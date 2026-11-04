@@ -88,7 +88,18 @@ function Get-FatalCount {
     return (Select-String -Path $log -Pattern 'FATAL' -ErrorAction SilentlyContinue | Measure-Object).Count
 }
 
-$failed = 0
+# --- юнит: самопроверка эмоций ---------------------------------------------
+# Отдельный прогон без окна: рендерит все настроения и сравнивает пиксели.
+$unitLog = Join-Path $env:LOCALAPPDATA 'DotShell\unit-selftest.txt'
+if (Test-Path $unitLog) { Remove-Item $unitLog -Force }
+
+& $Exe --unit-selftest | Out-Null
+Start-Sleep -Seconds 2
+
+$unitOk = (Test-Path $unitLog) -and ((Get-Content $unitLog -Raw -Encoding UTF8) -match 'UNIT SELFTEST PASS')
+Write-Host ("юнит: эмоции — " + $(if ($unitOk) { 'ok' } else { 'ПРОВАЛ' })) -ForegroundColor $(if ($unitOk) { 'Gray' } else { 'Red' })
+
+$failed = if ($unitOk) { 0 } else { 1 }
 $results = @()
 
 foreach ($case in $cases) {

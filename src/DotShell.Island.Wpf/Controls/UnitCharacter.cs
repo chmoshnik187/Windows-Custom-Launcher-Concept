@@ -138,6 +138,26 @@ public sealed class UnitCharacter : FrameworkElement
         }
     }
 
+    /// <summary>
+    /// Настроение по времени без внимания: чистая функция без побочных эффектов.
+    /// Отдельная — чтобы самопроверка могла проверить переходы, не ожидая трёх минут.
+    /// </summary>
+    public Mood MoodForIdle(TimeSpan idle)
+    {
+        if (idle > SleepyAfter) return Mood.Sleepy;
+        if (idle > SadAfter) return Mood.Sad;
+        return Mood.Idle;
+    }
+
+    /// <summary>Сколько сейчас «без внимания» — для диагностики и тестов.</summary>
+    public TimeSpan IdleFor => DateTime.Now - _lastInteraction;
+
+    /// <summary>Когда последний раз радовалась (тест частиц и клика).</summary>
+    public bool IsHappy => _mood == Mood.Happy;
+
+    /// <summary>Сколько частиц живёт прямо сейчас.</summary>
+    public int ParticleCount => _particles.Count;
+
     /// <summary>Погладить персонажа: он радуется и выпускает точки.</summary>
     public void Pet()
     {
@@ -207,11 +227,7 @@ public sealed class UnitCharacter : FrameworkElement
 
         if (_mood == Mood.Happy && now < _happyUntil) return;
 
-        var idle = now - _lastInteraction;
-
-        _mood = idle > SleepyAfter ? Mood.Sleepy
-            : idle > SadAfter ? Mood.Sad
-            : Mood.Idle;
+        _mood = MoodForIdle(now - _lastInteraction);
     }
 
     private void UpdateParticles(DateTime now)
