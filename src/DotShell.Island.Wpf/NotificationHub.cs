@@ -154,6 +154,10 @@ public static class NotificationHub
 
         var window = new Window
         {
+            // Заголовок нужен только для отладки и аудита: ShowInTaskbar = false,
+            // пользователь его не видит. Без него карточку не отличить от других
+            // безымянных окон процесса при перечислении.
+            Title = "DotShell — уведомление",
             WindowStyle = WindowStyle.None,
             AllowsTransparency = true,
             Background = Brushes.Transparent,

@@ -125,6 +125,10 @@ public sealed class MediaBridge : INotifyPropertyChanged, IAsyncDisposable
 
     private void Attach(GlobalSystemMediaTransportControlsSession? session)
     {
+        // Пока включена фикстура, настоящие сессии игнорируем: иначе пустое
+        // окружение сразу затрёт тестовый трек.
+        if (_fixture) return;
+
         if (_session is not null)
         {
             _session.MediaPropertiesChanged -= OnMediaPropertiesChanged;
@@ -238,6 +242,31 @@ public sealed class MediaBridge : INotifyPropertyChanged, IAsyncDisposable
         if (_session is null) return;
         try { await _session.TryChangePlaybackPositionAsync(to.Ticks); } catch { }
         Anchor(to);
+    }
+
+    private bool _fixture;
+
+    /// <summary>
+    /// Подменить реальную медиа-сессию тестовым треком.
+    ///
+    /// Нужно для проверки плеера без живого Spotify/YouTube: включается флагом
+    /// `--player-fixture`, дальше весь UI (остров, виджеты, обзор) работает с этим
+    /// треком как с настоящим. Позиция едет сама: якорь + прошедшее время.
+    /// </summary>
+    public void ApplyFixture()
+    {
+        _fixture = true;
+
+        HasSession = true;
+        Title = "Ночной дождь";
+        Artist = "DotShell · фикстура";
+        Album = "Проверка плеера";
+        SourceApp = "Fixture";
+        IsPlaying = true;
+        Duration = TimeSpan.FromSeconds(212);
+        ArtworkBytes = null;
+
+        Anchor(TimeSpan.Zero);
     }
 
     /// <summary>Таймер в UI может дёргать это раз в секунду, чтобы ползунок ехал.</summary>

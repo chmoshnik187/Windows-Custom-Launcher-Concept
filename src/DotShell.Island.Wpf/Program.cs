@@ -34,6 +34,22 @@ public static class Program
     /// <summary>--unit-demo: витрина настроений юнита.</summary>
     public static bool OpenUnitDemo { get; private set; }
 
+    /// <summary>
+    /// --notify-test: через 2 секунды после старта показать одно уведомление.
+    /// Нужен, чтобы проверять режимы (капсула / карточка / тост / точка) измерением,
+    /// а не вручную: без флага уведомление нечем вызвать.
+    /// </summary>
+    public static bool OpenNotifyTest { get; private set; }
+
+    /// <summary>--player-fixture: подменить медиа-сессию тестовым треком (проверка плеера).</summary>
+    public static bool PlayerFixture { get; private set; }
+
+    /// <summary>
+    /// --clamp-test: утащить остров за пределы виртуального экрана, вернуть клампом
+    /// и записать результат в файл. Проверка мультимониторной логики на одном мониторе.
+    /// </summary>
+    public static bool ClampTest { get; private set; }
+
     /// <summary>--software-render: программная отрисовка вместо GPU (диагностика артефактов).</summary>
     public static bool SoftwareRender { get; private set; }
 
@@ -278,6 +294,12 @@ public static class Program
             if (arg.Equals("--dot-demo", StringComparison.OrdinalIgnoreCase)) { OpenDotDemo = true; continue; }
 
             if (arg.Equals("--unit-demo", StringComparison.OrdinalIgnoreCase)) { OpenUnitDemo = true; continue; }
+
+            if (arg.Equals("--notify-test", StringComparison.OrdinalIgnoreCase)) { OpenNotifyTest = true; continue; }
+
+            if (arg.Equals("--player-fixture", StringComparison.OrdinalIgnoreCase)) { PlayerFixture = true; continue; }
+
+            if (arg.Equals("--clamp-test", StringComparison.OrdinalIgnoreCase)) { ClampTest = true; continue; }
 
             if (arg.Equals("--visual-dump", StringComparison.OrdinalIgnoreCase)) { VisualDump = true; continue; }
 

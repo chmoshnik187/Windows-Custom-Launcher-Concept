@@ -735,6 +735,71 @@ public partial class IslandWindow : Window
             Dispatcher.BeginInvoke(() => new UnitDemoWindow().Show());
         }
 
+        if (Program.ClampTest)
+        {
+            // Уводим окно далеко за виртуальный экран, затем просим кламп и пишем
+            // результат: так проверяется мультимониторная логика без второго монитора.
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                double farLeft = SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth + 900;
+                double farTop = SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight + 500;
+
+                Left = farLeft;
+                Top = farTop;
+
+                ClampToScreen();
+
+                double vLeft = SystemParameters.VirtualScreenLeft;
+                double vTop = SystemParameters.VirtualScreenTop;
+                double vRight = vLeft + SystemParameters.VirtualScreenWidth;
+                double vBottom = vTop + SystemParameters.VirtualScreenHeight;
+
+                bool inside = Left >= vLeft - Width && Left <= vRight
+                              && Top >= vTop - 60 && Top <= vBottom;
+
+                try
+                {
+                    var path = System.IO.Path.Combine(
+                        DotShell.Core.Settings.AppSettings.SettingsDirectory, "clamp-selftest.txt");
+
+                    System.IO.File.WriteAllLines(path, new[]
+                    {
+                        $"farLeft={farLeft:0} farTop={farTop:0}",
+                        $"afterLeft={Left:0} afterTop={Top:0}",
+                        $"virtual={vLeft:0},{vTop:0}-{vRight:0},{vBottom:0}",
+                        $"inside={inside}",
+                        inside ? "CLAMP SELFTEST PASS" : "CLAMP SELFTEST FAILED",
+                    });
+                }
+                catch { }
+            }));
+
+            Log.Info("clamp test: прогон ручной установки за экран");
+        }
+
+        if (Program.PlayerFixture)
+        {
+            ShellServices.Instance.Media.ApplyFixture();
+            Log.Info("player fixture: подставлен тестовый трек «Ночной дождь»");
+        }
+
+        if (Program.OpenNotifyTest)
+        {
+            // Даём острову собраться, потом показываем уведомление.
+            var timer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(2),
+            };
+
+            timer.Tick += (_, _) =>
+            {
+                timer.Stop();
+                NotificationHub.Show("DotShell", "Проверка уведомлений: режим из настроек.");
+            };
+
+            timer.Start();
+        }
+
         if (Program.OpenWidgetType is { } widgetType)
         {
             Dispatcher.BeginInvoke(() =>
