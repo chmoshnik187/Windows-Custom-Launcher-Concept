@@ -3,6 +3,7 @@ namespace DotShell.Island.Wpf;
 using System.Windows;
 using System.Windows.Media;
 using DotShell.Core.Theming;
+using DotShell.Island.Wpf.Desktop;
 
 /// <summary>
 /// Палитра DotShell и мост между ThemeBus (ядро) и WPF.
@@ -78,12 +79,38 @@ public static class ColorPalette
         Apply(bus);
     }
 
+    /// <summary>
+    /// Перекрасить уже монохромные иконки под новый акцент. Делается в фоне:
+    /// разбор ярлыков и запись .ico не должны задерживать перерисовку интерфейса.
+    /// </summary>
+    private static void RepaintMonochromeIcons(Color accent)
+    {
+        try
+        {
+            if (DesktopIcons.CountManaged() <= 0) return;
+
+            var links = DesktopIcons.Shortcuts();
+
+            _ = Task.Run(() =>
+            {
+                try { DesktopIcons.MakeMonochrome(links, accent, out _); }
+                catch { }
+            });
+        }
+        catch { }
+    }
+
     private static void Apply(ThemeBus bus)
     {
         var argb = bus.AccentArgb;
         var showGhostDots = bus.ShowGhostDots;
         var opacity = Math.Clamp(bus.Settings.IslandOpacity, 30, 100);
         var color = ApplyTint(FromArgb(argb), bus.Settings.AccentTemperature, bus.Settings.AccentSaturation);
+
+        // Смена акцента должна доехать и до монохромных иконок стола: иначе они
+        // остаются в старом цвете, хотя весь остальной интерфейс уже перекрашен.
+        if (Accent != color) RepaintMonochromeIcons(color);
+
         Accent = color;
         AccentFaded = Color.FromArgb(0x40, color.R, color.G, color.B);
 

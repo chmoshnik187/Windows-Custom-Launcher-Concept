@@ -91,7 +91,10 @@ public static class DesktopIcons
                 var png = ExtractGrayIcon(info.Value, tint);
                 if (png is null) { failed.Add(link); continue; }
 
-                var icoPath = Path.Combine(CacheDir, SafeName(link) + ".ico");
+                // Оттенок входит в имя файла: при смене акцента получается новый .ico,
+                // и проводник Windows перечитывает иконку. С прежним именем он держал
+                // старую копию из своего кэша, и цвет не менялся до перезагрузки.
+                var icoPath = Path.Combine(CacheDir, SafeName(link) + "-" + TintKey(tint) + ".ico");
                 WriteIco(icoPath, png);
                 WriteShortcutIcon(link, icoPath);
                 done++;
@@ -137,6 +140,10 @@ public static class DesktopIcons
     }
 
     // ---------- иконки ----------
+
+    /// <summary>Короткий ключ оттенка для имени файла кэша.</summary>
+    private static string TintKey(Color tint) =>
+        $"{tint.R:x2}{tint.G:x2}{tint.B:x2}";
 
     private static byte[]? ExtractGrayIcon(ShortcutInfo info, Color tint)
     {
