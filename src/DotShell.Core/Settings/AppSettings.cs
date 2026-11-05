@@ -1,4 +1,4 @@
-﻿namespace DotShell.Core.Settings;
+namespace DotShell.Core.Settings;
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -255,6 +255,22 @@ public sealed class AppSettings
     /// именно это. Выключается одной галочкой, потому что чужие уведомления могут мешать.
     /// </summary>
     public bool MirrorNotifications { get; set; } = true;
+
+    /// <summary>
+    /// Ночной свет: тёплая гамма монитора вместо синего. Публичного API у Windows нет,
+    /// поэтому делаем через SetDeviceGammaRamp; состояние переживает перезапуск.
+    /// </summary>
+    public bool NightLightEnabled { get; set; }
+
+    /// <summary>Теплота ночного света, 0–100: больше — меньше синего.</summary>
+    public int NightLightWarmth { get; set; } = 40;
+
+    /// <summary>
+    /// «Не беспокоить» на уровне DotShell: не показывать в острове уведомления других
+    /// программ. Системный фокус Windows без MSIX-упаковки не переключается, поэтому
+    /// это наша тишина, а не системная.
+    /// </summary>
+    public bool DoNotDisturb { get; set; }
 
     /// <summary>Шахматный сдвиг строк в точечной сетке.</summary>
     public bool DotStagger { get; set; }

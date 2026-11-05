@@ -1,4 +1,4 @@
-namespace DotShell.Island.Wpf;
+﻿namespace DotShell.Island.Wpf;
 
 using DotShell.Island.Wpf.Desktop;
 
@@ -6,6 +6,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using DotShell.Core;
+using NightLight = DotShell.Core.Native.NightLight;
 
 /// <summary>
 /// Точка входа. Написана руками вместо auto-generated Main,
@@ -451,6 +452,23 @@ public sealed class DotShellApp : Application
         window.Show();
         window.OpenStartupTab();
 
+        // Ночной свет: если прошлый запуск упал с тёплой гаммой, сначала возвращаем
+        // исходные цвета (сохранены в nightlight-original.json), потом применяем настройку.
+        if (NightLight.RecoverIfNeeded()) Log.Info("night light: восстановил гамму после сбоя");
+
+        var shellSettings = ShellServices.Instance.Settings.Current;
+        if (shellSettings.NightLightEnabled)
+        {
+            if (!NightLight.Set(true, shellSettings.NightLightWarmth))
+            {
+                Log.Info($"night light failed: {NightLight.LastError}");
+                ShellServices.Instance.Settings.Update(s => s.NightLightEnabled = false);
+            }
+        }
+
+        // Смена разрешения/монитора сбрасывает гамму драйвером — включаем заново.
+        Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+
         // Уведомления других программ: системный тост Windows (Telegram, Steam,
         // Discord…) перекладываем в капсулу острова. Слушатель живёт в ядре,
         // здесь только переброс в UI-поток: событие приходит из пула потоков.
@@ -460,6 +478,9 @@ public sealed class DotShellApp : Application
             try
             {
                 if (!ShellServices.Instance.Settings.Current.MirrorNotifications) return;
+
+                // «Не беспокоить»: чужие уведомления в остров не пускаем совсем.
+                if (ShellServices.Instance.Settings.Current.DoNotDisturb) return;
 
                 // Тот же NotificationHub, что и у своих напоминаний: значит режим
                 // «капсула/карточка/точка/тост» и звук работают одинаково.
@@ -479,8 +500,18 @@ public sealed class DotShellApp : Application
         });
     }
 
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
+    {
+        NightLight.ReapplyIfEnabled();
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
+        Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+
+        // Гамму обязательно вернуть: иначе рабочий стол останется тёплым после выхода.
+        NightLight.Restore();
+
         _systemNotifications?.Dispose();
         _ = ShellServices.Instance?.DisposeAsync();
         base.OnExit(e);

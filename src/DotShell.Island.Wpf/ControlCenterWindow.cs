@@ -38,6 +38,7 @@ public sealed class ControlCenterWindow : Window
     private TextBlock? _bluetoothRadioLabel;
     private readonly DotSeekBar _volumeBar;
     private readonly TextBlock _volumeValue;
+    private TextBlock? _nightLightNote;
 
     public static void Toggle()
     {
@@ -120,6 +121,7 @@ public sealed class ControlCenterWindow : Window
         toggles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         toggles.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         toggles.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        toggles.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         void AddToggle(int row, int column, UIElement chip)
         {
@@ -141,7 +143,25 @@ public sealed class ControlCenterWindow : Window
             value => ShellServices.Instance.Settings.Update(s => s.QuietThreshold = value ? "maximized" : "off")));
         AddToggle(1, 1, Toggle("ЗВУК", () => !_volume.Muted, value => _volume.SetMute(!value)));
 
+        // Ночной свет и тишина: гамма монитора и отказ от зеркальных уведомлений.
+        AddToggle(2, 0, Toggle("НОЧНОЙ СВЕТ", () => NightLight.Enabled, SetNightLight));
+        AddToggle(2, 1, Toggle("НЕ БЕСПОКОИТЬ", () => ShellServices.Instance.Settings.Current.DoNotDisturb,
+            value => ShellServices.Instance.Settings.Update(s => s.DoNotDisturb = value)));
+
         root.Children.Add(toggles);
+
+        // Драйвер может отказать (HDR, некоторые ноутбуки) — тогда честная строка,
+        // а не тумблер, который «щёлкнулся и ничего не сделал».
+        _nightLightNote = new TextBlock
+        {
+            FontFamily = new FontFamily("Segoe UI"),
+            FontSize = 9,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x8A, 0x93)),
+            TextWrapping = TextWrapping.Wrap,
+            Visibility = Visibility.Collapsed,
+            Margin = new Thickness(0, 0, 0, 4),
+        };
+        root.Children.Add(_nightLightNote);
 
         // --- питание и настройки ---
         root.Children.Add(Section("ПИТАНИЕ"));
@@ -228,7 +248,6 @@ public sealed class ControlCenterWindow : Window
         networkActions.Children.Add(RadioChip(_bluetoothRadioLabel, async () =>
             await ToggleRadioAsync(Windows.Devices.Radios.RadioKind.Bluetooth)));
 
-        networkActions.Children.Add(Chip("НОЧНОЙ СВЕТ", () => OpenUri("ms-settings:nightlight")));
         root.Children.Add(networkActions);
 
         root.Children.Add(Section("СИСТЕМА"));
@@ -492,6 +511,30 @@ public sealed class ControlCenterWindow : Window
 
         _volumeBar.Value = _volume.Level * 100;
         _volumeValue.Text = $"{_volume.Level * 100:0}%";
+    }
+
+    /// <summary>Тумблер ночного света: включить/выключить тёплую гамму мониторов.</summary>
+    private void SetNightLight(bool on)
+    {
+        var settings = ShellServices.Instance.Settings.Current;
+        bool ok = NightLight.Set(on, settings.NightLightWarmth);
+
+        if (!ok)
+        {
+            // Драйвер отказал (HDR, ноутбук, политика) — показываем причину и не врём
+            // сохранённым «включено». Тумблер после клика вернётся в выключенное.
+            if (_nightLightNote is not null)
+            {
+                _nightLightNote.Text = "ночной свет: " + (NightLight.LastError ?? "драйвер не поддерживает");
+                _nightLightNote.Visibility = Visibility.Visible;
+            }
+
+            ShellServices.Instance.Settings.Update(s => s.NightLightEnabled = false);
+            return;
+        }
+
+        if (_nightLightNote is not null) _nightLightNote.Visibility = Visibility.Collapsed;
+        ShellServices.Instance.Settings.Update(s => s.NightLightEnabled = NightLight.Enabled);
     }
 
     private void SetVolume(double fraction)
