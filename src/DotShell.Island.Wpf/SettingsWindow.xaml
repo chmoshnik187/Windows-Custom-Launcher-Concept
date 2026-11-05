@@ -304,6 +304,14 @@
                             <TextBlock Style="{StaticResource Section}" Text="КУДА ПОКАЗЫВАТЬ УВЕДОМЛЕНИЯ" />
                             <ComboBox x:Name="NotifyModeBox" Style="{StaticResource DsCombo}" />
 
+                            <!-- Чужие уведомления по умолчанию включены: владелец просил,
+                                 чтобы Telegram/Steam показывались в острове. Галочка нужна,
+                                 потому что поток чужих сообщений может мешать. -->
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Уведомления других программ"
+                                      IsChecked="{Binding MirrorNotifications}"
+                                      Margin="0,8,0,0" />
+
                             <TextBlock Style="{StaticResource Section}" Text="СКОЛЬКО ВИСИТ (СЕК)" />
                             <Slider Style="{StaticResource DsSlider}" Minimum="3" Maximum="10"
                                     Value="{Binding NotifySeconds}" />

@@ -257,6 +257,13 @@ public sealed class AppSettings
     /// <summary>Звук уведомления: none, tick, system.</summary>
     public string NotifySound { get; set; } = "none";
 
+    /// <summary>
+    /// Показывать в острове уведомления других программ (системные тосты Windows:
+    /// Telegram, Steam, Discord и остальные). По умолчанию включено — владелец просил
+    /// именно это. Выключается одной галочкой, потому что чужие уведомления могут мешать.
+    /// </summary>
+    public bool MirrorNotifications { get; set; } = true;
+
     /// <summary>Шахматный сдвиг строк в точечной сетке.</summary>
     public bool DotStagger { get; set; }
 

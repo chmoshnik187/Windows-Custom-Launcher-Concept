@@ -223,6 +223,17 @@ public sealed class IslandViewModel : INotifyPropertyChanged
         }
     }
 
+    public bool MirrorNotifications
+    {
+        get => _services.Settings.Current.MirrorNotifications;
+        set
+        {
+            if (value == _services.Settings.Current.MirrorNotifications) return;
+            _services.Settings.Update(s => s.MirrorNotifications = value);
+            RaisePropertyChanged();
+        }
+    }
+
     public bool DesktopWidgets
     {
         get => _services.Settings.Current.DesktopWidgets;

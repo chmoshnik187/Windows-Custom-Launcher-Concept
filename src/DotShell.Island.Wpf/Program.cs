@@ -417,6 +417,8 @@ public static class Program
 /// </summary>
 public sealed class DotShellApp : Application
 {
+    private DotShell.Core.Notifications.SystemNotificationWatcher? _systemNotifications;
+
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -448,10 +450,38 @@ public sealed class DotShellApp : Application
         MainWindow = window;
         window.Show();
         window.OpenStartupTab();
+
+        // Уведомления других программ: системный тост Windows (Telegram, Steam,
+        // Discord…) перекладываем в капсулу острова. Слушатель живёт в ядре,
+        // здесь только переброс в UI-поток: событие приходит из пула потоков.
+        _systemNotifications = new DotShell.Core.Notifications.SystemNotificationWatcher();
+        _systemNotifications.Arrived += notification => Dispatcher.BeginInvoke(() =>
+        {
+            try
+            {
+                if (!ShellServices.Instance.Settings.Current.MirrorNotifications) return;
+
+                // Тот же NotificationHub, что и у своих напоминаний: значит режим
+                // «капсула/карточка/точка/тост» и звук работают одинаково.
+                NotificationHub.Show(notification.AppName, notification.Text);
+                Log.Info($"system notification: {notification.AppName}: {notification.Text}");
+            }
+            catch (Exception ex) { Log.Info($"system notification failed: {ex.Message}"); }
+        });
+        _systemNotifications.Start();
+
+        // Доступ к чужим уведомлениям Windows выдаёт асинхронно: пишем в лог, что
+        // получилось, чтобы «не работает» можно было отличить от «запрещено».
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(2500);
+            Log.Info($"system notifications: {_systemNotifications?.Status}");
+        });
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _systemNotifications?.Dispose();
         _ = ShellServices.Instance?.DisposeAsync();
         base.OnExit(e);
     }

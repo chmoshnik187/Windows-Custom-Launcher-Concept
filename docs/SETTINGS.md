@@ -66,6 +66,7 @@
 | `CoverShape` | string | `"rounded"` | Форма обложки: square, rounded, circle. |
 | `NotifySeconds` | int | `6` | Сколько секунд висит уведомление. |
 | `NotifySound` | string | `"none"` | Звук уведомления: none, tick, system. |
+| `MirrorNotifications` | bool | `true` | Показывать в острове уведомления других программ (системные тосты Windows: Telegram, Steam, Discord). Читаются через `UserNotificationListener`; если Windows запретила доступ — просто не зеркалятся. |
 | `DotStagger` | bool | `—` | Шахматный сдвиг строк в точечной сетке. |
 | `IslandLeft` | int | `-32000` | Последнее положение окна острова (-32000 = "не задано, центрировать"). |
 | `IslandTop` | int | `-32000` | Последнее положение окна острова (-32000 = "не задано, центрировать"). |
