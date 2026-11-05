@@ -17,8 +17,8 @@ public sealed class UnitDemoWindow : Window
     public UnitDemoWindow()
     {
         Title = "DotShell — юнит: настроения";
-        Width = 620;
-        Height = 360;
+        Width = 1180;
+        Height = 420;
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
@@ -67,14 +67,18 @@ public sealed class UnitDemoWindow : Window
         (UnitCharacter.Mood Mood, string Label)[] states =
         {
             (UnitCharacter.Mood.Idle, "СПОКОЙНАЯ"),
-            (UnitCharacter.Mood.Happy, "РАДА (КЛИК)"),
+            (UnitCharacter.Mood.Curious, "ЛЮБОПЫТНАЯ"),
+            (UnitCharacter.Mood.Happy, "РАДА"),
+            (UnitCharacter.Mood.Loved, "ОБОЖАЕТ"),
+            (UnitCharacter.Mood.Annoyed, "НЕДОВОЛЬНА"),
+            (UnitCharacter.Mood.Surprised, "УДИВЛЕНА"),
             (UnitCharacter.Mood.Sad, "ГРУСТИТ"),
             (UnitCharacter.Mood.Sleepy, "СПИТ"),
         };
 
         foreach (var (mood, label) in states)
         {
-            var cell = new StackPanel { Margin = new Thickness(14, 0, 14, 0), Width = 110 };
+            var cell = new StackPanel { Margin = new Thickness(8, 0, 8, 0), Width = 128 };
 
             foreach (var kind in new[] { UnitCharacter.UnitKind.Goth, UnitCharacter.UnitKind.Skeleton })
             {
@@ -83,8 +87,8 @@ public sealed class UnitDemoWindow : Window
                     AutoMood = false,
                     CurrentMood = mood,
                     Kind = kind,
-                    Width = 56,
-                    Height = 62,
+                    Width = 60,
+                    Height = 72,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     Margin = new Thickness(0, 4, 0, 4),
                 };

@@ -46,25 +46,21 @@ public static class UnitSelfTest
         // 1. Все настроения рендерятся по-разному (для каждого персонажа).
         foreach (var kind in new[] { UnitCharacter.UnitKind.Goth, UnitCharacter.UnitKind.Skeleton })
         {
-            Check($"{$"{kind}"}: четыре разных выражения", () =>
+            Check($"{kind}: выражения", () =>
             {
                 var hashes = new Dictionary<UnitCharacter.Mood, string>();
 
-                foreach (var mood in new[]
-                         {
-                             UnitCharacter.Mood.Idle,
-                             UnitCharacter.Mood.Happy,
-                             UnitCharacter.Mood.Sad,
-                             UnitCharacter.Mood.Sleepy,
-                         })
+                var moods = (UnitCharacter.Mood[])Enum.GetValues(typeof(UnitCharacter.Mood));
+
+                foreach (var mood in moods)
                 {
                     hashes[mood] = RenderHash(kind, mood);
                 }
 
                 int distinct = hashes.Values.Distinct().Count();
-                bool ok = distinct == 4;
+                bool ok = distinct == moods.Length;
 
-                return (ok, ok ? "4 уникальных" : $"совпало {4 - distinct}: " +
+                return (ok, ok ? $"{moods.Length} уникальных" : $"совпало {moods.Length - distinct}: " +
                     string.Join(", ", hashes.GroupBy(h => h.Value).Where(g => g.Count() > 1)
                         .Select(g => string.Join("/", g.Select(x => x.Key)))));
             });
@@ -84,6 +80,34 @@ public static class UnitSelfTest
                       && sleepy == UnitCharacter.Mood.Sleepy;
 
             return (ok, $"{fresh} → {sad} → {sleepy}");
+        });
+
+        // 3а. Частые клики: 3 подряд — «обожает», 6 подряд — «недовольна».
+        Check("клики: обожание и недовольство", () =>
+        {
+            var unit = new UnitCharacter { AutoMood = false };
+            unit.Measure(new Size(48, 56));
+            unit.Arrange(new Rect(0, 0, 48, 56));
+
+            unit.Pet();
+            unit.Pet();
+            unit.Pet();
+            bool loved = unit.CurrentMood == UnitCharacter.Mood.Loved;
+
+            unit.Pet();
+            unit.Pet();
+            unit.Pet();
+            bool annoyed = unit.CurrentMood == UnitCharacter.Mood.Annoyed;
+
+            return (loved && annoyed, $"обожание={loved}, недовольство={annoyed}");
+        });
+
+        // 3б. Громкий бас: удивление.
+        Check("удивление на громкий звук", () =>
+        {
+            var unit = new UnitCharacter { AutoMood = false };
+            unit.Surprise();
+            return (unit.CurrentMood == UnitCharacter.Mood.Surprised, unit.CurrentMood.ToString());
         });
 
         // 3. Клик: радость и частицы.

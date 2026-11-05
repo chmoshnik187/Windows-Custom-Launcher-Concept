@@ -9,24 +9,30 @@ using DotShell.Core.Audio;
 /// <summary>
 /// Юнит-персонаж в капсуле: фигурка из точек с характером.
 ///
-/// Устроено как маленький автомат состояний:
-///   • <b>Idle</b>  — дышит, моргает, следит глазами за курсором;
-///   • <b>Happy</b> — на клик: подпрыгивает, жмурится, вокруг летят точки-сердечки;
-///   • <b>Sad</b>   — если её долго не трогают: смотрит вниз, вздыхает, реже моргает;
-///   • <b>Sleepy</b>— если не трогают совсем долго (или ночь): глаза-щёлочки, «z-z» точками.
+/// Две сетки: компактная 12×16 (капсула до 46 px) и подробная 20×24 (крупный юнит).
+/// Подробная включается сама по высоте — вручную ничего переключать не нужно.
 ///
-/// Рисуется точками, а не квадратами: та же графика, что у часов и заголовка трека.
-/// Цикл на CompositionTarget.Rendering (~20 кадров/с) с корректной остановкой при отвязке.
+/// Восемь настроений:
+///   Idle — дышит, моргает, следит глазами;
+///   Curious — курсор рядом: глаза шире, голова поворачивается;
+///   Happy — клик: подпрыгивает, жмурится, летят точки;
+///   Loved — много кликов подряд: глаза-дуги, румянец и сердечки;
+///   Annoyed — слишком много кликов: глаза-полоски, брови, мотает головой;
+///   Surprised — громкий бас: глаза во всю ширь, рот кругом;
+///   Sad — 3 минуты без внимания: взгляд вниз, блик гаснет;
+///   Sleepy — 9 минут без внимания: щёлочки, «z-z».
+///
+/// Живёт на CompositionTarget.Rendering с ограничением ~20 кадров/с и корректной остановкой.
 /// </summary>
 public sealed class UnitCharacter : FrameworkElement
 {
     public enum UnitKind { Goth, Skeleton }
 
-    /// <summary>Настроение персонажа. Меняется сама; можно выставить вручную (витрина, тесты).</summary>
-    public enum Mood { Idle, Happy, Sad, Sleepy }
+    /// <summary>Настроение персонажа.</summary>
+    public enum Mood { Idle, Curious, Happy, Loved, Annoyed, Surprised, Sad, Sleepy }
 
-    // Тело без глаз и рта: лицо рисуется отдельно, чтобы выражения были настоящими.
-    private static readonly string[] GothBody =
+    // Компактная сетка: тело без глаз и рта — лицо рисуется процедурно.
+    private static readonly string[] GothSmall =
     {
         "....oooo....",
         "..ooHHHHoo..",
@@ -46,7 +52,7 @@ public sealed class UnitCharacter : FrameworkElement
         "..oLLooLLo..",
     };
 
-    private static readonly string[] SkeletonBody =
+    private static readonly string[] SkeletonSmall =
     {
         "....oooo....",
         "..ooWWWWoo..",
@@ -66,6 +72,64 @@ public sealed class UnitCharacter : FrameworkElement
         "..oWWooWWo..",
     };
 
+    // Подробная сетка 20×24: косая чёлка, чокер, платье с бантом, платформы.
+    private static readonly string[] GothLarge =
+    {
+        // 20×24: чёлка до бровей, лицо 8 точек, чокер, платье с бантом, платформы.
+        ".......oooooo.......",
+        ".....ooHHHHHHoo.....",
+        "....oHHhhhhhhHHo....",
+        "...oHHhhhhhhhhHHo...",
+        "...ohhhhhhhhhhhho...",
+        "...ohhhhhhhhhhhho...",
+        "...ohhhhhhhhhhhho...",
+        "...ohhffffffffhho...",
+        "...ohhffffffffhho...",
+        "...ohhffffffffhho...",
+        "...ohhffffffffhho...",
+        "...ohhffffffffhho...",
+        "....ohhffffffhho....",
+        "....ohhffffffhho....",
+        ".....occcccco.......",
+        "....oaaaaaaaaao.....",
+        "...oaaaaaaaaaaao....",
+        "...oaaaaaaaaaaao....",
+        "....oaaaaaaaaao.....",
+        "....oaaabbaaao......",
+        "....oaaaaaaaaao.....",
+        "......oo....oo......",
+        "......ll....ll......",
+        ".....LLL....LLL.....",
+    };
+
+    private static readonly string[] SkeletonLarge =
+    {
+        // 20×24: череп с рёбрами, глазницы рисуются процедурно (тёмным).
+        ".......oooooo.......",
+        ".....oowwwwwwoo.....",
+        "....owwwwwwwwwwo....",
+        "...owwwwwwwwwwwwo...",
+        "...owwwwwwwwwwwwo...",
+        "...owwwwwwwwwwwwo...",
+        "...owwwwwwwwwwwwo...",
+        "...owwwwwwwwwwwwo...",
+        "....owwwwwwwwwwo....",
+        ".....owwwwwwwwo.....",
+        "..owwWWWWWWWWWWwwo..",
+        "..owwwwwwwwwwwwwwo..",
+        "..owwwkkwwwwkkwwwo..",
+        "..owwwkkwwwwkkwwwo..",
+        "..owwwkkwwwwkkwwwo..",
+        "...owwkkwwwwkkwwo...",
+        "....owwwwwwwwwwo....",
+        ".....owwwwwwwwo.....",
+        "......oo....oo......",
+        "......ww....ww......",
+        "......ww....ww......",
+        "......ww....ww......",
+        "......ww....ww......",
+        ".....WWWW..WWWW.....",
+    };
     private sealed class Particle
     {
         public double X;
@@ -76,6 +140,7 @@ public sealed class UnitCharacter : FrameworkElement
         public byte Red;
         public byte Green;
         public byte Blue;
+        public double Size;
     }
 
     private readonly DateTime _started = DateTime.Now;
@@ -84,17 +149,19 @@ public sealed class UnitCharacter : FrameworkElement
     private DateTime _nextBlink = DateTime.Now.AddSeconds(4);
     private DateTime _blinkUntil = DateTime.MinValue;
     private DateTime _happyUntil = DateTime.MinValue;
+    private DateTime _lovedUntil = DateTime.MinValue;
+    private DateTime _annoyedUntil = DateTime.MinValue;
+    private DateTime _surprisedUntil = DateTime.MinValue;
     private DateTime _lastInteraction = DateTime.Now;
+    private DateTime _lastPet = DateTime.MinValue;
 
+    private int _recentPets;
     private bool _running;
     private UnitKind _kind = UnitKind.Goth;
     private Mood _mood = Mood.Idle;
     private bool _autoMood = true;
 
-    /// <summary>Через сколько без внимания грустнеет.</summary>
     public TimeSpan SadAfter { get; set; } = TimeSpan.FromMinutes(3);
-
-    /// <summary>Через сколько без внимания засыпает.</summary>
     public TimeSpan SleepyAfter { get; set; } = TimeSpan.FromMinutes(9);
 
     public UnitCharacter()
@@ -106,7 +173,7 @@ public sealed class UnitCharacter : FrameworkElement
 
         Loaded += (_, _) => StartLoop();
         Unloaded += (_, _) => _running = false;
-        MouseLeftButtonDown += OnTapped;
+        MouseLeftButtonDown += (_, e) => { Pet(); e.Handled = true; };
     }
 
     public UnitKind Kind
@@ -120,7 +187,6 @@ public sealed class UnitCharacter : FrameworkElement
         }
     }
 
-    /// <summary>Автоматическое настроение по времени и клику. Выключается для витрины.</summary>
     public bool AutoMood
     {
         get => _autoMood;
@@ -138,10 +204,6 @@ public sealed class UnitCharacter : FrameworkElement
         }
     }
 
-    /// <summary>
-    /// Настроение по времени без внимания: чистая функция без побочных эффектов.
-    /// Отдельная — чтобы самопроверка могла проверить переходы, не ожидая трёх минут.
-    /// </summary>
     public Mood MoodForIdle(TimeSpan idle)
     {
         if (idle > SleepyAfter) return Mood.Sleepy;
@@ -149,45 +211,76 @@ public sealed class UnitCharacter : FrameworkElement
         return Mood.Idle;
     }
 
-    /// <summary>Сколько сейчас «без внимания» — для диагностики и тестов.</summary>
     public TimeSpan IdleFor => DateTime.Now - _lastInteraction;
 
-    /// <summary>Когда последний раз радовалась (тест частиц и клика).</summary>
-    public bool IsHappy => _mood == Mood.Happy;
-
-    /// <summary>Сколько частиц живёт прямо сейчас.</summary>
     public int ParticleCount => _particles.Count;
 
-    /// <summary>Погладить персонажа: он радуется и выпускает точки.</summary>
+    public bool IsHappy => _mood is Mood.Happy or Mood.Loved;
+
+    /// <summary>Погладить: обычный клик радует, частые — сначала «обожает», потом «недовольна».</summary>
     public void Pet()
     {
-        _lastInteraction = DateTime.Now;
-        _happyUntil = DateTime.Now.AddMilliseconds(1500);
-        _mood = Mood.Happy;
+        var now = DateTime.Now;
+        _lastInteraction = now;
 
-        // Немного точек-сердечек вбок и вверх.
-        for (int i = 0; i < 9; i++)
+        // Серия кликов: считаем те, что идут подряд, без паузы больше 2.5 с.
+        _recentPets = (now - _lastPet) < TimeSpan.FromSeconds(2.5) ? _recentPets + 1 : 1;
+        _lastPet = now;
+
+        if (_recentPets >= 6)
         {
-            _particles.Add(new Particle
-            {
-                X = ActualWidth / 2 + Random.Shared.Next(-8, 8),
-                Y = ActualHeight * 0.45,
-                Vx = Random.Shared.NextDouble() * 1.6 - 0.8,
-                Vy = -1.2 - Random.Shared.NextDouble() * 1.4,
-                Born = DateTime.Now,
-                Red = 0xFF,
-                Green = 0xFF,
-                Blue = 0xFF,
-            });
+            _mood = Mood.Annoyed;
+            _annoyedUntil = now.AddSeconds(2);
+            _recentPets = 0;
+        }
+        else if (_recentPets >= 3)
+        {
+            _mood = Mood.Loved;
+            _lovedUntil = now.AddSeconds(2.2);
+            SpawnParticles(now, accent: true, count: 12);
+        }
+        else
+        {
+            _mood = Mood.Happy;
+            _happyUntil = now.AddMilliseconds(1500);
+            SpawnParticles(now, accent: false, count: 9);
         }
 
         InvalidateVisual();
     }
 
-    private void OnTapped(object sender, MouseButtonEventArgs e)
+    /// <summary>Громкий бас пугает — удивление на пару секунд.</summary>
+    public void Surprise()
     {
-        Pet();
-        e.Handled = true;
+        var now = DateTime.Now;
+
+        // Настроение ставим всегда: это явный вызов, а не фоновая реакция,
+        // и в витрине (AutoMood = false) он тоже должен срабатывать.
+        _surprisedUntil = now.AddSeconds(1.2);
+        _mood = Mood.Surprised;
+
+        InvalidateVisual();
+    }
+
+    private void SpawnParticles(DateTime now, bool accent, int count)
+    {
+        var palette = ColorPalette.Accent;
+
+        for (int i = 0; i < count; i++)
+        {
+            _particles.Add(new Particle
+            {
+                X = ActualWidth / 2 + Random.Shared.Next(-10, 10),
+                Y = ActualHeight * 0.45,
+                Vx = Random.Shared.NextDouble() * 1.8 - 0.9,
+                Vy = -1.2 - Random.Shared.NextDouble() * 1.6,
+                Born = now,
+                Red = accent ? palette.R : (byte)0xFF,
+                Green = accent ? palette.G : (byte)0xFF,
+                Blue = accent ? palette.B : (byte)0xFF,
+                Size = accent ? 1.25 : 1.0,
+            });
+        }
     }
 
     private void StartLoop()
@@ -210,9 +303,10 @@ public sealed class UnitCharacter : FrameworkElement
 
         var now = DateTime.Now;
 
-        if (now >= _nextBlink && now >= _blinkUntil)
+        if (now >= _nextBlink && now >= _blinkUntil
+            && _mood is Mood.Idle or Mood.Curious or Mood.Sad)
         {
-            _blinkUntil = now.AddMilliseconds(_mood == Mood.Sleepy ? 220 : 130);
+            _blinkUntil = now.AddMilliseconds(130);
             _nextBlink = now.AddSeconds(_mood == Mood.Sad ? 6 : 3);
         }
 
@@ -225,9 +319,27 @@ public sealed class UnitCharacter : FrameworkElement
     {
         if (!_autoMood) return;
 
-        if (_mood == Mood.Happy && now < _happyUntil) return;
+        // Временные реакции держат приоритет над фоновым настроением.
+        if (now < _annoyedUntil) { _mood = Mood.Annoyed; return; }
+        if (now < _lovedUntil) { _mood = Mood.Loved; return; }
+        if (now < _surprisedUntil) { _mood = Mood.Surprised; return; }
+        if (now < _happyUntil) { _mood = Mood.Happy; return; }
 
-        _mood = MoodForIdle(now - _lastInteraction);
+        var idle = now - _lastInteraction;
+
+        if (idle > SadAfter) { _mood = MoodForIdle(idle); return; }
+
+        // Курсор рядом — любопытство (только если не грустит и не спит).
+        bool near = false;
+        try
+        {
+            var mouse = Mouse.GetPosition(this);
+            near = mouse.X >= -12 && mouse.Y >= -12
+                   && mouse.X <= ActualWidth + 12 && mouse.Y <= ActualHeight + 12;
+        }
+        catch { }
+
+        _mood = near ? Mood.Curious : Mood.Idle;
     }
 
     private void UpdateParticles(DateTime now)
@@ -252,21 +364,33 @@ public sealed class UnitCharacter : FrameworkElement
     {
         base.OnRender(dc);
 
-        var body = Kind == UnitKind.Skeleton ? SkeletonBody : GothBody;
+        bool large = ActualHeight >= 46;
 
-        double cell = Math.Max(2, Math.Min(ActualWidth / 12.0, ActualHeight / 16.0));
-        double width = cell * 12;
-        double height = cell * 16;
+        string[] body = (Kind, large) switch
+        {
+            (UnitKind.Goth, true) => GothLarge,
+            (UnitKind.Goth, false) => GothSmall,
+            (UnitKind.Skeleton, true) => SkeletonLarge,
+            _ => SkeletonSmall,
+        };
+
+        int cols = large ? 20 : 12;
+        int rows = large ? 24 : 16;
+
+        double cell = Math.Max(2, Math.Min(ActualWidth / cols, ActualHeight / rows));
+        double width = cell * cols;
+        double height = cell * rows;
 
         var now = DateTime.Now;
         double t = (now - _started).TotalSeconds;
 
-        // Дыхание: в грусти медленнее и ниже, в радости подпрыгивает.
         double breatheSpeed = _mood switch
         {
             Mood.Sad => 1.0,
             Mood.Sleepy => 0.7,
-            Mood.Happy => 3.2,
+            Mood.Annoyed => 2.6,
+            Mood.Happy or Mood.Loved => 3.2,
+            Mood.Surprised => 2.2,
             _ => 1.6,
         };
 
@@ -276,12 +400,22 @@ public sealed class UnitCharacter : FrameworkElement
         double bass = AudioSpectrum.Current?.Bass ?? 0f;
         double bounce = -Math.Clamp(bass, 0, 1) * cell * 1.4;
 
-        double sadDroop = _mood == Mood.Sad ? cell * 0.6 : _mood == Mood.Sleepy ? cell * 0.9 : 0;
+        double droop = _mood is Mood.Sad or Mood.Sleepy ? cell * 0.7 : 0;
+        double hop = _mood switch
+        {
+            Mood.Happy => -Math.Abs(Math.Sin(t * 7)) * cell * 0.8,
+            Mood.Loved => -Math.Abs(Math.Sin(t * 5)) * cell * 0.5,
+            Mood.Surprised => -Math.Abs(Math.Sin(t * 12)) * cell * 0.4,
+            _ => 0,
+        };
 
-        double originX = (ActualWidth - width) / 2;
-        double originY = (ActualHeight - height) / 2 + breathe + bounce + sadDroop;
+        // Недовольство: мотает головой.
+        double shake = _mood == Mood.Annoyed ? Math.Sin(t * 22) * cell * 0.35 : 0;
 
-        // Взгляд: глаза тянутся к курсору, но не дальше полутора клеток.
+        double originX = (ActualWidth - width) / 2 + shake;
+        double originY = (ActualHeight - height) / 2 + breathe + bounce + droop + hop;
+
+        // Взгляд за курсором.
         double lookX = 0, lookY = 0;
         try
         {
@@ -291,14 +425,11 @@ public sealed class UnitCharacter : FrameworkElement
         }
         catch { }
 
-        if (_mood is Mood.Sad or Mood.Sleepy)
-        {
-            lookX *= 0.2;
-            lookY = 1;   // в грусти смотрит вниз
-        }
+        if (_mood is Mood.Sad or Mood.Sleepy) { lookX *= 0.2; lookY = 1; }
+        if (_mood == Mood.Annoyed) lookX = 0;
 
         DrawBody(dc, body, originX, originY, cell);
-        DrawFace(dc, originX, originY, cell, lookX, lookY, now, t);
+        DrawFace(dc, originX, originY, cell, large, lookX, lookY, now, t);
         DrawParticles(dc, cell);
     }
 
@@ -307,6 +438,7 @@ public sealed class UnitCharacter : FrameworkElement
         for (int row = 0; row < body.Length; row++)
         {
             var line = body[row];
+
             for (int col = 0; col < line.Length; col++)
             {
                 char symbol = line[col];
@@ -322,77 +454,147 @@ public sealed class UnitCharacter : FrameworkElement
         }
     }
 
-    private void DrawFace(DrawingContext dc, double ox, double oy, double cell,
+    private void DrawFace(DrawingContext dc, double ox, double oy, double cell, bool large,
         double lookX, double lookY, DateTime now, double t)
     {
+        bool skeleton = Kind == UnitKind.Skeleton;
+
         var accent = ColorPalette.Accent;
-        var accentBrush = Frozen(accent);
+        var accentBrush = Frozen(skeleton ? Color.FromRgb(0x0B, 0x0B, 0x0E) : accent);
         var glint = Frozen(Color.FromRgb(0xFF, 0xFF, 0xFF));
-        var mouth = Frozen(Color.FromRgb(0x9A, 0x9A, 0xA4));
+        var mouthBrush = Frozen(skeleton ? Color.FromRgb(0x0B, 0x0B, 0x0E) : Color.FromRgb(0x9A, 0x9A, 0xA4));
+        var browBrush = Frozen(Color.FromRgb(0x1B, 0x1B, 0x22));
 
-        double eyeY = oy + 6.2 * cell;
-        double leftEyeX = ox + 3.6 * cell;
-        double rightEyeX = ox + 8.4 * cell;
+        // Геометрия лица зависит от сетки: компактная / подробная.
+        bool bone = Kind == UnitKind.Skeleton;
 
-        bool blink = now < _blinkUntil && _mood != Mood.Sleepy;
-        bool squint = _mood == Mood.Happy;
-        bool closed = _mood == Mood.Sleepy;
+        double eyeRow = large ? (bone ? 6.6 : 10.4) : (bone ? 6.2 : 6.2);
+        double eyeLeft = large ? (bone ? 6.9 : 6.9) : 3.6;
+        double eyeRight = large ? (bone ? 10.9 : 10.9) : 8.4;
+        double mouthRow = large ? (bone ? 10.4 : 12.7) : 8.4;
+        double cheekRow = large ? (bone ? 8.6 : 11.6) : 7.8;
+        double faceCenter = large ? 9.0 : 6.0;
 
-        // Смещение взгляда: 0.45 клетки — достаточно, чтобы читалось «смотрит».
+        double eyeY = oy + eyeRow * cell;
+        double leftEyeX = ox + eyeLeft * cell;
+        double rightEyeX = ox + eyeRight * cell;
+
+        bool blink = now < _blinkUntil && _mood is Mood.Idle or Mood.Curious or Mood.Sad;
         double dx = lookX * cell * 0.45;
         double dy = lookY * cell * 0.35;
 
-        if (closed || blink)
+        double radius = _mood switch
         {
-            foreach (double x in new[] { leftEyeX, rightEyeX })
-                dc.DrawRectangle(accentBrush, null,
-                    new Rect(x - cell * 0.45, eyeY, cell * 0.9, Math.Max(1, cell * 0.22)));
-        }
-        else if (squint)
-        {
-            // Жмурится: вместо точки — короткая дуга-«галочка».
-            foreach (double x in new[] { leftEyeX, rightEyeX })
-            {
-                dc.DrawEllipse(accentBrush, null, new Point(x - cell * 0.22, eyeY + cell * 0.18), cell * 0.34, cell * 0.34);
-                dc.DrawEllipse(accentBrush, null, new Point(x + cell * 0.22, eyeY - cell * 0.05), cell * 0.34, cell * 0.34);
-            }
-        }
-        else
-        {
-            foreach (double x in new[] { leftEyeX, rightEyeX })
-            {
-                dc.DrawEllipse(accentBrush, null, new Point(x + dx, eyeY + dy), cell * 0.5, cell * 0.5);
+            Mood.Surprised => cell * 0.66,
+            Mood.Curious => cell * 0.56,
+            Mood.Sad => cell * 0.46,
+            _ => cell * 0.5,
+        };
 
-                // Блики: в грусти приглушён, чтобы взгляд был «потухшим».
-                if (_mood != Mood.Sad)
-                    dc.DrawEllipse(glint, null, new Point(x + dx + cell * 0.16, eyeY + dy - cell * 0.18), cell * 0.17, cell * 0.17);
-            }
+        switch (_mood)
+        {
+            case Mood.Sleepy:
+            case Mood.Annoyed:
+                foreach (double x in new[] { leftEyeX, rightEyeX })
+                    dc.DrawRectangle(accentBrush, null,
+                        new Rect(x - cell * 0.48, eyeY, cell * 0.96, Math.Max(1, cell * 0.22)));
+
+                if (_mood == Mood.Annoyed)
+                {
+                    // Брови домиком — главный признак недовольства.
+                    dc.DrawRectangle(browBrush, null,
+                        new Rect(leftEyeX - cell * 0.5, eyeY - cell * 0.55, cell * 1.0, Math.Max(1, cell * 0.18)));
+                    dc.DrawRectangle(browBrush, null,
+                        new Rect(rightEyeX - cell * 0.5, eyeY - cell * 0.55, cell * 1.0, Math.Max(1, cell * 0.18)));
+                }
+                break;
+
+            case Mood.Happy:
+            case Mood.Loved:
+                // Жмурится дугами: две точки образуют «галочку».
+                foreach (double x in new[] { leftEyeX, rightEyeX })
+                {
+                    dc.DrawEllipse(accentBrush, null, new Point(x - cell * 0.24, eyeY + cell * 0.2), cell * 0.34, cell * 0.34);
+                    dc.DrawEllipse(accentBrush, null, new Point(x + cell * 0.24, eyeY - cell * 0.02), cell * 0.34, cell * 0.34);
+                }
+
+                if (_mood == Mood.Loved)
+                {
+                    // Румянец: две мягкие точки акцентом ниже глаз.
+                    var blush = Frozen(Color.FromArgb(150, accent.R, accent.G, accent.B));
+                    foreach (double x in new[] { leftEyeX - cell * 0.3, rightEyeX + cell * 0.3 })
+                        dc.DrawEllipse(blush, null, new Point(x, oy + cheekRow * cell), cell * 0.42, cell * 0.3);
+                }
+                break;
+
+            case Mood.Surprised:
+                foreach (double x in new[] { leftEyeX, rightEyeX })
+                {
+                    dc.DrawEllipse(accentBrush, null, new Point(x, eyeY), cell * 0.62, cell * 0.62);
+                    dc.DrawEllipse(glint, null, new Point(x + cell * 0.2, eyeY - cell * 0.22), cell * 0.2, cell * 0.2);
+                }
+                break;
+
+            default:
+                if (blink)
+                {
+                    foreach (double x in new[] { leftEyeX, rightEyeX })
+                        dc.DrawRectangle(accentBrush, null,
+                            new Rect(x - cell * 0.45, eyeY, cell * 0.9, Math.Max(1, cell * 0.22)));
+                }
+                else
+                {
+                    foreach (double x in new[] { leftEyeX, rightEyeX })
+                    {
+                        dc.DrawEllipse(accentBrush, null, new Point(x + dx, eyeY + dy), radius, radius);
+
+                        if (_mood != Mood.Sad)
+                            dc.DrawEllipse(glint, null,
+                                new Point(x + dx + cell * 0.17, eyeY + dy - cell * 0.19), cell * 0.17, cell * 0.17);
+                    }
+                }
+                break;
         }
 
-        // Рот: нейтрально — черта, радость — улыбка, грусть — уголки вниз, сон — маленький овал.
-        double mouthY = oy + 8.4 * cell;
-        double centerX = ox + 6 * cell;
+        // --- рот ---
+        double mouthY = oy + mouthRow * cell;
+        double centerX = ox + faceCenter * cell;
 
         switch (_mood)
         {
             case Mood.Happy:
-                dc.DrawEllipse(mouth, null, new Point(centerX - cell * 0.55, mouthY - cell * 0.1), cell * 0.22, cell * 0.22);
-                dc.DrawEllipse(mouth, null, new Point(centerX, mouthY + cell * 0.18), cell * 0.22, cell * 0.22);
-                dc.DrawEllipse(mouth, null, new Point(centerX + cell * 0.55, mouthY - cell * 0.1), cell * 0.22, cell * 0.22);
+            case Mood.Loved:
+                dc.DrawEllipse(mouthBrush, null, new Point(centerX - cell * 0.55, mouthY - cell * 0.1), cell * 0.22, cell * 0.22);
+                dc.DrawEllipse(mouthBrush, null, new Point(centerX, mouthY + cell * 0.18), cell * 0.22, cell * 0.22);
+                dc.DrawEllipse(mouthBrush, null, new Point(centerX + cell * 0.55, mouthY - cell * 0.1), cell * 0.22, cell * 0.22);
                 break;
 
             case Mood.Sad:
-                dc.DrawEllipse(mouth, null, new Point(centerX - cell * 0.5, mouthY + cell * 0.1), cell * 0.2, cell * 0.2);
-                dc.DrawEllipse(mouth, null, new Point(centerX, mouthY - cell * 0.1), cell * 0.2, cell * 0.2);
-                dc.DrawEllipse(mouth, null, new Point(centerX + cell * 0.5, mouthY + cell * 0.1), cell * 0.2, cell * 0.2);
+                dc.DrawEllipse(mouthBrush, null, new Point(centerX - cell * 0.5, mouthY + cell * 0.1), cell * 0.2, cell * 0.2);
+                dc.DrawEllipse(mouthBrush, null, new Point(centerX, mouthY - cell * 0.1), cell * 0.2, cell * 0.2);
+                dc.DrawEllipse(mouthBrush, null, new Point(centerX + cell * 0.5, mouthY + cell * 0.1), cell * 0.2, cell * 0.2);
                 break;
 
             case Mood.Sleepy:
-                dc.DrawEllipse(mouth, null, new Point(centerX, mouthY), cell * 0.3, cell * 0.2);
+                dc.DrawEllipse(mouthBrush, null, new Point(centerX, mouthY), cell * 0.3, cell * 0.2);
+                break;
+
+            case Mood.Surprised:
+                dc.DrawEllipse(mouthBrush, null, new Point(centerX, mouthY), cell * 0.36, cell * 0.46);
+                break;
+
+            case Mood.Annoyed:
+                dc.DrawRectangle(mouthBrush, null,
+                    new Rect(centerX - cell * 0.42, mouthY, cell * 0.84, Math.Max(1, cell * 0.2)));
+                break;
+
+            case Mood.Curious:
+                dc.DrawEllipse(mouthBrush, null, new Point(centerX - cell * 0.15, mouthY), cell * 0.26, cell * 0.22);
                 break;
 
             default:
-                dc.DrawRectangle(mouth, null, new Rect(centerX - cell * 0.5, mouthY, cell, Math.Max(1, cell * 0.2)));
+                dc.DrawRectangle(mouthBrush, null,
+                    new Rect(centerX - cell * 0.5, mouthY, cell, Math.Max(1, cell * 0.2)));
                 break;
         }
 
@@ -401,16 +603,26 @@ public sealed class UnitCharacter : FrameworkElement
         {
             var zBrush = Frozen(Color.FromRgb(0x8A, 0x8A, 0x93));
             double phase = (t % 3) / 3;
+            double baseX = ox + (large ? 17.0 : 10.4) * cell;
+            double baseY = oy + (large ? 1.4 : 1.2) * cell;
 
             for (int i = 0; i < 3; i++)
             {
                 double offset = (phase + i * 0.33) % 1;
-                double zx = ox + 10.4 * cell + offset * cell * 1.6;
-                double zy = oy + 1.2 * cell - offset * cell * 2.4;
-                double r = cell * (0.16 + 0.12 * (1 - offset));
-
-                dc.DrawEllipse(zBrush, null, new Point(zx, zy), r, r);
+                dc.DrawEllipse(zBrush, null, new Point(
+                    baseX + offset * cell * 1.6,
+                    baseY - offset * cell * 2.4), cell * (0.16 + 0.12 * (1 - offset)), cell * (0.16 + 0.12 * (1 - offset)));
             }
+        }
+
+        // Любопытство: маленький знак «?» точкой над головой.
+        if (_mood == Mood.Curious)
+        {
+            var qBrush = Frozen(Color.FromRgb(0x8A, 0x8A, 0x93));
+            double qx = ox + (large ? 16.8 : 10.2) * cell;
+            double qy = oy + (large ? 3.4 : 2.2) * cell;
+            dc.DrawEllipse(qBrush, null, new Point(qx, qy), cell * 0.2, cell * 0.2);
+            dc.DrawEllipse(qBrush, null, new Point(qx, qy + cell * 0.55), cell * 0.14, cell * 0.14);
         }
     }
 
@@ -424,7 +636,7 @@ public sealed class UnitCharacter : FrameworkElement
             if (life <= 0) continue;
 
             var brush = Frozen(Color.FromArgb((byte)(life * 210), particle.Red, particle.Green, particle.Blue));
-            double radius = cell * (0.14 + life * 0.16);
+            double radius = cell * (0.14 + life * 0.16) * particle.Size;
 
             dc.DrawEllipse(brush, null, new Point(particle.X, particle.Y), radius, radius);
         }
