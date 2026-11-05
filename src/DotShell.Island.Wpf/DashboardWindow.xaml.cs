@@ -92,7 +92,17 @@ public partial class DashboardWindow : Window
         // которое открылось «на секунду» без активации, иначе закрывается сразу.
         bool activated = false;
         Activated += (_, _) => activated = true;
-        Deactivated += (_, _) => { if (activated) Close(); };
+        Deactivated += (_, _) =>
+        {
+            if (!activated) return;
+
+            // Фокус ушёл к нашему же окну (док, виджет, остров) — не закрываемся.
+            // Без этого обзор захлопывался сразу после открытия, стоило доку
+            // получить активацию: в аудите окно вообще не появлялось.
+            if (ForegroundProcessId() == Environment.ProcessId) return;
+
+            Close();
+        };
         Closed += (_, _) =>
         {
             _tick.Stop();
@@ -367,5 +377,28 @@ public partial class DashboardWindow : Window
 
         BeginAnimation(TopProperty, slide);
         BeginAnimation(OpacityProperty, fade);
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+    /// <summary>PID окна, которое сейчас на переднем плане (0 — не удалось).</summary>
+    private static uint ForegroundProcessId()
+    {
+        try
+        {
+            var hwnd = GetForegroundWindow();
+            if (hwnd == IntPtr.Zero) return 0;
+
+            GetWindowThreadProcessId(hwnd, out uint pid);
+            return pid;
+        }
+        catch
+        {
+            return 0;
+        }
     }
 }
