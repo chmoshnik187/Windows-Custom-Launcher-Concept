@@ -5,9 +5,11 @@
 # или пустым прямоугольником, smoke пропускает.
 #
 # Скрипт запускает DotShell по очереди с флагами окон и смотрит три вещи:
-#   1) процесс жив через 12 секунд;
-#   2) окно с ожидаемым заголовком появилось;
-#   3) в crash.log не прибавилось FATAL.
+#   1) процесс жив и окно с ожидаемым заголовком появилось до таймаута
+#      (-WindowTimeoutSec, по умолчанию 15 с; окно ищем строго у своего PID,
+#      а если процесс умер — провал сразу, без досиживания паузы);
+#   2) в crash.log не прибавилось FATAL;
+#   3) у центра управления на месте содержимое (WI-FI/CPU), а не только рамка.
 #
 # Запуск:  pwsh -File scripts/ui-audit.ps1
 # Быстро:  pwsh -File scripts/ui-audit.ps1 -Quick
@@ -16,7 +18,8 @@
 [CmdletBinding()]
 param(
     [switch]$Quick,
-    [string]$Exe = ''
+    [string]$Exe = '',
+    [ValidateRange(1, 120)][int]$WindowTimeoutSec = 15
 )
 
 $ErrorActionPreference = 'Continue'
@@ -107,6 +110,25 @@ function Get-FatalCount {
     return (Select-String -Path $log -Pattern 'FATAL' -ErrorAction SilentlyContinue | Measure-Object).Count
 }
 
+# Содержимое центра управления через UI Automation. Вынесено в функцию, потому что
+# ожидание окна опрашивает его повторно: UIA-дерево наполняется не в тот же миг,
+# когда появляется заголовок окна.
+function Test-ControlCenterContent([int]$procId, [string]$title) {
+    $hwnd = [UiProbe]::Find($procId, $title)
+    if ($hwnd -eq [IntPtr]::Zero) { return $false }
+
+    try {
+        $element = [System.Windows.Automation.AutomationElement]::FromHandle($hwnd)
+        if ($element -ne $null) {
+            $found = $element.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+                [System.Windows.Automation.Condition]::TrueCondition)
+            $text = ($found | ForEach-Object { $_.Current.Name }) -join ' '
+            return ($text -match 'WI-FI') -and ($text -match 'CPU')
+        }
+    } catch { }
+    return $false
+}
+
 # --- юнит: самопроверка эмоций ---------------------------------------------
 # Отдельный прогон без окна: рендерит все настроения и сравнивает пиксели.
 $unitLog = Join-Path $env:LOCALAPPDATA 'DotShell\unit-selftest.txt'
@@ -127,37 +149,51 @@ foreach ($case in $cases) {
 
     $before = Get-FatalCount
     $process = Start-Process $Exe -ArgumentList $case.Flag -PassThru
-    Start-Sleep -Seconds 12
 
-    $alive = $null -ne (Get-Process -Id $process.Id -ErrorAction SilentlyContinue)
-    $titles = if ($alive) { [UiProbe]::Titles($process.Id) } else { @() }
-    $joined = $titles -join ';'
+    # Окно ждём циклом: на холодном старте 12 с не всегда хватало (ложные провалы),
+    # а на быстром старте фиксированная пауза только тормозила аудит.
+    # Процесс умер — провал сразу, таймаут не досиживаем.
+    $deadline = [DateTime]::UtcNow.AddSeconds($WindowTimeoutSec)
+    $alive = $false
+    $windowOk = $false
+    $contentOk = $true
+    $stableSince = $null
 
-    $windowOk = if ([string]::IsNullOrEmpty($case.Expect)) {
-        $titles.Count -gt 0
-    } else {
-        $joined -like "*$($case.Expect)*"
+    while ($true) {
+        $alive = $null -ne (Get-Process -Id $process.Id -ErrorAction SilentlyContinue)
+        if (-not $alive) { break }
+
+        $titles = [UiProbe]::Titles($process.Id)
+        $joined = $titles -join ';'
+
+        $windowOk = if ([string]::IsNullOrEmpty($case.Expect)) {
+            $titles.Count -gt 0
+        } else {
+            $joined -like "*$($case.Expect)*"
+        }
+
+        # Центр управления проверяем не только «окно есть», но и «сеть на месте»:
+        # в 1.1.0 там появились статус Wi-Fi и переключатели радио, и молчаливая
+        # поломка этого блока не должна проходить аудитом.
+        $contentOk = $true
+        if ($windowOk -and $case.Flag -eq '--control-center') {
+            $contentOk = Test-ControlCenterContent $process.Id $case.Expect
+        }
+
+        # 0.5 с устойчивого окна заменяют ту часть старой 12-секундной паузы,
+        # которая ловила падение сразу после появления окна.
+        if ($windowOk -and $contentOk) {
+            if ($null -eq $stableSince) { $stableSince = [DateTime]::UtcNow }
+            elseif (([DateTime]::UtcNow - $stableSince).TotalMilliseconds -ge 500) { break }
+        } else {
+            $stableSince = $null
+        }
+
+        if ([DateTime]::UtcNow -ge $deadline) { break }
+        Start-Sleep -Milliseconds 250
     }
 
     $fatal = (Get-FatalCount) - $before
-
-    # Центр управления проверяем не только «окно есть», но и «сеть на месте»:
-    # в 1.1.0 там появились статус Wi-Fi и переключатели радио, и молчаливая
-    # поломка этого блока не должна проходить аудитом.
-    $contentOk = $true
-    if ($case.Flag -eq '--control-center' -and $alive) {
-        $element = [System.Windows.Automation.AutomationElement]::FromHandle(
-            [UiProbe]::Find($process.Id, $case.Expect))
-
-        if ($element -ne $null) {
-            $found = $element.FindAll([System.Windows.Automation.TreeScope]::Descendants,
-                [System.Windows.Automation.Condition]::TrueCondition)
-
-            $text = ($found | ForEach-Object { $_.Current.Name }) -join ' '
-
-            $contentOk = ($text -match 'WI-FI') -and ($text -match 'CPU')
-        }
-    }
 
     $ok = $alive -and $windowOk -and $fatal -eq 0 -and $contentOk
 

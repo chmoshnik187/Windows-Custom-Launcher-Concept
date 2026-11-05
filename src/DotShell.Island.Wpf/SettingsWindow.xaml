@@ -95,8 +95,9 @@
         </ResourceDictionary>
     </Window.Resources>
 
-    <!-- Фон карточки непрозрачный: сквозь полупрозрачную «материю» острова проступала
-         сжатая строка подписей — читалось как двоящийся текст поверх первого пункта. -->
+    <!-- Фон карточки непрозрачный: иначе точечный рисунок фона просвечивает под текстом
+         и мешает читать. «Двоящийся текст» когда-то списывали на прозрачность — на самом
+         деле это были подписи вне панелей категорий (см. комментарий у PanelLook). -->
     <Border x:Name="Card" Margin="16" CornerRadius="16" BorderThickness="1" ClipToBounds="True"
             Background="#0B0B0E" BorderBrush="{DynamicResource DsBorder}">
         <Grid>
@@ -183,9 +184,9 @@
                               VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                               Style="{StaticResource DsScroll}">
 
-                    <!-- Фон непрозрачный: сквозь полупрозрачную карточку проступала
-                         сжатая строка подписей категорий — читалось как «двоящийся» текст
-                         поверх первого пункта. -->
+                    <!-- Фон непрозрачный: рисунок фона не должен просвечивать под строками.
+                         Раньше здесь искали причину «призрачной строки» — она была не в
+                         прозрачности: часть строк стояла вне панелей (см. PanelLook). -->
                     <Grid Background="#0B0B0E">
                         <!-- ВНЕШНИЙ ВИД -->
                         <StackPanel x:Name="PanelLook">
@@ -295,8 +296,11 @@
                                       Content="Шахматный сдвиг строк"
                                       IsChecked="{Binding DotStagger}"
                                       Margin="0,8,0,0" />
-                        </StackPanel>
 
+                            <!-- Эти строки раньше стояли после закрывающего </StackPanel> и попадали
+                                 прямыми детьми в Grid содержимого: Grid без строк растягивал подписи
+                                 на всю высоту, и три текста рисовались в одной верхней точке —
+                                 «призрачная строка» поверх первого пункта. -->
                             <TextBlock Style="{StaticResource Section}" Text="КУДА ПОКАЗЫВАТЬ УВЕДОМЛЕНИЯ" />
                             <ComboBox x:Name="NotifyModeBox" Style="{StaticResource DsCombo}" />
 
@@ -306,6 +310,7 @@
 
                             <TextBlock Style="{StaticResource Section}" Text="ЗВУК УВЕДОМЛЕНИЯ" />
                             <ComboBox x:Name="NotifySoundBox" Style="{StaticResource DsCombo}" />
+                        </StackPanel>
 
                         <StackPanel x:Name="PanelDesktop" Visibility="Collapsed">
                             <CheckBox Style="{StaticResource DsToggle}"

@@ -1,6 +1,7 @@
 namespace DotShell.Island.Wpf.Widgets;
 
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -10,9 +11,11 @@ using DotShell.Island.Wpf.Controls;
 /// <summary>
 /// Виджет «Трей»: значки приложений из области уведомлений, своими руками.
 ///
-/// Состав берём из процессов, которые держат трей-значок (см. <see cref="TrayApps"/>),
-/// служебные вроде прокси и webhelper прячем. Правый клик — настройка: какие значки
-/// показывать и какие закрепить навсегда.
+/// Состав берём из UI Automation по панели задач — это настоящий список значков.
+/// Перебор процессов-владельцев остаётся деградацией для того, чего UIA в этот
+/// момент не показывает (см. <see cref="TrayApps"/>). Служебные вроде прокси и
+/// webhelper прячем. Правый клик — настройка: какие значки показывать и какие
+/// закрепить навсегда.
 ///
 /// Плитки заполняют всю площадь виджета: потянул за угол — выросли и значки
 /// (<see cref="TileFillPanel"/>).
@@ -89,6 +92,11 @@ public sealed partial class WidgetWindow
                 tiles.Children.Add(empty);
             }
         }
+
+        // Источник значков ставим здесь, а не в ядре: UIAutomationClient живёт
+        // в WindowsDesktop, а ядро намеренно не ссылается на UI-фреймворк.
+        TrayApps.UiReader ??= TrayUi.Read;
+        TrayApps.UiInvoker ??= TrayUi.Invoke;
 
         menu = BuildTrayMenu(() => Refresh());
         Refresh();
@@ -226,6 +234,12 @@ public sealed partial class WidgetWindow
 
     private UIElement TrayTile(TrayApps.TrayApp app, ContextMenu? menu)
     {
+        // Подсказка значка из панели задач бывает многострочной (Java, Cloudflare),
+        // а в плитке нужна одна строка — иначе тултип занимает пол-экрана.
+        var caption = app.Tooltip is { Length: > 0 } tip
+            ? tip.Split('\n')[0].Trim()
+            : app.ProcessName;
+
         // Размер не задаём: его назначит панель, растягивая клетку на всю площадь.
         var frame = new Border
         {
@@ -234,7 +248,7 @@ public sealed partial class WidgetWindow
             Background = Brushes.Transparent,
             ToolTip = app.OwnerClass == "pinned"
                 ? $"{app.ProcessName}\nзакрыта · клик — запустить"
-                : $"{app.ProcessName}\nклик — показать окно",
+                : $"{caption}\nклик — показать окно",
             Opacity = app.OwnerClass == "pinned" ? 0.42 : 1.0,
         };
         frame.SetResourceReference(Border.BorderBrushProperty, "DsBorder");
@@ -268,5 +282,123 @@ public sealed partial class WidgetWindow
         frame.MouseRightButtonUp += (_, e) => OpenMenu(menu, frame, e);
 
         return frame;
+    }
+
+    /// <summary>
+    /// Значки панели задач через UI Automation — то, что Windows показывает человеку.
+    ///
+    /// Два места. Видимые значки приложений — кнопки с классом `SystemTray.*` в дереве
+    /// Shell_TrayWnd. Скрытые — в отдельном окне `TopLevelWindowForOverflowXamlIsland`:
+    /// измерено на 26300, что его дерево пустое, пока флайаут закрыт (0 кнопок), и
+    /// содержит все значки, пока открыт (12 кнопок). Ядро запоминает скрытые значки
+    /// на сессию, поэтому виджет показывает их и после закрытия переполнения.
+    ///
+    /// UIA отдаёт живое дерево чужого процесса: элементы нельзя держать между
+    /// обновлениями, поэтому клик каждый раз ищет кнопку заново по имени.
+    /// </summary>
+    private static class TrayUi
+    {
+        public static TrayApps.TrayUiSnapshot Read()
+        {
+            var icons = new List<TrayApps.TrayUiIcon>();
+
+            foreach (var handle in TrayApps.TaskbarHandles())
+                icons.AddRange(VisibleIcons(handle));
+
+            var overflow = TrayApps.OverflowIslandHandle();
+            if (overflow == IntPtr.Zero)
+                return new TrayApps.TrayUiSnapshot { Icons = icons, OverflowOpen = false };
+
+            var overflowOpen = false;
+            try
+            {
+                var root = AutomationElement.FromHandle(overflow);
+                var buttons = root.FindAll(
+                    TreeScope.Descendants,
+                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button));
+
+                foreach (AutomationElement button in buttons)
+                {
+                    if (!SafeClassName(button).StartsWith("SystemTray.", StringComparison.Ordinal)) continue;
+
+                    var name = SafeName(button);
+                    if (string.IsNullOrWhiteSpace(name) || TrayApps.IsShellTrayName(name)) continue;
+
+                    overflowOpen = true;
+                    icons.Add(new TrayApps.TrayUiIcon { Name = name, InOverflow = true });
+                }
+            }
+            catch { /* остров мог исчезнуть между чтениями */ }
+
+            return new TrayApps.TrayUiSnapshot { Icons = icons, OverflowOpen = overflowOpen };
+        }
+
+        /// <summary>Нажать значок так же, как это сделал бы человек в панели задач.</summary>
+        public static bool Invoke(string name)
+        {
+            var sources = new List<IntPtr>(TrayApps.TaskbarHandles());
+            var overflow = TrayApps.OverflowIslandHandle();
+            if (overflow != IntPtr.Zero) sources.Add(overflow);
+
+            foreach (var handle in sources)
+            {
+                try
+                {
+                    var root = AutomationElement.FromHandle(handle);
+                    var element = root.FindFirst(
+                        TreeScope.Descendants,
+                        new PropertyCondition(AutomationElement.NameProperty, name));
+
+                    if (element is null) continue;
+                    if (!SafeClassName(element).StartsWith("SystemTray.", StringComparison.Ordinal)) continue;
+                    if (!element.TryGetCurrentPattern(InvokePattern.Pattern, out var pattern)) continue;
+                    if (pattern is not InvokePattern invoke) continue;
+
+                    invoke.Invoke();
+                    return true;
+                }
+                catch { /* элемент исчез — пробуем следующий источник */ }
+            }
+
+            return false;
+        }
+
+        /// <summary>Видимые значки приложений в дереве панели задач (служебные отсекаем).</summary>
+        private static IEnumerable<TrayApps.TrayUiIcon> VisibleIcons(IntPtr handle)
+        {
+            AutomationElement root;
+            try { root = AutomationElement.FromHandle(handle); }
+            catch { yield break; }
+
+            AutomationElementCollection all;
+            // Condition здесь именно из UIA: в System.Windows есть свой Condition (кисти),
+            // и без полного имени компилятор не может выбрать.
+            try { all = root.FindAll(TreeScope.Descendants, System.Windows.Automation.Condition.TrueCondition); }
+            catch { yield break; }
+
+            foreach (AutomationElement element in all)
+            {
+                if (!SafeClassName(element).StartsWith("SystemTray.", StringComparison.Ordinal)) continue;
+
+                var name = SafeName(element);
+                if (string.IsNullOrWhiteSpace(name) || TrayApps.IsShellTrayName(name)) continue;
+
+                yield return new TrayApps.TrayUiIcon { Name = name, InOverflow = false };
+            }
+        }
+
+        // Current ходит в чужой процесс и бросает, если элемент исчез;
+        // один пропавший значок не должен ломать всё чтение.
+        private static string SafeClassName(AutomationElement element)
+        {
+            try { return element.Current.ClassName; }
+            catch { return string.Empty; }
+        }
+
+        private static string SafeName(AutomationElement element)
+        {
+            try { return element.Current.Name; }
+            catch { return string.Empty; }
+        }
     }
 }
