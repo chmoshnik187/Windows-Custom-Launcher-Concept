@@ -20,10 +20,13 @@
 
 ### Удалено
 
-- **9 мёртвых приватных методов**: `FindProcessByPath`, `BuildGroupApps` (старая
+- **13 мёртвых приватных методов**: `FindProcessByPath`, `BuildGroupApps` (старая
   отрисовка группы внутри острова — группу теперь открывает `GroupWindow`),
   `IsLabelAbove`, `RowText`, `Unused`, `FadedWhite`, `OnPlayClick`/`OnNextClick`/`OnPrevClick`
-  (плеер рисует `PlayerStrip`, эти обработчики никто не вызывал);
+  (плеер рисует `PlayerStrip`, эти обработчики никто не вызывал). После удаления
+  `BuildGroupApps` сиротами стали ещё четыре: `AssignHotkey` (назначение клавиши теперь
+  в контекстном меню `GroupWindow`), `LoadIconFile`, `OpenPicker` (панель выбора программ
+  была привязана только к удалённой плите) и `WhiteColor` (держался только `FadedWhite`);
 - **поле `_none`** (давало предупреждение CS0169);
 - **3 мёртвые настройки**: `ArtistStyle`, `HitTestPollMs`, `NotchAvoidWidth` — поля
   в `settings.json` были, а кода, который их читает, не было;
