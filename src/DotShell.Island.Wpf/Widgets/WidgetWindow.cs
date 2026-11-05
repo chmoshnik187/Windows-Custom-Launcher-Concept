@@ -310,6 +310,7 @@ public sealed partial class WidgetWindow : Window
         "currency" => BuildCurrency(),
         "tray" => BuildTray(),
         "weather" => BuildWeather(),
+        "calendar" => BuildCalendar(),
         _ => new TextBlock { Text = "?" },
     };
 

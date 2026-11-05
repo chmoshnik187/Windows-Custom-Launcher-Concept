@@ -14,11 +14,12 @@ using DotShell.Core.Widgets;
 public static class WidgetsManager
 {
     public static readonly string[] Types =
-        { "clock", "eq", "media", "system", "units", "settings", "clean", "dupes", "update", "windows", "audio", "currency", "tray", "weather" };
+        { "clock", "eq", "media", "system", "units", "settings", "clean", "dupes", "update", "windows", "audio", "currency", "tray", "weather", "calendar" };
 
     public static string Label(string type) => type switch
     {
         "clock" => "Часы из точек",
+        "calendar" => "Календарь месяца",
         "eq" => "Эквалайзер",
         "media" => "Плеер",
         "system" => "Система (CPU/RAM)",

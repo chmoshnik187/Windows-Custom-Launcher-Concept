@@ -67,7 +67,7 @@ public static class WidgetProbe
 
 $allTypes = @(
     'clock', 'media', 'weather', 'system', 'units', 'settings', 'clean',
-    'dupes', 'update', 'windows', 'audio', 'currency', 'tray', 'eq'
+    'dupes', 'update', 'windows', 'audio', 'currency', 'tray', 'eq', 'calendar'
 )
 
 $types = if ($Quick) { $allTypes | Select-Object -First 5 } else { $allTypes }
