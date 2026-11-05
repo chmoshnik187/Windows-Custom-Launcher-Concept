@@ -29,6 +29,12 @@ public sealed class ControlCenterWindow : Window
     private TextBlock? _clockLine;
     private TextBlock? _wifiLine;
     private TextBlock? _wifiRadioLabel;
+    private DotSpark? _cpuSpark;
+    private DotSpark? _ramSpark;
+    private DotSpark? _gpuSpark;
+    private TextBlock? _cpuCaption;
+    private TextBlock? _ramCaption;
+    private TextBlock? _gpuCaption;
     private TextBlock? _bluetoothRadioLabel;
     private readonly DotSeekBar _volumeBar;
     private readonly TextBlock _volumeValue;
@@ -227,6 +233,16 @@ public sealed class ControlCenterWindow : Window
 
         root.Children.Add(Section("СИСТЕМА"));
 
+        // История загрузки: три спарклайна точками. Строка «CPU 24%» отвечает, что сейчас;
+        // график показывает, что было — всплески видны сразу.
+        _cpuSpark = SparkRow(root, "CPU", out var cpuCaption);
+        _ramSpark = SparkRow(root, "RAM", out var ramCaption);
+        _gpuSpark = SparkRow(root, "GPU", out var gpuCaption);
+
+        _cpuCaption = cpuCaption;
+        _ramCaption = ramCaption;
+        _gpuCaption = gpuCaption;
+
         _clockLine = new TextBlock
         {
             FontFamily = new FontFamily("Bahnschrift"),
@@ -312,6 +328,33 @@ public sealed class ControlCenterWindow : Window
             _statsLine.Text = $"CPU {stats.Cpu:0}%   ·   RAM {usedGb:0,0} из {totalGb:0,0} ГБ";
         }
 
+        double totalMemory = Math.Max(1, stats.TotalMemoryMb);
+        double ramPercent = stats.UsedMemoryMb / totalMemory * 100.0;
+
+        DotShell.Core.Diagnostics.PerfHistory.Push(stats.Cpu, ramPercent);
+
+        if (_cpuSpark is not null) _cpuSpark.Values = DotShell.Core.Diagnostics.PerfHistory.Cpu();
+        if (_ramSpark is not null) _ramSpark.Values = DotShell.Core.Diagnostics.PerfHistory.Ram();
+
+        if (_gpuSpark is not null)
+        {
+            var history = DotShell.Core.Diagnostics.PerfHistory.Gpu();
+            _gpuSpark.Values = history;
+            _gpuSpark.Visibility = DotShell.Core.Diagnostics.PerfHistory.GpuAvailable
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+
+        if (_cpuCaption is not null) _cpuCaption.Text = $"CPU {stats.Cpu:0}%";
+        if (_ramCaption is not null) _ramCaption.Text = $"RAM {ramPercent:0}%";
+
+        if (_gpuCaption is not null)
+        {
+            _gpuCaption.Text = DotShell.Core.Diagnostics.PerfHistory.GpuAvailable
+                ? $"GPU {DotShell.Core.Diagnostics.PerfHistory.GpuPercent:0}%"
+                : "GPU недоступен";
+        }
+
         if (_wifiLine is not null)
         {
             var wifi = DotShell.Core.Network.WifiInfo.Query();
@@ -349,6 +392,25 @@ public sealed class ControlCenterWindow : Window
             });
         }
         catch { }
+    }
+
+    /// <summary>Строка графика: микро-подпись слева и спарклайн на всю ширину.</summary>
+    private static DotSpark SparkRow(Panel host, string label, out TextBlock captionOut)
+    {
+        var caption = new TextBlock
+        {
+            Text = label,
+            FontFamily = new FontFamily("Bahnschrift"),
+            FontSize = 9,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x5C, 0x5C, 0x66)),
+            Margin = new Thickness(0, 6, 0, 0),
+        };
+        host.Children.Add(caption);
+        captionOut = caption;
+
+        var spark = new DotSpark { Height = 26, Margin = new Thickness(0, 2, 0, 0) };
+        host.Children.Add(spark);
+        return spark;
     }
 
     /// <summary>Кнопка-переключатель радио: рамка и подпись, клик переключает.</summary>
