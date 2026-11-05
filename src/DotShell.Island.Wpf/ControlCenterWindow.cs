@@ -27,6 +27,9 @@ public sealed class ControlCenterWindow : Window
     private TextBlock? _statsLine;
     private TextBlock? _batteryLine;
     private TextBlock? _clockLine;
+    private TextBlock? _wifiLine;
+    private TextBlock? _wifiRadioLabel;
+    private TextBlock? _bluetoothRadioLabel;
     private readonly DotSeekBar _volumeBar;
     private readonly TextBlock _volumeValue;
 
@@ -181,6 +184,47 @@ public sealed class ControlCenterWindow : Window
 
         // Показатели системы: раньше центр управления показывал только громкость,
         // и «сколько RAM занято» приходилось смотреть в другом месте.
+        // --- сеть ---
+        root.Children.Add(Section("СЕТЬ"));
+
+        _wifiLine = new TextBlock
+        {
+            FontFamily = new FontFamily("Segoe UI"),
+            FontSize = 12,
+            Foreground = new SolidColorBrush(Color.FromRgb(0xEC, 0xEC, 0xEE)),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(0, 0, 0, 6),
+        };
+        root.Children.Add(_wifiLine);
+
+        var networkActions = new WrapPanel();
+
+        // Настоящие переключатели радио, а не «открыть настройки». Если Windows не даёт
+        // доступ к радио (политика устройства), подпись говорит об этом, а клик ведёт
+        // в системные настройки — честнее, чем тумблер, который ничего не делает.
+        _wifiRadioLabel = new TextBlock
+        {
+            Text = "WI-FI",
+            FontFamily = new FontFamily("Bahnschrift"),
+            FontSize = 10,
+            Foreground = new SolidColorBrush(Color.FromRgb(0xEC, 0xEC, 0xEE)),
+        };
+        networkActions.Children.Add(RadioChip(_wifiRadioLabel, async () =>
+            await ToggleRadioAsync(Windows.Devices.Radios.RadioKind.WiFi)));
+
+        _bluetoothRadioLabel = new TextBlock
+        {
+            Text = "BT",
+            FontFamily = new FontFamily("Bahnschrift"),
+            FontSize = 10,
+            Foreground = new SolidColorBrush(Color.FromRgb(0xEC, 0xEC, 0xEE)),
+        };
+        networkActions.Children.Add(RadioChip(_bluetoothRadioLabel, async () =>
+            await ToggleRadioAsync(Windows.Devices.Radios.RadioKind.Bluetooth)));
+
+        networkActions.Children.Add(Chip("НОЧНОЙ СВЕТ", () => OpenUri("ms-settings:nightlight")));
+        root.Children.Add(networkActions);
+
         root.Children.Add(Section("СИСТЕМА"));
 
         _clockLine = new TextBlock
@@ -268,6 +312,25 @@ public sealed class ControlCenterWindow : Window
             _statsLine.Text = $"CPU {stats.Cpu:0}%   ·   RAM {usedGb:0,0} из {totalGb:0,0} ГБ";
         }
 
+        if (_wifiLine is not null)
+        {
+            var wifi = DotShell.Core.Network.WifiInfo.Query();
+
+            _wifiLine.Text = wifi switch
+            {
+                { HasAdapter: false } => "WI-FI: нет адаптера · подключение проводом",
+                { Connected: true } => $"WI-FI: {wifi.Ssid} · {wifi.Signal}%",
+                _ => "WI-FI: адаптер есть, не подключено",
+            };
+
+            _wifiLine.Foreground = new SolidColorBrush(
+                wifi is { HasAdapter: true, Connected: true }
+                    ? ColorPalette.Accent
+                    : Color.FromRgb(0x8A, 0x8A, 0x93));
+        }
+
+        _ = RefreshRadiosAsync();
+
         if (_batteryLine is not null)
         {
             _batteryLine.Text = stats.HasBattery
@@ -286,6 +349,74 @@ public sealed class ControlCenterWindow : Window
             });
         }
         catch { }
+    }
+
+    /// <summary>Кнопка-переключатель радио: рамка и подпись, клик переключает.</summary>
+    private static Border RadioChip(TextBlock label, Func<Task> onClick)
+    {
+        var border = new Border
+        {
+            Padding = new Thickness(10, 8, 10, 8),
+            Margin = new Thickness(0, 0, 6, 6),
+            CornerRadius = new CornerRadius(2),
+            BorderThickness = new Thickness(1),
+            Child = label,
+            Cursor = Cursors.Hand,
+        };
+
+        border.MouseLeftButtonUp += async (_, _) => await onClick();
+        return border;
+    }
+
+    private async Task RefreshRadiosAsync()
+    {
+        var state = await DotShell.Core.Network.RadioControl.GetAsync();
+
+        if (_wifiRadioLabel is not null)
+        {
+            _wifiRadioLabel.Text = state.Available
+                ? (state.WifiOn ? "WI-FI · ВКЛ" : "WI-FI · ВЫКЛ")
+                : "WI-FI · НЕТ";
+
+            _wifiRadioLabel.Foreground = new SolidColorBrush(
+                state is { Available: true, WifiOn: true }
+                    ? ColorPalette.Accent
+                    : Color.FromRgb(0x8A, 0x8A, 0x93));
+        }
+
+        if (_bluetoothRadioLabel is not null)
+        {
+            _bluetoothRadioLabel.Text = state.Available
+                ? (state.BluetoothOn ? "BT · ВКЛ" : "BT · ВЫКЛ")
+                : "BT · НЕТ";
+
+            _bluetoothRadioLabel.Foreground = new SolidColorBrush(
+                state is { Available: true, BluetoothOn: true }
+                    ? ColorPalette.Accent
+                    : Color.FromRgb(0x8A, 0x8A, 0x93));
+        }
+
+        if (!state.Available && _wifiLine is not null && !string.IsNullOrEmpty(state.Note))
+            _wifiLine.Text += $" · радио: {state.Note}";
+    }
+
+    private async Task ToggleRadioAsync(Windows.Devices.Radios.RadioKind kind)
+    {
+        var state = await DotShell.Core.Network.RadioControl.GetAsync();
+
+        if (!state.Available)
+        {
+            // Нет доступа к радио — открываем системную панель, чтобы клик не был пустым.
+            OpenUri("ms-availablenetworks:");
+            return;
+        }
+
+        bool currentlyOn = kind == Windows.Devices.Radios.RadioKind.WiFi
+            ? state.WifiOn
+            : state.BluetoothOn;
+
+        await DotShell.Core.Network.RadioControl.SetAsync(kind, !currentlyOn);
+        await RefreshRadiosAsync();
     }
 
     private void SyncVolume()

@@ -53,6 +53,7 @@ $cases = if ($Quick) {
     )
 }
 
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 Add-Type -TypeDefinition @'
 using System;
 using System.Text;
@@ -65,6 +66,24 @@ public static class UiProbe
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowTextW(IntPtr h, StringBuilder sb, int m);
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+
+    /// <summary>Ручка окна с нужным заголовком именно у этого процесса.</summary>
+    public static IntPtr Find(int pid, string title)
+    {
+        IntPtr result = IntPtr.Zero;
+        EnumWindows((h, l) =>
+        {
+            uint pp; GetWindowThreadProcessId(h, out pp);
+            if (pp != pid) return true;
+
+            var sb = new StringBuilder(256);
+            GetWindowTextW(h, sb, sb.Capacity);
+
+            if (sb.ToString() == title) { result = h; return false; }
+            return true;
+        }, IntPtr.Zero);
+        return result;
+    }
 
     public static List<string> Titles(int pid)
     {
@@ -121,7 +140,26 @@ foreach ($case in $cases) {
     }
 
     $fatal = (Get-FatalCount) - $before
-    $ok = $alive -and $windowOk -and $fatal -eq 0
+
+    # Центр управления проверяем не только «окно есть», но и «сеть на месте»:
+    # в 1.1.0 там появились статус Wi-Fi и переключатели радио, и молчаливая
+    # поломка этого блока не должна проходить аудитом.
+    $contentOk = $true
+    if ($case.Flag -eq '--control-center' -and $alive) {
+        $element = [System.Windows.Automation.AutomationElement]::FromHandle(
+            [UiProbe]::Find($process.Id, $case.Expect))
+
+        if ($element -ne $null) {
+            $found = $element.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+                [System.Windows.Automation.Condition]::TrueCondition)
+
+            $text = ($found | ForEach-Object { $_.Current.Name }) -join ' '
+
+            $contentOk = ($text -match 'WI-FI') -and ($text -match 'CPU')
+        }
+    }
+
+    $ok = $alive -and $windowOk -and $fatal -eq 0 -and $contentOk
 
     if (-not $ok) { $failed++ }
 
