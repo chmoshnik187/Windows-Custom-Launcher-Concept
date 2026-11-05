@@ -5,6 +5,9 @@ publish/
 publish_new/
 installer/Output/
 
+# Служебный каталог замера веса exe: это артефакты сборки, в git не нужны
+_size_probe/
+
 # Готовый exe в git не храним — он лежит в GitHub Releases (75 МБ)
 release/*.exe
 
