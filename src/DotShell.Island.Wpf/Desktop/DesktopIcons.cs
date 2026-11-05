@@ -1,4 +1,4 @@
-namespace DotShell.Island.Wpf.Desktop;
+﻿namespace DotShell.Island.Wpf.Desktop;
 
 using System.IO;
 using System.Runtime.InteropServices;
@@ -331,6 +331,8 @@ public static class DesktopIcons
             if (type is null) return;
 
             shell = Activator.CreateInstance(type);
+            if (shell is null) return;
+
             dynamic shortcut = shell.CreateShortcut(link);
             shortcut.IconLocation = iconLocation;
             shortcut.Save();

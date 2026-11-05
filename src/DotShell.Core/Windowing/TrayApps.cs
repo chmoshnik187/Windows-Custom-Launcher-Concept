@@ -1,4 +1,4 @@
-namespace DotShell.Core.Windowing;
+﻿namespace DotShell.Core.Windowing;
 
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -663,17 +663,6 @@ public static class TrayApps
             }
         }
         catch { return null; }
-    }
-
-    private static Resolved? FindProcessByPath(string path)
-    {
-        foreach (var process in ProcessSnapshot())
-        {
-            if (!string.Equals(process.Path, path, StringComparison.OrdinalIgnoreCase)) continue;
-            return ToResolved(process);
-        }
-
-        return null;
     }
 
     /// <summary>

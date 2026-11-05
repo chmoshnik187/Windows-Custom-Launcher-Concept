@@ -1,4 +1,4 @@
-namespace DotShell.Core.Settings;
+﻿namespace DotShell.Core.Settings;
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -41,11 +41,6 @@ public sealed class AppSettings
     /// Показывать напоминания тостами Windows (иначе только пузырь трея).
     /// </summary>
     public bool ToastEnabled { get; set; } = true;
-
-    /// <summary>
-    /// Запускать свёрнутым: только капсула, без раскрытия.
-    /// </summary>
-    public bool StartMinimized { get; set; }
 
     /// <summary>
     /// Проверять обновления при старте (окно появляется, только если версия новее).
@@ -134,9 +129,6 @@ public sealed class AppSettings
 
     /// <summary>Выбранный скин (nothing / cmf / phosphor / violet / amber).</summary>
     public string Skin { get; set; } = "nothing";
-
-    /// <summary>Исполнитель в плеере: dots (крупные точки) / fine (мелкие, плотнее) / text.</summary>
-    public string ArtistStyle { get; set; } = "fine";
 
     /// <summary>Раскладка плеера в острове: cover (обложка) / dots (точки) / row (строка).</summary>
     public string PlayerStyle { get; set; } = "cover";
@@ -272,12 +264,6 @@ public sealed class AppSettings
 
     /// <summary>Последнее положение окна острова (-32000 = "не задано, центрировать").</summary>
     public int IslandTop { get; set; } = -32000;
-
-    /// <summary>Ширина "мёртвой зоны" слева/справа от камеры ноутбука, px (чтобы остров её не закрывал).</summary>
-    public int NotchAvoidWidth { get; set; } = 0;
-
-    /// <summary>Интервал опроса курсора для "умного" клика по острову, мс. 0 = отключить.</summary>
-    public int HitTestPollMs { get; set; } = 40;
 
     // ---- Поведение ----
     /// <summary>Скрывать остров, когда какое-то окно развернуто на весь экран (игры, видео).</summary>

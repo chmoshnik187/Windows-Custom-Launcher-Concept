@@ -121,7 +121,7 @@ public partial class IslandWindow
         {
             _updateShown = true;
             var toShow = info;
-            Dispatcher.BeginInvoke(() =>
+            _ = Dispatcher.BeginInvoke(() =>
             {
                 try
                 {

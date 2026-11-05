@@ -115,27 +115,6 @@ public partial class IslandWindow
         _keysWindow.Activate();
     }
 
-    /// <summary>Диалог назначения клавиши на плитку.</summary>
-    private void AssignHotkey(IslandViewModel.PinnedRow row)
-    {
-        var dialog = new HotkeyCaptureWindow(row.Name, ShellServices.Instance.Pinned
-            .Items.FirstOrDefault(p => p.Target == row.Target)?.Hotkey, combo =>
-        {
-            if (combo is null) return;                       // отмена
-            ShellServices.Instance.Pinned.SetHotkey(row.Target, combo);
-            var busy = RefreshPinHotkeys();
-            RebuildPinnedTiles();
-
-
-            _vm.StatusLine = string.IsNullOrWhiteSpace(combo)
-                ? $"«{row.Name}»: сочетание снято"
-                : busy.Count > 0
-                    ? $"{combo} занято другой программой — выбери другое"
-                    : $"{combo} → {row.Name}";
-        });
-
-        dialog.ShowDialog();
-    }
     /// <summary>Тумблер «цвет заголовка из обложки»: пишем настройку и обновляем плеер.</summary>
     private void OnCoverAccentToggled(object sender, RoutedEventArgs e)
     {

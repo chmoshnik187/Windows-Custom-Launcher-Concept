@@ -1,4 +1,4 @@
-namespace DotShell.Island.Wpf.Widgets;
+﻿namespace DotShell.Island.Wpf.Widgets;
 
 using System.Windows;
 using System.IO;
@@ -1192,7 +1192,7 @@ public sealed partial class WidgetWindow : Window
 
                 parts.Add($"{DotShell.Core.Currency.CurrencyRates.Title(code).ToLowerInvariant()} {series.DeltaPercent:+0.00;-0.00}%");
 
-                Dispatcher.BeginInvoke(() =>
+                _ = Dispatcher.BeginInvoke(() =>
                 {
                     if (!blocks.TryGetValue(code, out var block)) return;
 
@@ -1213,7 +1213,7 @@ public sealed partial class WidgetWindow : Window
                 });
             }
 
-            Dispatcher.BeginInvoke(() =>
+            _ = Dispatcher.BeginInvoke(() =>
             {
                 caption.Text = parts.Count > 0
                     ? $"ЦБ РФ · за {(days == 7 ? "неделю" : days == 30 ? "месяц" : "квартал")}: " + string.Join(" · ", parts)

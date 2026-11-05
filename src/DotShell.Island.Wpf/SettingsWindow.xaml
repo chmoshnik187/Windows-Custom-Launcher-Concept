@@ -1,4 +1,4 @@
-<Window x:Class="DotShell.Island.Wpf.SettingsWindow"
+﻿<Window x:Class="DotShell.Island.Wpf.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:DotShell.Island.Wpf.Controls"
@@ -346,9 +346,6 @@
                             <CheckBox Style="{StaticResource DsToggle}"
                                       Content="Запускать вместе с Windows"
                                       IsChecked="{Binding RunAtStartup}" />
-                            <CheckBox Style="{StaticResource DsToggle}"
-                                      Content="Запускать свёрнутым"
-                                      IsChecked="{Binding StartMinimized}" />
                             <CheckBox Style="{StaticResource DsToggle}"
                                       Content="Показывать подсказки хоткеев (Ctrl / Alt / Win)"
                                       IsChecked="{Binding HotkeyHudEnabled}" />

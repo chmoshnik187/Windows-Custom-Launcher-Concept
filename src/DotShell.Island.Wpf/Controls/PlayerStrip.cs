@@ -1,4 +1,4 @@
-namespace DotShell.Island.Wpf.Controls;
+﻿namespace DotShell.Island.Wpf.Controls;
 
 using System.IO;
 using System.Windows;
@@ -45,7 +45,7 @@ public sealed class PlayerStrip : Grid
     private readonly List<Button> _accentButtons = new();
 
     /// <summary>Раскладка: cover | dots | row.</summary>
-    public string Style
+    public new string Style
     {
         get => _style;
         set
@@ -439,16 +439,6 @@ public sealed class PlayerStrip : Grid
         int columns = (int)Math.Ceiling(estimated / 3.0);
         return Math.Clamp(columns, 8, 220);
     }
-    /// <summary>Белый из палитры — цвет подписи-исполнителя.</summary>
-/// <summary>Белый с лёгкой прозрачностью: подпись не должна спорить с названием.</summary>
-    private static Color FadedWhite()
-    {
-        var c = WhiteColor();
-        return Color.FromArgb(210, c.R, c.G, c.B);
-    }
-
-    private static Color WhiteColor() =>
-        (Application.Current?.TryFindResource("DsText") as SolidColorBrush)?.Color ?? Colors.White;
     // ------------------------------------------------------------------
     //  Кирпичи
     // ------------------------------------------------------------------

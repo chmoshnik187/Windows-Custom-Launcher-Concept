@@ -34,7 +34,7 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon>..\DotShell.Island\Assets\dotshell.ico</ApplicationIcon>
+    <ApplicationIcon>Assets\dotshell.ico</ApplicationIcon>
     <NoWarn>$(NoWarn);CS1591;CS1570;CS1573</NoWarn>
 
     <!-- Свои App.xaml/MainWindow.xaml не нужны — точка входа написана руками. -->
@@ -46,3 +46,4 @@
   </ItemGroup>
 
 </Project>
+

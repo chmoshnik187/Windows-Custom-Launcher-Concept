@@ -1,4 +1,4 @@
-namespace DotShell.Island.Wpf.Controls;
+﻿namespace DotShell.Island.Wpf.Controls;
 
 using System.Windows;
 using System.Windows.Media;
@@ -28,7 +28,7 @@ public sealed class IslandBackdrop : FrameworkElement
     private double _corner = 22;
 
     /// <summary>Имя рисунка: none / waves / topo / rays / aurora / grid.</summary>
-    public string Style
+    public new string Style
     {
         get => _style;
         set

@@ -1,4 +1,4 @@
-namespace DotShell.Island.Wpf;
+﻿namespace DotShell.Island.Wpf;
 
 using System.Diagnostics;
 using System.IO;
@@ -138,7 +138,7 @@ public partial class LauncherWindow : Window
             menu.PlacementTarget is System.Windows.Controls.ListBoxItem lbi)
             row = lbi.DataContext as LauncherRow;
         if (row is null) return;
-        ShellServices.Instance.Pinned.Add(row.Name, row.Target, row.Entry.Shortcut);
+        ShellServices.Instance.Pinned.Add(row.Name, row.Target, row.Entry?.Shortcut ?? string.Empty);
         StatusLine.Text = $"закреплено на острове: {row.Name}";
     }
 

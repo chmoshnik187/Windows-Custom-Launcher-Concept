@@ -1,4 +1,4 @@
-namespace DotShell.Island.Wpf;
+﻿namespace DotShell.Island.Wpf;
 
 using System.Windows;
 using System.Windows.Controls;
@@ -61,7 +61,7 @@ public partial class IslandNotification : UserControl
     }
 
     /// <summary>Сколько места нужно тексту (DIP), без юнита и отступов.</summary>
-    public double MeasureWidth(string title, string message)
+    public double MeasureWidth(string? title, string? message)
     {
         double pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
 

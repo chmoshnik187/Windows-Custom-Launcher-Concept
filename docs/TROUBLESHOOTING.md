@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 ![TROUBLESHOOTING](images/banner-troubleshooting.png)
 
@@ -115,6 +115,7 @@ pwsh -File scripts/smoke.ps1
 | `--settings` | сразу открыть окно настроек |
 | `--launcher` | сразу открыть поиск |
 | `--gallery` / `--keys` | витрина виджетов / окно клавиш |
+| `--dot-demo` / `--slider-demo` | витрины размера точки и стилей ползунков (их проверяет ui-audit) |
 | `--style=full\|island` | режим оформления |
 | `--fake-version=0.1.0` | притвориться старой версией (проверка окна обновления) |
 | `--icons-apply` / `--icons-restore` / `--icons-dir=<папка>` | монохром иконок и откат (можно на тестовой папке) |

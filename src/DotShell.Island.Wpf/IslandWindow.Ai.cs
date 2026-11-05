@@ -45,7 +45,7 @@ public partial class IslandWindow
         var models = await DotShell.Core.Ai.OllamaClient.ListAsync();
         var names = models.Select(m => m.Name).ToList();
 
-        Dispatcher.BeginInvoke(() =>
+        _ = Dispatcher.BeginInvoke(() =>
         {
             AiModelBox.ItemsSource = names;
 

@@ -1,4 +1,4 @@
-namespace DotShell.Island.Wpf;
+﻿namespace DotShell.Island.Wpf;
 
 using System.IO;
 using System.Collections.ObjectModel;
@@ -874,7 +874,7 @@ public sealed class IslandViewModel : INotifyPropertyChanged
 
     public void PinFromPicker(LauncherRow row)
     {
-        _services.Pinned.Add(row.Name, row.Target, row.Entry.Shortcut);
+        _services.Pinned.Add(row.Name, row.Target, row.Entry?.Shortcut ?? string.Empty);
         StatusLine = $"закреплено: {row.Name}";
     }
 

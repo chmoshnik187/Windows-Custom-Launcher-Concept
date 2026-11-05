@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 ![Логотип DotShell](images/banner.png)
 
@@ -215,6 +215,7 @@ Wallpaper Engine — берётся из превью текущих обоев 
 | Таймер | вкладка ЗАМЕТКИ → минуты → СТАРТ; круг показывает прогресс, «голова» едет по времени |
 | Подсказки хоткеев | зажать Ctrl / Alt / Win (включается в настройках) |
 | Открыть сразу на вкладке | `DotShell.exe --tab=notes`, `--tab=chat`, `--gallery`, `--keys`, `--launcher` |
+| Витрины для проверки | `--dot-demo` (размер точки и зазор), `--slider-demo` (стили ползунков) |
 | Режим оформления | `DotShell.exe --style=full` или `--style=island` |
 
 <div align="center">

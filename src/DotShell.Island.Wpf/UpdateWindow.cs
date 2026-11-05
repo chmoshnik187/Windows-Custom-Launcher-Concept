@@ -1,4 +1,4 @@
-namespace DotShell.Island.Wpf;
+﻿namespace DotShell.Island.Wpf;
 
 using System.Diagnostics;
 using System.Windows;
@@ -73,7 +73,7 @@ public sealed class UpdateWindow : Window
         return new ControlTemplate(typeof(Button)) { VisualTree = border };
     }
 
-    private static void Unused() { }    /// <summary>
+    /// <summary>
     /// Markdown релиза → человеческий текст. GitHub присылает «## заголовок»,
     /// звёздочки и обратные кавычки — в окне это выглядит как сырой исходник.
     /// </summary>

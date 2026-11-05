@@ -1,4 +1,4 @@
-namespace DotShell.Island.Wpf;
+﻿namespace DotShell.Island.Wpf;
 
 using System.Diagnostics;
 using System.Windows;
@@ -810,44 +810,6 @@ public partial class SettingsWindow : Window
         };
 
         return $"{closest?.Text} {own} {row.ToolTip}".Trim();
-    }
-
-    /// <summary>Стоит ли подпись прямо над строкой (в пределах 40 px).</summary>
-    private static bool IsLabelAbove(TextBlock label, FrameworkElement row)
-    {
-        if (!label.IsLoaded || !row.IsLoaded) return false;
-
-        try
-        {
-            var window = Window.GetWindow(row);
-            Point labelTop = label.TranslatePoint(new Point(0, 0), window);
-            Point rowTop = row.TranslatePoint(new Point(0, 0), window);
-
-            // Подпись стоит ВЫШЕ строки: расстояние = rowTop − labelTop.
-            double distance = rowTop.Y - labelTop.Y;
-            return distance >= -4 && distance <= 40;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    /// <summary>Текст строки: свой и предыдущего элемента (подписи стоят отдельными TextBlock).</summary>
-    private static string RowText(UIElement element, UIElement? previous)
-    {
-        var parts = new List<string>();
-
-        string label = TextOf(previous);
-        if (!string.IsNullOrWhiteSpace(label)) parts.Add(label);
-
-        if (element is FrameworkElement { ToolTip: string tip } && !string.IsNullOrWhiteSpace(tip))
-            parts.Add(tip);
-
-        string own = TextOf(element);
-        if (!string.IsNullOrWhiteSpace(own)) parts.Add(own);
-
-        return string.Join(" ", parts);
     }
 
     private static string TextOf(UIElement? element)

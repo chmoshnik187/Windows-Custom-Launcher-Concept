@@ -1,4 +1,4 @@
-namespace DotShell.Island.Wpf;
+﻿namespace DotShell.Island.Wpf;
 
 using System.Diagnostics;
 using System.IO;
@@ -28,8 +28,6 @@ public sealed class GroupWindow : Window
     private readonly WrapPanel _grid;
     private readonly TextBlock _counter;
     private readonly TextBlock _title;
-    private readonly System.Windows.Shapes.Ellipse? _none;
-
     /// <summary>Точки «программа работает»: пересчитываются таймером.</summary>
     private readonly List<(System.Windows.Controls.Border Mark, PinnedApp App)> _runDots = new();
 
