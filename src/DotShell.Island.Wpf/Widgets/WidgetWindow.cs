@@ -1269,13 +1269,16 @@ public sealed partial class WidgetWindow : Window
     /// <summary>Кисть из ресурсов окна (для контролов, созданных кодом).</summary>
     /// <summary>
     /// «Умная папка» на рабочем столе: живой вид содержимого папки.
-    /// MVP: список файлов/папок с иконками, открытие по клику, drag&drop файлов
-    /// в папку, автообновление, быстрые действия (открыть папку, обновить).
+    /// Удобства: фильтр, сортировка, навигация внутрь подпапок, контекстные действия,
+    /// drag&drop (в т.ч. между дисками — копирование), автообновление.
     /// </summary>
     private UIElement BuildFolder()
     {
-        string folderPath = _path;
-        bool missing = string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath);
+        string rootPath = _path;
+        string currentPath = rootPath;
+        bool missing = string.IsNullOrWhiteSpace(currentPath) || !Directory.Exists(currentPath);
+        string filter = string.Empty;
+        int sortMode = 0; // 0 имя, 1 дата, 2 размер, 3 тип
 
         var title = new TextBlock
         {
@@ -1292,6 +1295,7 @@ public sealed partial class WidgetWindow : Window
             Foreground = ResBrush("DsTextMuted"),
             TextTrimming = TextTrimming.CharacterEllipsis,
             Margin = new Thickness(0, 2, 0, 0),
+            ToolTip = rootPath,
         };
 
         var list = new StackPanel();
@@ -1300,23 +1304,40 @@ public sealed partial class WidgetWindow : Window
             Content = list,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Margin = new Thickness(0, 8, 0, 0),
+            Margin = new Thickness(0, 6, 0, 0),
         };
 
-        void RefreshHeader(int count = -1)
+        bool AtRoot() => string.Equals(System.IO.Path.GetFullPath(currentPath).TrimEnd('\\', '/'),
+            System.IO.Path.GetFullPath(rootPath).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
+
+        string SortLabel() => sortMode switch { 1 => "дата", 2 => "размер", 3 => "тип", _ => "имя" };
+
+        Button? upBtnRef = null;
+        Button? sortBtnRef = null;
+
+        void RefreshHeader(int shown = -1, int total = -1)
         {
-            if (missing || !Directory.Exists(folderPath))
+            if (missing || !Directory.Exists(currentPath))
             {
                 missing = true;
                 title.Text = "ПАПКА НЕ НАЙДЕНА";
-                subtitle.Text = folderPath;
+                subtitle.Text = currentPath;
+                if (upBtnRef is not null) upBtnRef.IsEnabled = false;
                 return;
             }
 
-            string name = System.IO.Path.GetFileName(folderPath.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar));
-            if (string.IsNullOrWhiteSpace(name)) name = folderPath;
+            string name = System.IO.Path.GetFileName(currentPath.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar));
+            if (string.IsNullOrWhiteSpace(name)) name = currentPath;
             title.Text = name.ToUpperInvariant();
-            subtitle.Text = count >= 0 ? $"{count} объект(ов) · {folderPath}" : folderPath;
+
+            string where = AtRoot() ? rootPath : currentPath;
+            subtitle.Text = (shown >= 0 && total >= 0 && shown != total)
+                ? $"{shown} из {total} · {SortLabel()} · {where}"
+                : shown >= 0 ? $"{shown} объект(ов) · {SortLabel()} · {where}" : where;
+            subtitle.ToolTip = where;
+
+            if (upBtnRef is not null) upBtnRef.IsEnabled = !AtRoot();
+            if (sortBtnRef is not null) sortBtnRef.Content = "⇅";
         }
 
         ImageSource? IconForPath(string path, bool isDir)
@@ -1325,7 +1346,6 @@ public sealed partial class WidgetWindow : Window
             {
                 if (isDir)
                 {
-                    // Пытаемся взять иконку самой папки; при неудаче — стандартную иконку оболочки.
                     try
                     {
                         using var dirIcon = System.Drawing.Icon.ExtractAssociatedIcon(path);
@@ -1377,6 +1397,56 @@ public sealed partial class WidgetWindow : Window
             catch { return null; }
         }
 
+        void CopyToClipboardText(string text)
+        {
+            try { Clipboard.SetDataObject(text, true); }
+            catch (Exception ex) { Log.Info($"folder widget: clipboard failed — {ex.Message}"); }
+        }
+
+        void MoveOrCopyInto(string sourcePath, string targetDir)
+        {
+            string dest = System.IO.Path.Combine(targetDir, System.IO.Path.GetFileName(sourcePath));
+            if (string.Equals(System.IO.Path.GetFullPath(sourcePath), System.IO.Path.GetFullPath(dest), StringComparison.OrdinalIgnoreCase))
+                return;
+
+            try
+            {
+                if (Directory.Exists(sourcePath)) Directory.Move(sourcePath, dest);
+                else if (File.Exists(sourcePath)) File.Move(sourcePath, dest);
+                return;
+            }
+            catch (IOException)
+            {
+                // Между дисками Move не работает — пробуем копирование.
+            }
+            catch (Exception ex)
+            {
+                Log.Info($"folder widget: move failed {sourcePath} — {ex.Message}");
+                throw;
+            }
+
+            try
+            {
+                if (Directory.Exists(sourcePath)) CopyDirectory(sourcePath, dest);
+                else if (File.Exists(sourcePath)) File.Copy(sourcePath, dest, overwrite: false);
+            }
+            catch (Exception ex)
+            {
+                Log.Info($"folder widget: copy fallback failed {sourcePath} — {ex.Message}");
+            }
+        }
+
+        void NavigateTo(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path)) return;
+            // Не выходим выше корневой папки виджета.
+            var rootFull = System.IO.Path.GetFullPath(rootPath).TrimEnd('\\', '/');
+            var full = System.IO.Path.GetFullPath(path).TrimEnd('\\', '/');
+            if (!full.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase)) return;
+            currentPath = full;
+            Rebuild();
+        }
+
         UIElement Row(string path, bool isDir)
         {
             var icon = new Image
@@ -1418,19 +1488,42 @@ public sealed partial class WidgetWindow : Window
             border.MouseLeave += (_, _) => border.Background = Brushes.Transparent;
             border.MouseLeftButtonUp += (_, e) =>
             {
-                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); }
-                catch (Exception ex) { Log.Info($"folder widget: open failed {path} — {ex.Message}"); }
+                if (isDir)
+                {
+                    // Внутри виджета папки удобнее открывать навигацией; во внешний проводник — ПКМ.
+                    NavigateTo(path);
+                }
+                else
+                {
+                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); }
+                    catch (Exception ex) { Log.Info($"folder widget: open failed {path} — {ex.Message}"); }
+                }
                 e.Handled = true;
             };
 
             var menu = new ContextMenu();
-            var open = new MenuItem { Header = "Открыть" };
+            var open = new MenuItem { Header = isDir ? "Открыть внутри виджета" : "Открыть" };
             open.Click += (_, _) =>
             {
-                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); }
-                catch (Exception ex) { Log.Info($"folder widget: open failed {path} — {ex.Message}"); }
+                if (isDir) NavigateTo(path);
+                else
+                {
+                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); }
+                    catch (Exception ex) { Log.Info($"folder widget: open failed {path} — {ex.Message}"); }
+                }
             };
             menu.Items.Add(open);
+
+            if (isDir)
+            {
+                var openExt = new MenuItem { Header = "Открыть в проводнике" };
+                openExt.Click += (_, _) =>
+                {
+                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); }
+                    catch (Exception ex) { Log.Info($"folder widget: open dir failed {path} — {ex.Message}"); }
+                };
+                menu.Items.Add(openExt);
+            }
 
             var reveal = new MenuItem { Header = "Показать в проводнике" };
             reveal.Click += (_, _) =>
@@ -1438,11 +1531,15 @@ public sealed partial class WidgetWindow : Window
                 try
                 {
                     if (File.Exists(path)) System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{path}\"");
-                    else System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(System.IO.Path.GetDirectoryName(path) ?? folderPath) { UseShellExecute = true });
+                    else System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(System.IO.Path.GetDirectoryName(path) ?? currentPath) { UseShellExecute = true });
                 }
                 catch (Exception ex) { Log.Info($"folder widget: reveal failed {path} — {ex.Message}"); }
             };
             menu.Items.Add(reveal);
+
+            var copy = new MenuItem { Header = "Копировать путь" };
+            copy.Click += (_, _) => CopyToClipboardText(path);
+            menu.Items.Add(copy);
 
             menu.Items.Add(new Separator());
             menu.Items.Add(RemoveWidgetItem());
@@ -1456,40 +1553,69 @@ public sealed partial class WidgetWindow : Window
             try
             {
                 list.Children.Clear();
-                if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath))
+                if (string.IsNullOrWhiteSpace(currentPath) || !Directory.Exists(currentPath))
                 {
-                    missing = true;
-                    RefreshHeader();
-                    list.Children.Add(new TextBlock
+                    // Если текущая подпапка исчезла — пробуем вернуться к корню.
+                    if (!string.Equals(currentPath, rootPath, StringComparison.OrdinalIgnoreCase) && Directory.Exists(rootPath))
                     {
-                        Text = "Папка недоступна. Можно убрать виджет или выбрать другую папку.",
-                        FontFamily = new FontFamily("Segoe UI"),
-                        FontSize = 11,
-                        Foreground = ResBrush("DsTextMuted"),
-                        TextWrapping = TextWrapping.Wrap,
-                        Margin = new Thickness(4, 8, 4, 4),
-                    });
-                    return;
+                        currentPath = rootPath;
+                    }
+                    else
+                    {
+                        missing = true;
+                        RefreshHeader();
+                        list.Children.Add(new TextBlock
+                        {
+                            Text = "Папка недоступна. Можно убрать виджет или открыть корень заново.",
+                            FontFamily = new FontFamily("Segoe UI"),
+                            FontSize = 11,
+                            Foreground = ResBrush("DsTextMuted"),
+                            TextWrapping = TextWrapping.Wrap,
+                            Margin = new Thickness(4, 8, 4, 4),
+                        });
+                        return;
+                    }
                 }
 
                 missing = false;
-                var dirs = Directory.EnumerateDirectories(folderPath)
-                    .OrderBy(p => System.IO.Path.GetFileName(p), StringComparer.CurrentCultureIgnoreCase)
-                    .ToList();
-                var files = Directory.EnumerateFiles(folderPath)
-                    .OrderBy(p => System.IO.Path.GetFileName(p), StringComparer.CurrentCultureIgnoreCase)
-                    .ToList();
+                var dirInfos = new DirectoryInfo(currentPath).EnumerateDirectories().ToList();
+                var fileInfos = new DirectoryInfo(currentPath).EnumerateFiles().ToList();
 
-                RefreshHeader(dirs.Count + files.Count);
+                bool Match(string name) => string.IsNullOrWhiteSpace(filter) || name.Contains(filter, StringComparison.CurrentCultureIgnoreCase);
 
-                foreach (var d in dirs.Take(120)) list.Children.Add(Row(d, true));
-                foreach (var f in files.Take(200)) list.Children.Add(Row(f, false));
+                IEnumerable<DirectoryInfo> SortDirs(IEnumerable<DirectoryInfo> src) => sortMode switch
+                {
+                    1 => src.OrderByDescending(d => d.LastWriteTimeUtc).ThenBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase),
+                    2 => src.OrderBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase),
+                    3 => src.OrderBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase),
+                    _ => src.OrderBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase),
+                };
 
-                if (dirs.Count + files.Count == 0)
+                IEnumerable<FileInfo> SortFiles(IEnumerable<FileInfo> src) => sortMode switch
+                {
+                    1 => src.OrderByDescending(f => f.LastWriteTimeUtc).ThenBy(f => f.Name, StringComparer.CurrentCultureIgnoreCase),
+                    2 => src.OrderByDescending(f => f.Length).ThenBy(f => f.Name, StringComparer.CurrentCultureIgnoreCase),
+                    3 => src.OrderBy(f => f.Extension, StringComparer.CurrentCultureIgnoreCase).ThenBy(f => f.Name, StringComparer.CurrentCultureIgnoreCase),
+                    _ => src.OrderBy(f => f.Name, StringComparer.CurrentCultureIgnoreCase),
+                };
+
+                var dirs = SortDirs(dirInfos.Where(d => Match(d.Name))).Select(d => d.FullName).ToList();
+                var files = SortFiles(fileInfos.Where(f => Match(f.Name))).Select(f => f.FullName).ToList();
+                int total = dirInfos.Count + fileInfos.Count;
+                int shown = dirs.Count + files.Count;
+
+                RefreshHeader(shown, total);
+
+                foreach (var d in dirs.Take(160)) list.Children.Add(Row(d, true));
+                foreach (var f in files.Take(240)) list.Children.Add(Row(f, false));
+
+                if (shown == 0)
                 {
                     list.Children.Add(new TextBlock
                     {
-                        Text = "Папка пуста. Перетащите сюда файлы из проводника.",
+                        Text = total == 0
+                            ? "Папка пуста. Перетащите сюда файлы из проводника."
+                            : "Ничего не найдено по фильтру.",
                         FontFamily = new FontFamily("Segoe UI"),
                         FontSize = 11,
                         Foreground = ResBrush("DsTextMuted"),
@@ -1526,36 +1652,72 @@ public sealed partial class WidgetWindow : Window
         header.Children.Add(titles);
 
         var actions = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
-        var openBtn = WBtn("↗", "Открыть папку");
+        var upBtn = WBtn("↑", "На уровень вверх (в пределах папки виджета)");
+        upBtn.Padding = new Thickness(6, 2, 6, 2);
+        upBtn.Margin = new Thickness(0, 0, 0, 0);
+        upBtn.IsEnabled = false;
+        upBtn.Click += (_, _) =>
+        {
+            if (AtRoot()) return;
+            var parent = Directory.GetParent(currentPath);
+            if (parent is not null) NavigateTo(parent.FullName);
+        };
+        upBtnRef = upBtn;
+
+        var openBtn = WBtn("↗", "Открыть текущую папку в проводнике");
         openBtn.Padding = new Thickness(6, 2, 6, 2);
         openBtn.Margin = new Thickness(4, 0, 0, 0);
         openBtn.Click += (_, _) =>
         {
-            try { if (Directory.Exists(folderPath)) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(folderPath) { UseShellExecute = true }); }
+            try { if (Directory.Exists(currentPath)) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(currentPath) { UseShellExecute = true }); }
             catch (Exception ex) { Log.Info($"folder widget: open root failed — {ex.Message}"); }
         };
+
+        var sortBtn = WBtn("⇅", "Сортировка: имя → дата → размер → тип");
+        sortBtn.Padding = new Thickness(6, 2, 6, 2);
+        sortBtn.Margin = new Thickness(4, 0, 0, 0);
+        sortBtn.Click += (_, _) => { sortMode = (sortMode + 1) % 4; Rebuild(); };
+        sortBtnRef = sortBtn;
+
         var refreshBtn = WBtn("⟳", "Обновить");
         refreshBtn.Padding = new Thickness(6, 2, 6, 2);
         refreshBtn.Margin = new Thickness(4, 0, 0, 0);
         refreshBtn.Click += (_, _) => Rebuild();
+        actions.Children.Add(upBtn);
         actions.Children.Add(openBtn);
+        actions.Children.Add(sortBtn);
         actions.Children.Add(refreshBtn);
         Grid.SetColumn(actions, 1);
         header.Children.Add(actions);
 
+        var filterBox = WTextBox("Фильтр по имени…");
+        filterBox.Margin = new Thickness(0, 6, 0, 0);
+        filterBox.TextChanged += (_, _) => { filter = filterBox.Text?.Trim() ?? string.Empty; Rebuild(); };
+
+        var top = new StackPanel();
+        top.Children.Add(header);
+        top.Children.Add(filterBox);
+
         var container = new DockPanel();
-        DockPanel.SetDock(header, Dock.Top);
-        container.Children.Add(header);
+        DockPanel.SetDock(top, Dock.Top);
+        container.Children.Add(top);
         container.Children.Add(scroll);
 
         var menu = new ContextMenu();
-        var openRoot = new MenuItem { Header = "Открыть папку" };
+        var openRoot = new MenuItem { Header = "Открыть текущую папку" };
         openRoot.Click += (_, _) =>
         {
-            try { if (Directory.Exists(folderPath)) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(folderPath) { UseShellExecute = true }); }
+            try { if (Directory.Exists(currentPath)) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(currentPath) { UseShellExecute = true }); }
             catch (Exception ex) { Log.Info($"folder widget: open root failed — {ex.Message}"); }
         };
         menu.Items.Add(openRoot);
+        var toRoot = new MenuItem { Header = "К корню виджета" };
+        toRoot.Click += (_, _) => NavigateTo(rootPath);
+        menu.Items.Add(toRoot);
+        var copyPath = new MenuItem { Header = "Копировать путь папки" };
+        copyPath.Click += (_, _) => CopyToClipboardText(currentPath);
+        menu.Items.Add(copyPath);
+        menu.Items.Add(new Separator());
         var refreshItem = new MenuItem { Header = "Обновить" };
         refreshItem.Click += (_, _) => Rebuild();
         menu.Items.Add(refreshItem);
@@ -1571,26 +1733,19 @@ public sealed partial class WidgetWindow : Window
 
         void OnDragOver(object? s, DragEventArgs e)
         {
-            e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) && !missing ? DragDropEffects.Move : DragDropEffects.None;
+            e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) && !missing ? DragDropEffects.Copy : DragDropEffects.None;
             e.Handled = true;
         }
         void OnDrop(object? s, DragEventArgs e)
         {
             try
             {
-                if (missing || !Directory.Exists(folderPath)) return;
+                if (missing || !Directory.Exists(currentPath)) return;
                 if (e.Data.GetData(DataFormats.FileDrop) is not string[] paths) return;
                 foreach (var p in paths)
                 {
-                    try
-                    {
-                        string dest = System.IO.Path.Combine(folderPath, System.IO.Path.GetFileName(p));
-                        if (string.Equals(System.IO.Path.GetFullPath(p), System.IO.Path.GetFullPath(dest), StringComparison.OrdinalIgnoreCase))
-                            continue;
-                        if (Directory.Exists(p)) Directory.Move(p, dest);
-                        else if (File.Exists(p)) File.Move(p, dest);
-                    }
-                    catch (Exception ex) { Log.Info($"folder widget: drop move failed {p} — {ex.Message}"); }
+                    try { MoveOrCopyInto(p, currentPath); }
+                    catch (Exception ex) { Log.Info($"folder widget: drop failed {p} — {ex.Message}"); }
                 }
             }
             catch (Exception ex) { Log.Info($"folder widget: drop failed — {ex.Message}"); }
@@ -1603,8 +1758,17 @@ public sealed partial class WidgetWindow : Window
 
         Timer(5000, Rebuild);
 
-        _relayout = (_, h) => scroll.MaxHeight = Math.Max(80, h - 60);
+        _relayout = (_, h) => scroll.MaxHeight = Math.Max(80, h - 92);
         return container;
+    }
+
+    private static void CopyDirectory(string sourceDir, string destDir)
+    {
+        Directory.CreateDirectory(destDir);
+        foreach (var file in Directory.GetFiles(sourceDir))
+            File.Copy(file, System.IO.Path.Combine(destDir, System.IO.Path.GetFileName(file)), overwrite: false);
+        foreach (var dir in Directory.GetDirectories(sourceDir))
+            CopyDirectory(dir, System.IO.Path.Combine(destDir, System.IO.Path.GetFileName(dir)));
     }
 
     private Brush ResBrush(string key) => TryFindResource(key) as Brush ?? Brushes.White;
