@@ -779,55 +779,6 @@ public sealed class IslandViewModel : INotifyPropertyChanged
         StatusLine = $"акцент {hex}";
     }
 
-    // ------------------------------------------------------------------
-    //  Быстрый чат с ИИ (вкладка ИИ)
-    //
-    //  Без агента и инструментов: просто переписка с моделью через любой
-    //  OpenAI-совместимый эндпоинт (Qwen / OpenRouter / OpenAI / Ollama /
-    //  свой адрес). Ключ лежит локально в settings.json (AiApiKey)
-    //  и уходит только на указанный адрес API.
-    // ------------------------------------------------------------------
-
-    private readonly AiChat _chat = new();
-
-    public ObservableCollection<ChatLine> ChatLines { get; } = new();
-
-    public bool ChatBusy { get => _chatBusy; set => Set(ref _chatBusy, value); }
-    private bool _chatBusy;
-
-    public string AiModel
-    {
-        get => _services.Settings.Current.AiModel;
-        set => _services.Settings.Update(s => s.AiModel = value);
-    }
-
-    public async Task ChatSendAsync(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text) || ChatBusy) return;
-
-        ChatBusy = true;
-        ChatLines.Add(new ChatLine("user", text));
-        try
-        {
-            var s = _services.Settings.Current;
-            if (string.IsNullOrWhiteSpace(s.AiModel))
-                throw new AiChatException("Сначала выбери модель: кнопка ⟳ сверху вкладки ИИ.");
-            var baseUrl = s.AiBaseUrl;
-            if (string.IsNullOrWhiteSpace(baseUrl))
-                baseUrl = AiChat.Providers.FirstOrDefault(p => p.Name == s.AiProvider).Url;
-            var reply = await _chat.SendAsync(text, baseUrl, s.AiModel, s.AiApiKey);
-            RunOnUiThread(() => ChatLines.Add(new ChatLine("qwen", reply)));
-        }
-        catch (Exception ex)
-        {
-            var msg = ex is AiChatException q ? q.Message : ex.Message;
-            RunOnUiThread(() => ChatLines.Add(new ChatLine("error", msg)));
-        }
-        finally
-        {
-            RunOnUiThread(() => ChatBusy = false);
-        }
-    }
 
     // ------------------------------------------------------------------
     //  Главная страница: мои программы (плитки) и выбор из индекса
@@ -1361,35 +1312,6 @@ public sealed class IslandViewModel : INotifyPropertyChanged
         public string Name => File.Name;
         public string Path => File.Path;
         public string SizeLabel => File.SizeLabel;
-    }
-
-    /// <summary>Одна реплика быстрого чата для привязки в XAML.</summary>
-    public sealed class ChatLine
-    {
-        public ChatLine(string who, string text)
-        {
-            Who = who;
-            Text = text;
-            Stamp = DateTime.Now.ToString("HH:mm");
-        }
-
-        public string Who { get; }
-        public string Text { get; }
-
-        /// <summary>Время реплики — мелкой цифрой рядом с меткой автора.</summary>
-        public string Stamp { get; }
-
-        public bool IsUser => Who == "user";
-        public bool IsError => Who == "error";
-        public bool IsAi => Who == "qwen";
-
-        /// <summary>Что показать слева вместо пузыря: подпись тоном ниже.</summary>
-        public string WhoLabel => Who switch
-        {
-            "user" => "ТЫ",
-            "qwen" => "ИИ",
-            _ => "ОШИБКА"
-        };
     }
 
     private void RunOnUiThread(Action action)

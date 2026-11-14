@@ -330,20 +330,6 @@ public sealed class AppSettings
     // капсулу и читались как «горизонтальные выцветшие полосы».
     public int IslandOpacity { get; set; } = 97;
 
-    /// <summary>Провайдер быстрого чата на вкладке ИИ: имя из списка пресетов или "Custom".</summary>
-    public string AiProvider { get; set; } = "Ollama";
-
-    /// <summary>Адрес OpenAI-совместимого API (для Custom; у пресетов подставляется сам).</summary>
-    public string AiBaseUrl { get; set; } = "http://localhost:11434/v1";
-
-    /// <summary>Модель для быстрого чата.</summary>
-    public string AiModel { get; set; } = "";
-
-    /// <summary>
-    /// Ключ API для чата. Хранится локально в settings.json и уходит
-    /// только на указанный адрес API. Для локальной Ollama не нужен.
-    /// </summary>
-    public string AiApiKey { get; set; } = string.Empty;
 
     [JsonIgnore]
     public static string SettingsDirectory =>

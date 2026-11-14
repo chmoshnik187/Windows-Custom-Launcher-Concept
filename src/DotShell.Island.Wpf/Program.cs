@@ -16,7 +16,6 @@ public static class Program
 {
     /// <summary>
     /// Вкладка, которую открыть сразу при старте (`--tab=chat`).
-    /// Полезно для ярлыка «открыть чат» и для проверки вёрстки без кликов.
     /// </summary>
     public static string? StartupTab { get; private set; }
 
@@ -74,11 +73,7 @@ public static class Program
 
     /// <summary>--widget-size=520x112: задать размер открываемого виджета.</summary>
     public static (int W, int H)? WidgetSize { get; private set; }
-
-    /// <summary>--chat-demo: пара демонстрационных реплик в чате (снимки, проверка вёрстки).</summary>
-    public static bool ChatDemo { get; private set; }
-
-    /// <summary>--toast-test: отправить проверочный тост и завершиться.</summary>
+/// <summary>--toast-test: отправить проверочный тост и завершиться.</summary>
     public static bool ToastTest { get; private set; }
 
     [STAThread]
@@ -321,10 +316,7 @@ public static class Program
                 }
                 continue;
             }
-
-            if (arg.Equals("--chat-demo", StringComparison.OrdinalIgnoreCase)) { ChatDemo = true; continue; }
-
-            // Проверка уведомлений: отправить тост сразу и выйти. Нужна, чтобы
+// Проверка уведомлений: отправить тост сразу и выйти. Нужна, чтобы
             // убедиться, что AUMID зарегистрирован и Windows тосты не блокирует.
             if (arg.Equals("--toast-test", StringComparison.OrdinalIgnoreCase)) { ToastTest = true; continue; }
 

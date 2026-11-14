@@ -616,9 +616,7 @@
                                     <RadioButton Style="{StaticResource DsTabIcon}" Content="&#xE790;"
                                                  GroupName="tabs" Tag="theme"
                                                  Checked="OnTabChecked" ToolTip="Тема" />
-                                    <RadioButton Style="{StaticResource DsTabIcon}" Content="&#xE8BD;"
-                                                 GroupName="tabs" Tag="chat" Margin="0"
-                                                 Checked="OnTabChecked" ToolTip="ИИ-чат" />
+
                                 </StackPanel>
                             </Grid>
 
@@ -965,7 +963,7 @@
                                     </Grid.RowDefinitions>
 
                                     <!-- Заголовок вкладки: точечная подпись и подсказка,
-                                         как на главной и в чате. -->
+                                         как на главной. -->
                                     <Grid Grid.Row="0" Margin="0,0,0,8">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto" />
@@ -1071,155 +1069,7 @@
                                 </Grid>
 
                                 <!-- ЧАТ: локальная модель, переписка как текст, а не пузыри -->
-                                <Grid x:Name="TabChat" Visibility="Collapsed">
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="*" />
-                                        <RowDefinition Height="Auto" />
-                                    </Grid.RowDefinitions>
-
-                                    <!-- Настройка: модель, обновить список, скачать, сохранить -->
-                                    <StackPanel Grid.Row="0" Margin="0,0,0,8">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <ComboBox x:Name="AiModelBox" Style="{StaticResource DsCombo}"
-                                                      IsEditable="True"
-                                                      DropDownOpened="OnModelDropDownOpened"
-                                                      ToolTip="Модель из твоей Ollama. Список приносит кнопка ⟳; можно вписать вручную (ollama list)." />
-                                            <Button Grid.Column="1" Style="{StaticResource DsButton}"
-                                                    Content="⟳" Padding="9,4" Margin="6,0,0,0" FontSize="11"
-                                                    ToolTip="Обновить список моделей из Ollama"
-                                                    Click="OnRefreshModels" />
-                                            <Button x:Name="AiPullBtn" Grid.Column="2" Style="{StaticResource DsButton}"
-                                                    Content="СКАЧАТЬ" Margin="6,0,0,0"
-                                                    ToolTip="Скачать рекомендованную модель в Ollama — один клик, 1.4 ГБ"
-                                                    Click="OnPullModel" />
-                                            <Button Grid.Column="3" Style="{StaticResource DsButton}"
-                                                    Content="СОХРАНИТЬ" Margin="6,0,0,0"
-                                                    Click="OnSaveAiConfig" />
-                                        </Grid>
-                                        <!-- Постоянная памятка: ИИ работает локально, но саму Ollama
-                                             надо поставить отдельно. Без неё чат молча не отвечает,
-                                             и это выглядит как поломка. -->
-                                        <!-- Пока модель думает: точки-полоска и обычная подпись.
-                                             Слово точками при таком размере не читается — проверено
-                                             на снимке: «ДУМАЮ» превращалось в кашу. -->
-                                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0"
-                                                    Visibility="{Binding ChatBusy, Converter={StaticResource BoolToVis}}">
-                                            <controls:MiniEq x:Name="AiThinkingEq" Width="56" Height="12"
-                                                             IsHitTestVisible="False" VerticalAlignment="Center" />
-                                            <controls:TrackedText Text="ДУМАЮ" FontSize="8" Tracking="0.30"
-                                                                  Margin="8,0,0,0" VerticalAlignment="Center"
-                                                                  Brush="{DynamicResource DsTextMuted}" />
-                                        </StackPanel>
-
-                                        <Border x:Name="OllamaNote" Visibility="Collapsed"
-                                                Margin="0,8,0,0" Padding="10,8" CornerRadius="8"
-                                                BorderThickness="1">
-                                            <Border.BorderBrush>
-                                                <SolidColorBrush Color="#33D71920" />
-                                            </Border.BorderBrush>
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="&#xE946;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                                           FontSize="12" VerticalAlignment="Center"
-                                                           Foreground="{DynamicResource DsAccent}" />
-                                                <StackPanel Margin="8,0,0,0" VerticalAlignment="Center">
-                                                    <TextBlock FontFamily="Segoe UI" FontSize="10"
-                                                               Foreground="{DynamicResource DsText}"
-                                                               Text="Для чата нужна Ollama — её ставят отдельно, дальше всё работает без интернета." />
-                                                    <TextBlock FontFamily="Segoe UI" FontSize="9" Margin="0,2,0,0"
-                                                               Foreground="{DynamicResource DsTextMuted}"
-                                                               Text="ollama.com/download · после установки вернись сюда и нажми СКАЧАТЬ" />
-                                                </StackPanel>
-                                                <Button Style="{StaticResource DsButton}" Content="ОТКРЫТЬ САЙТ"
-                                                        Margin="12,0,0,0" VerticalAlignment="Center"
-                                                        Click="OnOpenOllamaSite" />
-                                            </StackPanel>
-                                        </Border>
-                                        <TextBlock x:Name="AiHint" Visibility="Collapsed"
-                                                   TextWrapping="Wrap" Margin="0,6,0,0"
-                                                   FontFamily="Segoe UI" FontSize="10"
-                                                   Foreground="{DynamicResource DsAccent}" />
-                                        <ProgressBar x:Name="AiPullBar" Visibility="Collapsed"
-                                                     Height="3" Minimum="0" Maximum="100" Margin="0,6,0,0"
-                                                     Foreground="{DynamicResource DsAccent}"
-                                                     Background="{DynamicResource DsBorder}"
-                                                     BorderThickness="0" />
-                                    </StackPanel>
-
-                                    <ScrollViewer x:Name="ChatScroller" Grid.Row="1" Style="{StaticResource DsScroll}">
-                                        <ItemsControl ItemsSource="{Binding ChatLines}" Margin="0,0,6,12">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
-                                                    <!-- Без пузырей: реплика — строка переписки, а не карточка
-                                                         из мессенджера. Свои помечены акцентной полоской,
-                                                         ответы — тихой подписью ИИ и временем. -->
-                                                    <Grid Margin="0,0,0,14">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="Auto" />
-                                                            <ColumnDefinition Width="*" />
-                                                        </Grid.ColumnDefinitions>
-
-                                                        <Border x:Name="Bar" Grid.Column="0" Width="2"
-                                                                Margin="0,3,10,3" CornerRadius="1"
-                                                                Background="{DynamicResource DsAccent}"
-                                                                Visibility="Collapsed" />
-
-                                                        <StackPanel Grid.Column="1">
-                                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
-                                                                <!-- Автор реплики — мелким текстом с разрядкой.
-                                                                     Пробовал точками: при сетке 8×8 буквы сливаются в кашу.
-                                                                     Точки остались там, где работают: заголовок и «думаю». -->
-                                                                <controls:TrackedText Text="{Binding WhoLabel}"
-                                                                                      FontSize="8" Tracking="0.32"
-                                                                                      Brush="{DynamicResource DsTextMuted}" />
-                                                                <TextBlock Text="{Binding Stamp}"
-                                                                           FontFamily="Bahnschrift" FontSize="8"
-                                                                           Opacity="0.6" Margin="9,0,0,0"
-                                                                           Foreground="{DynamicResource DsTextMuted}" />
-                                                            </StackPanel>
-                                                            <TextBlock x:Name="ReplyText" Text="{Binding Text}"
-                                                                       FontFamily="Segoe UI" FontSize="12.5"
-                                                                       LineHeight="19" TextWrapping="Wrap"
-                                                                       Foreground="{DynamicResource DsText}" />
-                                                        </StackPanel>
-                                                    </Grid>
-                                                    <DataTemplate.Triggers>
-                                                        <DataTrigger Binding="{Binding IsUser}" Value="True">
-                                                            <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding IsError}" Value="True">
-                                                            <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
-                                                            <Setter TargetName="Bar" Property="Background" Value="#E5484D" />
-                                                        </DataTrigger>
-                                                    </DataTemplate.Triggers>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </ScrollViewer>
-
-                                    <Grid Grid.Row="2" Margin="0,10,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox x:Name="ChatInput" Style="{StaticResource DsTextBox}"
-                                                 Background="Transparent" BorderThickness="0,0,0,1"
-                                                 Padding="2,8,2,8" FontSize="12.5"
-                                                 KeyDown="OnChatInputKeyDown"
-                                                 ToolTip="Enter — отправить" />
-                                        <Button Grid.Column="1" Style="{StaticResource DsButton}"
-                                                Content="→" FontSize="13" Padding="12,4"
-                                                ToolTip="Отправить (Enter)"
-                                                Margin="10,0,0,0" Click="OnChatSend" />
-                                    </Grid>
-                                </Grid>
-
+                                
                                 <!-- ПОЛКА ФАЙЛОВ -->
                                 <Grid x:Name="TabShelf" Visibility="Collapsed">
                                     <Grid.RowDefinitions>

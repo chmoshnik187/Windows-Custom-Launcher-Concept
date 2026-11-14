@@ -122,19 +122,6 @@ public sealed class ShellServices : IAsyncDisposable
         var services = new ShellServices();
         Instance = services;
 
-        // Миграция на 0.1.8: чат теперь только Ollama, но в settings.json
-        // могли остаться облачные адреса из прошлых версий (dashscope и т.п.) —
-        // без этой правки остров молча опрашивал бы мёртвый сервер и список
-        // моделей был бы пустым.
-        if (!services.Settings.Current.AiBaseUrl.Contains("11434"))
-        {
-            services.Settings.Update(s =>
-            {
-                s.AiProvider = "Ollama";
-                s.AiBaseUrl = "http://localhost:11434/v1";
-            });
-        }
-
         await services.Media.StartAsync();
         services.AccentSampler.Start();
         services.Stats.Start();

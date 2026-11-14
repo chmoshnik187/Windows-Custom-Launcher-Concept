@@ -224,42 +224,6 @@ public partial class IslandWindow
         return Math.Clamp(headroom, ExpandedHeight, 1400);
     }
 
-    private void ScheduleGrowChat()
-    {
-        if (!_isExpanded || _vm.ActiveTab != "chat") return;
-        _growTimer.Stop();
-        _growTimer.Start();
-    }
-
-    private void GrowChat()
-    {
-        if (!_isExpanded || _vm.ActiveTab != "chat" || ChatScroller is null) return;
-        if (ChatScroller.Content is not FrameworkElement content) return;
-
-        ChatScroller.UpdateLayout();
-        double width = ChatScroller.ViewportWidth > 10 ? ChatScroller.ViewportWidth : 560;
-        content.Measure(new Size(width, double.PositiveInfinity));
-        double needed = content.DesiredSize.Height;
-
-        // "Хром" вокруг скроллера (плеер, вкладки, настройка, ввод, нижняя строка)
-        // не зависит от высоты острова — по нему и пересчитываем полную высоту.
-        double chrome = _expandedH - ChatScroller.ViewportHeight;
-
-        // Потолок роста: 62% рабочей области. Без него переписка вытягивает остров
-        // почти на весь экран — проверено: шесть реплик точками дали окно 1094 px
-        // при экране 1152 px. Дальше пусть работает прокрутка, а не само окно.
-        double share = SystemParameters.WorkArea.Height * 0.62;
-        double ceiling = Math.Min(MaxExpandedHeight(), Math.Max(TabMinHeight("chat"), share));
-
-        double target = Math.Clamp(needed + chrome + 6, TabMinHeight("chat"), ceiling);
-        if (Math.Abs(target - _expandedH) <= 2) return;
-
-        SetExpandedHeight(target, animate: true);
-
-        // Страховка: окно обязано соответствовать новой высоте, иначе
-        // содержимое чата рисуется за краем, а поле ввода недосягаемо.
-        ResizeWindowTo(Math.Max(CollapsedWidth, Width), target);
-    }
 
     private static void Animate(FrameworkElement el, DependencyProperty prop, double to)
     {
@@ -312,8 +276,7 @@ public partial class IslandWindow
 
         Units.SetPaused(true); // юниты видны только в свёрнутой таблетке
         UpdateMiniEq();
-        if (_vm.ActiveTab == "chat") ScheduleGrowChat();
-        _vm.Tick();
+_vm.Tick();
 
         // Автоскрытие: если включено, раскрытый остров уходит сам через 30 секунд.
         _autoHideTimer?.Stop();

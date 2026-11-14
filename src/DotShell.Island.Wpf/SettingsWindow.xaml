@@ -192,10 +192,7 @@
                         <StackPanel x:Name="PanelLook">
                             <CheckBox Style="{StaticResource DsToggle}" Content="Авто-цвет из обоев"
                                       IsChecked="{Binding AutoAccent}" />
-                            <CheckBox Style="{StaticResource DsToggle}"
-                                      Content="Ответы ИИ набирать точками"
-                                      IsChecked="{Binding AiAnswersInDots}"
-                                      ToolTip="Крупный точечный текст читается; мелкий — нет. Поэтому в точках только ответы ИИ, и кегль крупный" />                            <CheckBox Style="{StaticResource DsToggle}" Content="Показывать погасшие точки сетки"
+                                                        <CheckBox Style="{StaticResource DsToggle}" Content="Показывать погасшие точки сетки"
                                       IsChecked="{Binding ShowGhostDots}" />
 
                             <!-- Скины, рисунки и пресеты акцента остаются во вкладке ТЕМА:

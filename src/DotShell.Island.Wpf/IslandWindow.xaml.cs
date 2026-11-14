@@ -103,7 +103,7 @@ public partial class IslandWindow : Window
     /// Размер раскрытого острова под задачу вкладки.
     ///
     /// Раньше все вкладки жили в одном прямоугольнике 640×306: заметкам было
-    /// тесно по высоте, главной с плитками программ — тесно по ширине, а чату
+    /// тесно по высоте, главной с плитками программ — тесно по ширине
     /// приходилось вытягиваться вниз вручную. Теперь у каждой вкладки свой
     /// размер, и остров перетекает между ними той же анимацией, что и при
     /// раскрытии: капсула подстраивается под то, что ты делаешь.
@@ -156,8 +156,7 @@ public partial class IslandWindow : Window
 
     // ---- раскрытие переменной высоты (чат растёт вместе с перепиской) ----
     private double _expandedH = ExpandedHeight;
-    private readonly DispatcherTimer _growTimer;
-    private readonly DispatcherTimer _volChipTimer;
+private readonly DispatcherTimer _volChipTimer;
     private bool _volSync;
     private WidgetGalleryWindow? _widgetGallery;
 
@@ -193,18 +192,6 @@ public partial class IslandWindow : Window
         ApplyBackdrop();
         // Рисунок — общая тема: меняется на острове, значит меняется и в окне
         // настроек, и в виджетах. Иначе «тема» перестаёт быть темой.
-
-        if (Program.ChatDemo)
-        {
-            _vm.ChatBusy = true;
-            if (AiThinkingEq is not null) AiThinkingEq.IsRunning = true;
-            _vm.ChatLines.Add(new IslandViewModel.ChatLine("user", "покажи, как теперь выглядит ответ"));
-            _vm.ChatLines.Add(new IslandViewModel.ChatLine("qwen", "Ответ остаётся обычным текстом — точками набраны только метки и заголовок."));
-            _vm.ChatLines.Add(new IslandViewModel.ChatLine("user", "а если ответ длиннее?"));
-            _vm.ChatLines.Add(new IslandViewModel.ChatLine("qwen", "Длинный ответ проверяет, как остров ведёт себя, когда сообщений больше трёх: растёт ли окно, появляется ли прокрутка, не уезжает ли поле ввода."));
-            _vm.ChatLines.Add(new IslandViewModel.ChatLine("user", "и ещё одно"));
-            _vm.ChatLines.Add(new IslandViewModel.ChatLine("qwen", "Третья пара реплик нужна, чтобы точно выйти за предел и увидеть, где заканчивается место."));
-        }
 
         _vm.BackdropChanged += () =>
         {
@@ -300,9 +287,7 @@ public partial class IslandWindow : Window
 
         // Первая отрисовка переписки: прокрутка в конец, иначе чат открывается
         // на самых старых репликах, а свежие висят ниже без движения.
-        Loaded += (_, _) => Dispatcher.BeginInvoke(new Action(() => ChatScroller?.ScrollToEnd()),
-            System.Windows.Threading.DispatcherPriority.Loaded);
-        SourceInitialized += OnSourceInitialized;
+SourceInitialized += OnSourceInitialized;
 
         // Смена разрешения или мониторов: позиция считалась один раз при старте,
         // и остров оставался в координатах старого экрана.
@@ -358,23 +343,6 @@ public partial class IslandWindow : Window
         // Полка: drag-out строки списка в любое окно
         ShelfList.PreviewMouseLeftButtonDown += OnShelfDragCandidate;
         ShelfList.PreviewMouseMove += OnShelfDragMove;
-
-        // Автопрокрутка чата к последней реплике + остров растёт вслед за перепиской
-        _vm.ChatLines.CollectionChanged += (_, _) =>
-        {
-            Dispatcher.BeginInvoke(() => ChatScroller?.ScrollToEnd());
-            ScheduleGrowChat();
-        };
-
-        // Чат растёт ПОСЛЕ окончания анимации раскрытия: мерить viewport во время
-        // анимации — значит получить ложную высоту.
-        _growTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(360) };
-        _growTimer.Tick += (_, _) =>
-        {
-            try { _growTimer.Stop(); GrowChat(); }
-            catch (Exception ex) { Log.Info($"island chat grow failed: {ex.Message}"); }
-        };
-
         // Громкость: ползунок на главной, чип при кручении колеса, внешние изменения
         _volChipTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1200) };
         _volChipTimer.Tick += (_, _) =>

@@ -76,7 +76,6 @@ public partial class IslandWindow
             "clipboard" => TabClipboard,
             "system" => TabSystem,
             "theme" => TabTheme,
-            "chat" => TabChat,
             "shelf" => TabShelf,
             "cmd" => TabCmd,
             _ => TabHome,
@@ -89,7 +88,7 @@ public partial class IslandWindow
 
         var all = new FrameworkElement[]
         {
-            TabHome, TabNotes, TabClipboard, TabSystem, TabTheme, TabChat, TabShelf, TabCmd,
+            TabHome, TabNotes, TabClipboard, TabSystem, TabTheme, TabShelf, TabCmd,
         };
 
         foreach (var tab in all)
@@ -193,39 +192,9 @@ public partial class IslandWindow
             catch (Exception ex) { Log.Info($"tab switch guard failed: {ex.Message}"); }
         };
         guard.Start();
-
-        if (tag == "chat") _ = CheckOllamaAsync();
-        if (tag == "notes") Dispatcher.BeginInvoke(() => UpdateNotesHeight(false));
     }
 
     /// <summary>
-    /// Памятка про Ollama, если её нет. Чат с локальной моделью — единственная часть
-    /// острова, которой нужна сторонняя программа; без предупреждения это выглядит
-    /// как «ИИ сломался».
-    /// </summary>
-    private async Task CheckOllamaAsync()
-    {
-        try
-        {
-            bool alive = await DotShell.Core.Ai.OllamaClient.IsRunningAsync();
-            OllamaNote.Visibility = alive ? Visibility.Collapsed : Visibility.Visible;
-        }
-        catch { OllamaNote.Visibility = Visibility.Visible; }
-    }
-
-    private void OnOpenOllamaSite(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://ollama.com/download")
-            {
-                UseShellExecute = true,
-            });
-            ShowAiHint("ставим Ollama: после установки вернись сюда и нажми СКАЧАТЬ");
-        }
-        catch (Exception ex) { ShowAiHint($"не смог открыть сайт: {ex.Message}"); }
-    }
-
     private void OnTabChecked(object sender, RoutedEventArgs e)
     {
         if (sender is not RadioButton { Tag: string tag }) return;
@@ -269,17 +238,8 @@ public partial class IslandWindow
         {
             PickerPanel.Visibility = Visibility.Collapsed;
         }
-
-        if (tag == "chat") ScheduleGrowChat();
-
-        if (tag == "chat")
+if (tag == "chat")
         {
-            // Блок настройки чата виден всегда: ключ, провайдер и модель можно
-            // поменять в любой момент. Модель синхронизируем вручную (editable-комбобокс)
-            // и молча подтягиваем список, если он ещё пуст.
-            if (string.IsNullOrWhiteSpace(AiModelBox.Text)) AiModelBox.Text = _vm.AiModel;
-            if (AiModelBox.ItemsSource is null) _ = RefreshModelsAsync();
-            ChatInput.Focus();
         }
 
         if (tag == "system")
