@@ -1282,6 +1282,7 @@ public sealed partial class WidgetWindow : Window
         string filter = string.Empty;
         int sortMode = 0; // 0 имя, 1 дата, 2 размер, 3 тип
         int groupMode = 0; // 0 нет, 1 тип, 2 дата
+        var collapsedGroups = new HashSet<string>(StringComparer.Ordinal);
         var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var rowByPath = new Dictionary<string, Border>(StringComparer.OrdinalIgnoreCase);
         var visiblePaths = new List<string>();
@@ -1578,6 +1579,7 @@ public sealed partial class WidgetWindow : Window
             snapshotPath = string.Empty;
             haveSnapshot = false;
             changedPaths.Clear();
+            collapsedGroups.Clear();
             Rebuild();
         }
 
@@ -1921,19 +1923,6 @@ public sealed partial class WidgetWindow : Window
 
                 RefreshHeader(shown, total);
 
-                UIElement GroupHeader(string text, int count)
-                {
-                    return new TextBlock
-                    {
-                        Text = $"{text} · {count}",
-                        FontFamily = new FontFamily("Segoe UI"),
-                        FontSize = 10,
-                        FontWeight = FontWeights.SemiBold,
-                        Foreground = ResBrush("DsTextMuted"),
-                        Margin = new Thickness(2, 8, 2, 2),
-                    };
-                }
-
                 string TypeGroup(FileInfo f)
                 {
                     string ext = f.Extension.ToLowerInvariant();
@@ -1953,32 +1942,63 @@ public sealed partial class WidgetWindow : Window
                     return "Ранее";
                 }
 
+                UIElement GroupHeader(string text, int count, string key)
+                {
+                    bool collapsed = collapsedGroups.Contains(key);
+                    var tb = new TextBlock
+                    {
+                        Text = $"{(collapsed ? "▸" : "▾")} {text} · {count}",
+                        FontFamily = new FontFamily("Segoe UI"),
+                        FontSize = 10,
+                        FontWeight = FontWeights.SemiBold,
+                        Foreground = ResBrush("DsTextMuted"),
+                        VerticalAlignment = VerticalAlignment.Center,
+                    };
+                    var border = new Border
+                    {
+                        Child = tb,
+                        Padding = new Thickness(4, 6, 4, 2),
+                        Background = Brushes.Transparent,
+                        Cursor = Cursors.Hand,
+                        ToolTip = collapsed ? "Развернуть" : "Свернуть",
+                    };
+                    border.MouseLeftButtonUp += (_, e) =>
+                    {
+                        if (!collapsedGroups.Add(key)) collapsedGroups.Remove(key);
+                        Rebuild();
+                        e.Handled = true;
+                    };
+                    return border;
+                }
+
+                void RenderGroup(string text, string key, IEnumerable<string> paths, bool isDir)
+                {
+                    var listPaths = paths.ToList();
+                    list.Children.Add(GroupHeader(text, listPaths.Count, key));
+                    if (collapsedGroups.Contains(key)) return;
+                    foreach (var p in listPaths) list.Children.Add(Row(p, isDir));
+                }
+
                 if (groupMode == 1)
                 {
-                    list.Children.Add(GroupHeader("Папки", dirsShown.Count));
-                    foreach (var d in dirsShown) list.Children.Add(Row(d.FullName, true));
+                    RenderGroup("Папки", "1:Папки", dirsShown.Select(d => d.FullName), true);
                     foreach (var g in filesShown.GroupBy(TypeGroup).OrderBy(g => g.Key, StringComparer.CurrentCulture))
                     {
                         var items = g.ToList();
-                        list.Children.Add(GroupHeader(g.Key, items.Count));
-                        foreach (var f in items) list.Children.Add(Row(f.FullName, false));
+                        RenderGroup(g.Key, $"1:{g.Key}", items.Select(f => f.FullName), false);
                     }
                 }
                 else if (groupMode == 2)
                 {
                     if (dirsShown.Count > 0)
-                    {
-                        list.Children.Add(GroupHeader("Папки", dirsShown.Count));
-                        foreach (var d in dirsShown) list.Children.Add(Row(d.FullName, true));
-                    }
+                        RenderGroup("Папки", "2:Папки", dirsShown.Select(d => d.FullName), true);
                     var dateGroups = filesShown
                         .GroupBy(f => DateGroup(f.LastWriteTime))
                         .OrderBy(g => g.Key switch { "Сегодня" => 0, "Вчера" => 1, "За неделю" => 2, _ => 3 });
                     foreach (var g in dateGroups)
                     {
                         var items = g.ToList();
-                        list.Children.Add(GroupHeader(g.Key, items.Count));
-                        foreach (var f in items) list.Children.Add(Row(f.FullName, false));
+                        RenderGroup(g.Key, $"2:{g.Key}", items.Select(f => f.FullName), false);
                     }
                 }
                 else
@@ -2070,7 +2090,7 @@ public sealed partial class WidgetWindow : Window
         var groupBtn = WBtn("≡", "Группировка: нет → тип → дата");
         groupBtn.Padding = new Thickness(6, 2, 6, 2);
         groupBtn.Margin = new Thickness(4, 0, 0, 0);
-        groupBtn.Click += (_, _) => { groupMode = (groupMode + 1) % 3; Rebuild(); };
+        groupBtn.Click += (_, _) => { groupMode = (groupMode + 1) % 3; collapsedGroups.Clear(); Rebuild(); };
         groupBtnRef = groupBtn;
 
         var newBtn = WBtn("+", "Создать папку");
