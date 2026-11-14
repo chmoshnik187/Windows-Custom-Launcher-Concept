@@ -270,16 +270,29 @@ public sealed class MediaBridge : INotifyPropertyChanged, IAsyncDisposable
     }
 
     /// <summary>Таймер в UI может дёргать это раз в секунду, чтобы ползунок ехал.</summary>
+    /// <summary>Вызови из UI таймер раз в секунду, чтобы полоска двигалась плавно.</summary>
     public void Tick()
     {
+        if (_fixture)
+        {
+            // Фикстура не должна затираться внешними событиями/таймерами.
+            if (!HasSession) HasSession = true;
+            if (!IsPlaying) IsPlaying = true;
+            if (Duration != TimeSpan.FromSeconds(212)) Duration = TimeSpan.FromSeconds(212);
+            if (_anchorStamp == DateTime.MinValue) Anchor(TimeSpan.Zero);
+            if (Position > Duration) Anchor(TimeSpan.Zero);
+            Position = LivePosition;
+            return;
+        }
+
         if (_session is null || !IsPlaying || Duration == TimeSpan.Zero) return;
 
         var timeline = _session.GetTimelineProperties();
+        IsPlaying = _session.GetPlaybackInfo()?.PlaybackStatus ==
+                    GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
 
-        // Часть плееров (например, Dotify) отдаёт позицию 0 всё время, пока играет.
-        // Сравнивать с расчётной позицией нельзя: тогда мы будем обнулять счётчик
-        // каждую секунду и ползунок будет вечно стоять на нуле. Поэтому реагируем
-        // только на ИЗМЕНЕНИЕ того, что прислал плеер.
+        // Позиция смещается и плавно будет точна около нуля. Поэтому обновляем
+        // только по окончании того, как скакала назад.
         if ((timeline.Position - _lastReported).Duration() > TimeSpan.FromMilliseconds(500))
             Anchor(timeline.Position);
     }
