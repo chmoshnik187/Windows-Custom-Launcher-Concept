@@ -2707,18 +2707,31 @@ public sealed partial class WidgetWindow : Window
             var movedPairs = new List<(string src, string dst, bool isDir)>();
             int errors = 0;
             bool cancelled = false;
+            string opName = doMove ? "Перемещение" : "Копирование";
 
-            SetFileOpUi(true, doMove ? "Перемещение…" : "Копирование…");
+            long doneBytes = 0;
+
+            long totalBytes = 0;
+
+
+
+            SetFileOpUi(true, opName);
+
             try
             {
                 await Task.Run(() =>
                 {
+                    totalBytes = doMove ? 0 : ComputeTotalBytes(fileList);
+
                     for (int i = 0; i < fileList.Count; i++)
                     {
                         if (ct.IsCancellationRequested) { cancelled = true; break; }
                         string p = fileList[i];
                         string label = System.IO.Path.GetFileName(p);
-                        ReportProgress($"{(doMove ? "Перемещение" : "Копирование")} {i + 1}/{fileList.Count}: {label}");
+                        ReportProgress(FormatProgressText(opName, i + 1, fileList.Count, label, System.Threading.Interlocked.Read(ref doneBytes), totalBytes));
+
+                        void AddBytes(long b) { System.Threading.Interlocked.Add(ref doneBytes, b); }
+
                         try
                         {
                             if (!File.Exists(p) && !Directory.Exists(p)) continue;
@@ -2769,8 +2782,8 @@ public sealed partial class WidgetWindow : Window
                                 {
                                     try
                                     {
-                                        if (isDirSrc) { CopyDirectoryCancellable(p, dest, ct); if (!ct.IsCancellationRequested) Directory.Delete(p, true); }
-                                        else { CopyFileCancellable(p, dest, ct); if (!ct.IsCancellationRequested) File.Delete(p); }
+                                        if (isDirSrc) { CopyDirectoryCancellable(p, dest, ct, AddBytes); if (!ct.IsCancellationRequested) Directory.Delete(p, true); }
+                                        else { CopyFileCancellable(p, dest, ct, AddBytes); if (!ct.IsCancellationRequested) File.Delete(p); }
                                         if (ct.IsCancellationRequested) { cancelled = true; break; }
                                         movedOk = true;
                                     }
@@ -2784,8 +2797,8 @@ public sealed partial class WidgetWindow : Window
                             {
                                 try
                                 {
-                                    if (isDirSrc) CopyDirectoryCancellable(p, dest, ct);
-                                    else CopyFileCancellable(p, dest, ct);
+                                    if (isDirSrc) CopyDirectoryCancellable(p, dest, ct, AddBytes);
+                                    else CopyFileCancellable(p, dest, ct, AddBytes);
                                 }
                                 catch (OperationCanceledException) { cancelled = true; break; }
                                 catch (Exception ex) { Log.Info($"folder widget: paste failed {p} — {ex.Message}"); errors++; }
@@ -3028,24 +3041,29 @@ public sealed partial class WidgetWindow : Window
             if (fileOpRunning || missing || !Directory.Exists(currentPath)) return;
             if (e.Data.GetData(DataFormats.FileDrop) is not string[] paths || paths.Length == 0) return;
 
-            fileOpCts?.Dispose();
-            fileOpCts = new CancellationTokenSource();
-            var ct = fileOpCts.Token;
-            int errors = 0;
-            bool cancelled = false;
-
-            SetFileOpUi(true, "Перенос…");
-            try
-            {
-                await Task.Run(() =>
-                {
-                    for (int i = 0; i < paths.Length; i++)
-                    {
-                        if (ct.IsCancellationRequested) { cancelled = true; break; }
-                        string sourcePath = paths[i];
-                        if (string.IsNullOrWhiteSpace(sourcePath)) continue;
-                        string label = System.IO.Path.GetFileName(sourcePath);
-                        ReportProgress($"Перенос {i + 1}/{paths.Length}: {label}");
+            fileOpCts?.Dispose();
+            fileOpCts = new CancellationTokenSource();
+            var ct = fileOpCts.Token;
+            int errors = 0;
+            bool cancelled = false;
+            long doneBytes = 0;
+            long totalBytes = 0;
+            string opName = "Перетаскивание";
+
+            SetFileOpUi(true, "Перетаскивание");
+            try
+            {
+                await Task.Run(() =>
+                {
+                    totalBytes = ComputeTotalBytes(paths);
+                    for (int i = 0; i < paths.Length; i++)
+                    {
+                        if (ct.IsCancellationRequested) { cancelled = true; break; }
+                        string sourcePath = paths[i];
+                        if (string.IsNullOrWhiteSpace(sourcePath)) continue;
+                        string label = System.IO.Path.GetFileName(sourcePath);
+                        ReportProgress(FormatProgressText(opName, i + 1, paths.Length, label, System.Threading.Interlocked.Read(ref doneBytes), totalBytes));
+                        void AddBytes(long b) { System.Threading.Interlocked.Add(ref doneBytes, b); }
                         try
                         {
                             string name = System.IO.Path.GetFileName(sourcePath);
@@ -3084,8 +3102,8 @@ public sealed partial class WidgetWindow : Window
                             {
                                 try
                                 {
-                                    if (Directory.Exists(sourcePath)) CopyDirectoryCancellable(sourcePath, dest, ct);
-                                    else if (File.Exists(sourcePath)) CopyFileCancellable(sourcePath, dest, ct);
+                                    if (Directory.Exists(sourcePath)) CopyDirectoryCancellable(sourcePath, dest, ct, AddBytes);
+                                    else if (File.Exists(sourcePath)) CopyFileCancellable(sourcePath, dest, ct, AddBytes);
                                 }
                                 catch (OperationCanceledException) { cancelled = true; break; }
                                 catch (Exception ex) { Log.Info($"folder widget: drop copy failed {sourcePath} — {ex.Message}"); errors++; }
@@ -3325,26 +3343,73 @@ public sealed partial class WidgetWindow : Window
         return container;
     }
 
-    private static void CopyFileCancellable(string source, string dest, CancellationToken ct)
+    private static void CopyFileCancellable(string source, string dest, CancellationToken ct, Action<long>? addBytes = null)
     {
         ct.ThrowIfCancellationRequested();
-        File.Copy(source, dest, overwrite: false);
+        const int bufSize = 1024 * 128;
+        using var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, bufSize, FileOptions.SequentialScan);
+        using var output = new FileStream(dest, FileMode.CreateNew, FileAccess.Write, FileShare.None, bufSize, FileOptions.SequentialScan);
+        var buffer = new byte[bufSize];
+        int read;
+        long since = 0;
+        while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            ct.ThrowIfCancellationRequested();
+            output.Write(buffer, 0, read);
+            since += read;
+            if (since >= 1024 * 512)
+            {
+                addBytes?.Invoke(since);
+                since = 0;
+            }
+        }
+        if (since > 0) addBytes?.Invoke(since);
     }
 
-    private static void CopyDirectoryCancellable(string sourceDir, string destDir, CancellationToken ct)
+    private static void CopyDirectoryCancellable(string sourceDir, string destDir, CancellationToken ct, Action<long>? addBytes = null)
     {
         ct.ThrowIfCancellationRequested();
         Directory.CreateDirectory(destDir);
         foreach (var file in Directory.GetFiles(sourceDir))
         {
             ct.ThrowIfCancellationRequested();
-            File.Copy(file, System.IO.Path.Combine(destDir, System.IO.Path.GetFileName(file)), overwrite: false);
+            CopyFileCancellable(file, System.IO.Path.Combine(destDir, System.IO.Path.GetFileName(file)), ct, addBytes);
         }
         foreach (var dir in Directory.GetDirectories(sourceDir))
         {
             ct.ThrowIfCancellationRequested();
-            CopyDirectoryCancellable(dir, System.IO.Path.Combine(destDir, System.IO.Path.GetFileName(dir)), ct);
+            CopyDirectoryCancellable(dir, System.IO.Path.Combine(destDir, System.IO.Path.GetFileName(dir)), ct, addBytes);
         }
+    }
+
+    private static long ComputeTotalBytes(IEnumerable<string> paths)
+    {
+        long total = 0;
+        foreach (var p in paths)
+        {
+            try
+            {
+                if (File.Exists(p)) { total += new FileInfo(p).Length; continue; }
+                if (Directory.Exists(p))
+                {
+                    foreach (var f in Directory.EnumerateFiles(p, "*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint }))
+                    {
+                        try { total += new FileInfo(f).Length; } catch { }
+                    }
+                }
+            }
+            catch { }
+        }
+        return total;
+    }
+
+    private static string FormatProgressText(string op, int i, int n, string label, long doneBytes, long totalBytes)
+    {
+        string baseText = $"{op} {i}/{n}: {label}";
+        if (totalBytes <= 0) return baseText;
+        double doneMb = doneBytes / 1024.0 / 1024.0;
+        double totalMb = totalBytes / 1024.0 / 1024.0;
+        return $"{baseText} · {doneMb:0.#}/{totalMb:0.#} МБ";
     }
 
     private static void CopyDirectory(string sourceDir, string destDir)

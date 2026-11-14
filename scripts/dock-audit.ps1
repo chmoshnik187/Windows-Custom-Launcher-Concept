@@ -157,11 +157,16 @@ function Run-Side([string]$side, [int]$screenWidth) {
         Check 'выехал по наведению' (($peek.R - $hiddenVisible) -ge ($panel * 0.4)) "right $visible -> $($peek.R), видно $($peek.R) из $panel"
         Check 'панель у левого края' ($peek.L -le $strip) "left=$($peek.L)"
 
-        # Уводим курсор — панель должна спрятаться.
-        [void][DockProbe]::SetCursorPos([int]($screenWidth / 2), 400)
-        Start-Sleep -Milliseconds 1200
-        $hidden = Measure-Dock $process.Id
-        Check 'спрятался обратно' ([Math]::Abs($hidden.R - $hiddenVisible) -le 6) "right=$($hidden.R), было $hiddenVisible"
+        # Уводим курсор в центр экрана и ждём auto-hide.
+        [void][DockProbe]::SetCursorPos([int]($screenWidth / 2), 400)
+        $hidden = $null
+        $hideDeadline = [DateTime]::UtcNow.AddSeconds(3)
+        while ([DateTime]::UtcNow -lt $hideDeadline) {
+            Start-Sleep -Milliseconds 200
+            $hidden = Measure-Dock $process.Id
+            if ($null -ne $hidden -and [Math]::Abs($hidden.R - $hiddenVisible) -le 6) { break }
+        }
+        Check 'спрятался обратно' ($null -ne $hidden -and [Math]::Abs($hidden.R - $hiddenVisible) -le 6) "right=$($hidden.R), было $hiddenVisible"
     } else {
         $visible = $screenWidth - $rect.L
         Check 'спрятан за правым краем' ($visible -gt 0 -and $visible -le $strip) "видно $visible px из $panel"
@@ -173,10 +178,16 @@ function Run-Side([string]$side, [int]$screenWidth) {
         Check 'выехал по наведению' (($screenWidth - $peek.L - $hiddenVisible) -ge ($panel * 0.4)) "left $($rect.L) -> $($peek.L), видно $($screenWidth - $peek.L) из $panel"
         Check 'панель у правого края' (($screenWidth - $peek.R) -le $strip) "right=$($peek.R)"
 
-        [void][DockProbe]::SetCursorPos([int]($screenWidth / 2), 400)
-        Start-Sleep -Milliseconds 1200
-        $hidden = Measure-Dock $process.Id
-        Check 'спрятался обратно' ([Math]::Abs(($screenWidth - $hidden.L) - $hiddenVisible) -le 6) "left=$($hidden.L), видно $($screenWidth - $hidden.L), было $hiddenVisible"
+        # Уводим курсор в центр экрана и ждём auto-hide.
+        [void][DockProbe]::SetCursorPos([int]($screenWidth / 2), 400)
+        $hidden = $null
+        $hideDeadline = [DateTime]::UtcNow.AddSeconds(3)
+        while ([DateTime]::UtcNow -lt $hideDeadline) {
+            Start-Sleep -Milliseconds 200
+            $hidden = Measure-Dock $process.Id
+            if ($null -ne $hidden -and [Math]::Abs(($screenWidth - $hidden.L) - $hiddenVisible) -le 6) { break }
+        }
+        Check 'спрятался обратно' ($null -ne $hidden -and [Math]::Abs(($screenWidth - $hidden.L) - $hiddenVisible) -le 6) "left=$($hidden.L), видно $($screenWidth - $hidden.L), было $hiddenVisible"
     }
 
     [void][DockProbe]::SetCursorPos($saved.X, $saved.Y)
