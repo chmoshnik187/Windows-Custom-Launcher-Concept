@@ -1405,12 +1405,34 @@ public sealed partial class WidgetWindow : Window
         CancellationTokenSource? fileOpCts = null;
         bool fileOpRunning = false;
 
+        var undoTtlTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+        undoTtlTimer.Tick += (_, _) =>
+        {
+            undoTtlTimer.Stop();
+            if (!fileOpRunning && undoStack.Count > 0)
+            {
+                // TTL: скрываем панель, но оставляем возможность отмены по Ctrl+Z (стек сохраняется).
+                undoBar.Visibility = Visibility.Collapsed;
+                scroll.MaxHeight = Math.Max(80, ActualHeight - 110
+                    - (previewPanel.Visibility == Visibility.Visible ? 90 : 0));
+            }
+        };
+        _timers.Add(undoTtlTimer);
+
+        void BumpUndoTtl(bool showUndo)
+        {
+            undoTtlTimer.Stop();
+            if (showUndo && !fileOpRunning && undoStack.Count > 0) undoTtlTimer.Start();
+        }
+
         void SetFileOpUi(bool running, string? text = null)
         {
             fileOpRunning = running;
+            bool showUndo = !running && undoStack.Count > 0;
             undoBar.Visibility = (running || undoStack.Count > 0) ? Visibility.Visible : Visibility.Collapsed;
             if (running)
             {
+                undoTtlTimer.Stop();
                 undoBtn.Content = "Отмена";
                 undoBtn.ToolTip = "Отменить текущую операцию";
                 undoBtn.IsEnabled = true;
@@ -1422,6 +1444,7 @@ public sealed partial class WidgetWindow : Window
                 undoBtn.ToolTip = "Отменить последнее действие (Ctrl+Z)";
                 if (undoStack.Count == 0)
                 {
+                    undoTtlTimer.Stop();
                     undoBar.Visibility = Visibility.Collapsed;
                     undoText.Text = string.Empty;
                     undoBtn.IsEnabled = false;
@@ -1433,6 +1456,7 @@ public sealed partial class WidgetWindow : Window
                     else if (string.IsNullOrWhiteSpace(undoText.Text)) undoText.Text = $"Можно отменить: {undoStack.Count}";
                 }
             }
+            BumpUndoTtl(showUndo);
             scroll.MaxHeight = Math.Max(80, ActualHeight - 110
                 - (previewPanel.Visibility == Visibility.Visible ? 90 : 0)
                 - (undoBar.Visibility == Visibility.Visible ? 28 : 0));

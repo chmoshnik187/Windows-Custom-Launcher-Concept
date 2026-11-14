@@ -97,7 +97,7 @@ foreach ($case in $cases) {
     Set-Mode $case.Mode
 
     $process = Start-Process $Exe -ArgumentList '--notify-test' -PassThru
-    Start-Sleep -Seconds 7   # 2 с до показа + 5 с на анимацию и измерение
+    Start-Sleep -Milliseconds 4500   # 2с до показа + ~2.5с в момент отображения   # 2 с до показа + 5 с на анимацию и измерение
 
     $alive = $null -ne (Get-Process -Id $process.Id -ErrorAction SilentlyContinue)
     $wins = if ($alive) { [NotifyProbe]::All($process.Id) } else { @() }
