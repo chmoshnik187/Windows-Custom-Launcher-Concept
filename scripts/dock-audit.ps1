@@ -223,9 +223,7 @@ function Run-Drag([int]$screenWidth, [int]$screenHeight) {
 
     Press-At $grabX $grabY
 
-    # Сдвигаем курсор на 120 px и меряем окно, не отпуская кнопку.
-    # На 125% корректный drag проходит ровно 120 px; без пересчёта DPI
-    # окно уехало бы на 150 px, и проверка это поймает.
+    # Тащим влево на 120 px и держим кнопку.
     Move-Steps $grabX $grabY ($grabX + 120) $grabY 12
     Start-Sleep -Milliseconds 350
     $mid = Measure-Dock $script:dockPid
@@ -233,12 +231,12 @@ function Run-Drag([int]$screenWidth, [int]$screenHeight) {
     $dragOk = $null -ne $mid -and
               [Math]::Abs(($mid.L - $rect.L) - 120) -le 12 -and
               [Math]::Abs($mid.T - $rect.T) -le 8
-    Check 'drag следует за курсором' $dragOk "left $($rect.L) -> $($mid.L), top $($rect.T) -> $($mid.T)"
+    Check 'drag сдвинул по горизонтали' $dragOk "left $($rect.L) -> $($mid.L), top $($rect.T) -> $($mid.T)"
 
     $json = Get-Content $settingsPath -Raw | ConvertFrom-Json
-    Check 'во время drag сторона не меняется' ($json.dockSide -eq 'left') "dockSide=$($json.dockSide)"
+    Check 'во время drag сторона не сменилась' ($json.dockSide -eq 'left') "dockSide=$($json.dockSide)"
 
-    # Доводим до правой половины экрана и отпускаем: док должен прилипнуть справа.
+    # Бросаем в правый край экрана и отпускаем: это должно переключить сторону.
     Move-Steps ($grabX + 120) $grabY ([int]($screenWidth * 0.8)) $grabY 16
     Release-Mouse
 
