@@ -76,6 +76,20 @@ import json, io, os
 p = os.path.join(os.environ['LOCALAPPDATA'], 'DotShell', 'settings.json')
 j = json.load(io.open(p, encoding='utf-8'))
 j['notifyMode'] = '$mode'
+j['quietThreshold'] = 'off'
+io.open(p, 'w', encoding='utf-8').write(json.dumps(j, ensure_ascii=False, indent=2))
+"@ | Out-Null
+}
+
+function Restore-Defaults() {
+    $py = 'C:\Users\maxim\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\python\python.exe'
+    if (-not (Test-Path $py)) { $py = 'python' }
+    & $py -c @"
+import json, io, os
+p = os.path.join(os.environ['LOCALAPPDATA'], 'DotShell', 'settings.json')
+j = json.load(io.open(p, encoding='utf-8'))
+j['notifyMode'] = 'capsule'
+j['quietThreshold'] = 'maximized'
 io.open(p, 'w', encoding='utf-8').write(json.dumps(j, ensure_ascii=False, indent=2))
 "@ | Out-Null
 }

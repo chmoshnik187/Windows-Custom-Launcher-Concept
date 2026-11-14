@@ -193,7 +193,10 @@ public sealed class WidgetStore
                 foreach (var i in list.Where(i => !string.IsNullOrWhiteSpace(i.Type))) Items.Add(i);
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"WidgetStore.Load failed: {ex.Message}");
+        }
     }
 
     private void Save()
@@ -205,6 +208,9 @@ public sealed class WidgetStore
             Directory.CreateDirectory(AppSettings.SettingsDirectory);
             File.WriteAllText(StorePath, JsonSerializer.Serialize(snapshot, JsonOpts));
         }
-        catch { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"WidgetStore.Save failed: {ex.Message}");
+        }
     }
 }
