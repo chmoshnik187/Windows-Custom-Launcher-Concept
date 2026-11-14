@@ -21,6 +21,61 @@ public sealed class FolderCollectionSpec
     /// <summary>Минимальный размер в МБ. 0 — без фильтра.</summary>
     public int MinSizeMb { get; set; }
     public int Limit { get; set; } = 50;
+
+    public FolderCollectionSpec Clone() => new()
+    {
+        Enabled = Enabled,
+        Preset = Preset ?? string.Empty,
+        Scope = Scope ?? string.Empty,
+        Recursive = Recursive,
+        Kinds = Kinds?.ToList() ?? new List<string>(),
+        NameContains = NameContains ?? string.Empty,
+        WithinDays = WithinDays,
+        MinSizeMb = MinSizeMb,
+        Limit = Limit > 0 ? Limit : 50,
+    };
+}
+
+/// <summary>Именованный набор правил (портал) для умной папки, сохраняемый отдельно от виджета.</summary>
+public sealed class FolderPortal
+{
+    public string Name { get; set; } = string.Empty;
+    public FolderCollectionSpec Spec { get; set; } = new();
+}
+
+/// <summary>Хранилище именованных порталов/наборов правил умной папки (глобально для пользователя).</summary>
+public static class FolderPortalStore
+{
+    private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
+    private static string StorePath => Path.Combine(AppSettings.SettingsDirectory, "folder-portals.json");
+
+    public static List<FolderPortal> Load()
+    {
+        try
+        {
+            if (!File.Exists(StorePath)) return new List<FolderPortal>();
+            var list = JsonSerializer.Deserialize<List<FolderPortal>>(File.ReadAllText(StorePath));
+            return list?.Where(p => p is not null && !string.IsNullOrWhiteSpace(p.Name)).ToList() ?? new List<FolderPortal>();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"FolderPortalStore.Load failed: {ex.Message}");
+            return new List<FolderPortal>();
+        }
+    }
+
+    public static void Save(IReadOnlyCollection<FolderPortal> portals)
+    {
+        try
+        {
+            Directory.CreateDirectory(AppSettings.SettingsDirectory);
+            File.WriteAllText(StorePath, JsonSerializer.Serialize(portals, JsonOpts));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"FolderPortalStore.Save failed: {ex.Message}");
+        }
+    }
 }
 
 public sealed class WidgetSpec

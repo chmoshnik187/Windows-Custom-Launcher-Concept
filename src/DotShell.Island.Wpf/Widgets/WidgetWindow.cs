@@ -1557,88 +1557,111 @@ public sealed partial class WidgetWindow : Window
         void PushUndo(string kind, string from, string to, bool isDir, string message)
             => PushUndoBatch(new[] { (kind, from, to, isDir) }, message);
         Button?[] btnRefs = new Button?[2];
-        bool TryRestoreFromRecycleBin(IReadOnlyCollection<string> originalPaths)
+        (int restored, int notFound, int ambiguous) TryRestoreFromRecycleBin(IReadOnlyCollection<string> originalPaths)
         {
-            if (originalPaths.Count == 0) return false;
+            var unique = (originalPaths ?? Array.Empty<string>())
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Select(p => System.IO.Path.GetFullPath(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (unique.Count == 0) return (0, 0, 0);
             try
             {
                 var t = Type.GetTypeFromProgID("Shell.Application");
-                if (t is null) return false;
+                if (t is null) return (0, unique.Count, 0);
                 dynamic? shell = Activator.CreateInstance(t);
-                if (shell is null) return false;
+                if (shell is null) return (0, unique.Count, 0);
                 dynamic? bin = shell.NameSpace(10);
-                if (bin is null) return false;
+                if (bin is null) return (0, unique.Count, 0);
 
-                var wanted = new HashSet<string>(originalPaths, StringComparer.OrdinalIgnoreCase);
-                int restored = 0;
+                var wanted = new HashSet<string>(unique, StringComparer.OrdinalIgnoreCase);
+                var candidates = new Dictionary<string, List<dynamic>>(StringComparer.OrdinalIgnoreCase);
 
-                // Итерируем по снимку имён; восстановление меняет коллекцию.
                 var items = bin.Items();
-                int count = (int)items.Count;
+                int count = 0;
+                try { count = (int)items.Count; } catch { count = 0; }
+
                 for (int idx = 0; idx < count; idx++)
                 {
-                    if (wanted.Count == 0) break;
-                    dynamic? item = items.Item(idx);
+                    dynamic? item = null;
+                    try { item = items.Item(idx); } catch { item = null; }
                     if (item is null) continue;
+
                     string itemName = string.Empty;
                     try { itemName = (string)(item.Name ?? string.Empty); } catch { }
 
-                    // Пытаемся сопоставить по имени файла с любым из запрошенных путей.
-                    string? match = wanted.FirstOrDefault(p => string.Equals(System.IO.Path.GetFileName(p), itemName, StringComparison.OrdinalIgnoreCase));
-                    // Если неоднозначно, пробуем уточнить через "Original Location" (детали корзины).
-                    if (match is not null)
-                    {
-                        try
-                        {
-                            string origLoc = (string)(bin.GetDetailsOf(item, 1) ?? string.Empty);
-                            if (!string.IsNullOrWhiteSpace(origLoc))
-                            {
-                                string candidate = System.IO.Path.Combine(origLoc, itemName);
-                                if (wanted.Contains(candidate)) match = candidate;
-                            }
-                        }
-                        catch { }
-                    }
-                    if (match is null) continue;
+                    string origLoc = string.Empty;
+                    try { origLoc = (string)(bin.GetDetailsOf(item, 1) ?? string.Empty); } catch { }
 
+                    string full = string.Empty;
+                    if (!string.IsNullOrWhiteSpace(origLoc) && !string.IsNullOrWhiteSpace(itemName))
+                    {
+                        try { full = System.IO.Path.GetFullPath(System.IO.Path.Combine(origLoc, itemName)); } catch { full = string.Empty; }
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(full) && wanted.Contains(full))
+                    {
+                        if (!candidates.TryGetValue(full, out var list)) { list = new List<dynamic>(); candidates[full] = list; }
+                        list.Add(item);
+                        continue;
+                    }
+
+                    var nameMatches = wanted.Where(p => string.Equals(System.IO.Path.GetFileName(p), itemName, StringComparison.OrdinalIgnoreCase)).ToList();
+                    if (nameMatches.Count == 1)
+                    {
+                        var match = nameMatches[0];
+                        if (!candidates.TryGetValue(match, out var list)) { list = new List<dynamic>(); candidates[match] = list; }
+                        list.Add(item);
+                    }
+                }
+
+                int restored = 0, notFound = 0, ambiguous = 0;
+                foreach (var path in unique)
+                {
+                    if (!candidates.TryGetValue(path, out var list) || list.Count == 0)
+                    {
+                        notFound++;
+                        continue;
+                    }
+                    if (list.Count > 1)
+                    {
+                        ambiguous++;
+                        continue;
+                    }
+
+                    dynamic item = list[0];
+                    bool done = false;
                     try
                     {
                         dynamic verbs = item.Verbs();
                         int vcount = (int)verbs.Count;
-                        bool done = false;
-                        for (int v = 0; v < vcount; v++)
+                        for (int v = 0; v < vcount && !done; v++)
                         {
                             dynamic verb = verbs.Item(v);
                             string vname = string.Empty;
                             try { vname = ((string)(verb.Name ?? string.Empty)).Replace("&", string.Empty).Trim(); } catch { }
                             if (string.IsNullOrWhiteSpace(vname)) continue;
-                            // Локализованные варианты "Восстановить"/"Restore".
-                            if (vname.IndexOf("восстанов", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                                vname.Equals("Restore", StringComparison.OrdinalIgnoreCase) ||
-                                vname.Equals("Undelete", StringComparison.OrdinalIgnoreCase) ||
-                                vname.IndexOf("undelete", StringComparison.OrdinalIgnoreCase) >= 0)
+                            if (vname.IndexOf("Восстанов", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                vname.IndexOf("Restore", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                vname.IndexOf("Undelete", StringComparison.OrdinalIgnoreCase) >= 0)
                             {
-                                try { verb.DoIt(); restored++; wanted.Remove(match); done = true; } catch { }
-                                break;
+                                try { verb.DoIt(); done = true; } catch { done = false; }
                             }
                         }
-                        if (!done)
-                        {
-                            // Не нашли явный verb — пропускаем этот элемент.
-                        }
                     }
-                    catch { }
+                    catch { done = false; }
+
+                    if (done) restored++; else notFound++;
                 }
 
-                return restored > 0 && wanted.Count < originalPaths.Count;
+                return (restored, notFound, ambiguous);
             }
             catch (Exception ex)
             {
                 Log.Info($"folder widget: recycle restore failed — {ex.Message}");
-                return false;
+                return (0, unique.Count, 0);
             }
         }
-
         bool TryUndo()
         {
             if (fileOpRunning)
@@ -1681,17 +1704,31 @@ public sealed partial class WidgetWindow : Window
                         }
                         if (a.kind == "recycle")
                         {
-                            bool ok = TryRestoreFromRecycleBin(new[] { a.from });
-                            SetFileOpUi(false, ok ? "Восстановлено из корзины" : "Не удалось восстановить");
+                            var r = TryRestoreFromRecycleBin(new[] { a.from });
+                            string msg = r.restored > 0
+                                ? (r.ambiguous > 0 || r.notFound > 0 ? $"Восстановлено: {r.restored} (не найдено/неоднозначно: {r.notFound + r.ambiguous})" : "Восстановлено из корзины")
+                                : (r.ambiguous > 0 ? "Не удалось: неоднозначно в корзине" : "Не удалось восстановить (не найдено в корзине)");
+                            SetFileOpUi(false, msg);
                             Rebuild();
-                            return ok;
+                            return r.restored > 0;
                         }
                     }
                     else
                     {
-                        // Пакет: применяем отмену в обратном порядке.
+                        // Пакет: отменяем операции в обратном порядке.
                         bool allOk = true;
                         int undone = 0;
+                        int total = batch.actions.Count;
+
+                        // Сначала восстанавливаем удаления батчем (лучше идентификация в корзине).
+                        var recyclePaths = batch.actions.Where(a => a.kind == "recycle").Select(a => a.from).ToList();
+                        if (recyclePaths.Count > 0)
+                        {
+                            var rr = TryRestoreFromRecycleBin(recyclePaths);
+                            undone += rr.restored;
+                            if (rr.notFound + rr.ambiguous > 0) allOk = false;
+                        }
+
                         for (int i = batch.actions.Count - 1; i >= 0; i--)
                         {
                             var a = batch.actions[i];
@@ -1715,16 +1752,13 @@ public sealed partial class WidgetWindow : Window
                                     }
                                     else allOk = false;
                                 }
-                                else if (a.kind == "recycle")
-                                {
-                                    if (TryRestoreFromRecycleBin(new[] { a.from })) undone++; else allOk = false;
-                                }
+                                // recycle обработан батчем выше
                             }
                             catch { allOk = false; }
                         }
                         if (undone > 0)
                         {
-                            SetFileOpUi(false, allOk ? $"Отменено действий: {undone}" : $"Отменено частично: {undone}/{batch.actions.Count}");
+                            SetFileOpUi(false, allOk ? $"Отменено: {undone}/{total}" : $"Отменено частично: {undone}/{total}");
                             Rebuild();
                             return true;
                         }
@@ -2605,7 +2639,7 @@ public sealed partial class WidgetWindow : Window
         groupBtn.Click += (_, _) => { groupMode = (groupMode + 1) % 3; collapsedGroups.Clear(); Rebuild(); };
 
 
-        var collBtn = WBtn("⚡", "Живая подборка / правила");
+        var collBtn = WBtn("⚡", "Живые подборки / правила / порталы");
         collBtn.Padding = new Thickness(6, 2, 6, 2);
         collBtn.Margin = new Thickness(4, 0, 0, 0);
         collBtn.Click += (_, _) =>
@@ -2613,12 +2647,14 @@ public sealed partial class WidgetWindow : Window
             collection ??= new DotShell.Core.Widgets.FolderCollectionSpec();
             var cm = new ContextMenu();
             void SaveAndRefresh() { SaveCollection(); UpdateFolderWatcher(); Rebuild(); }
+
             MenuItem MI(string header, Action action)
             {
                 var m = new MenuItem { Header = header };
                 m.Click += (_, _) => { action(); SaveAndRefresh(); };
                 return m;
             }
+
             void ApplyPreset(string name, Action<DotShell.Core.Widgets.FolderCollectionSpec> cfg)
             {
                 collection ??= new DotShell.Core.Widgets.FolderCollectionSpec();
@@ -2629,10 +2665,131 @@ public sealed partial class WidgetWindow : Window
                 collection.NameContains = string.Empty;
                 collection.WithinDays = 0;
                 collection.MinSizeMb = 0;
-                collection.Recursive = collection.Recursive;
                 collection.Limit = 50;
                 cfg(collection);
             }
+
+            void EditRulesDialog()
+            {
+                collection ??= new DotShell.Core.Widgets.FolderCollectionSpec();
+                var c = collection.Clone();
+
+                var dialog = new Window
+                {
+                    Title = "Правила живой подборки",
+                    Width = 520,
+                    SizeToContent = SizeToContent.Height,
+                    WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                    Owner = this,
+                    ResizeMode = ResizeMode.NoResize,
+                    WindowStyle = WindowStyle.ToolWindow,
+                    Background = ResBrush("DsBg"),
+                };
+
+                var root = new StackPanel { Margin = new Thickness(14) };
+                TextBlock L(string t) => new() { Text = t, Foreground = ResBrush("DsTextMuted"), FontFamily = new FontFamily("Segoe UI"), Margin = new Thickness(0, 8, 0, 3) };
+                TextBox TB(string v) => new() { Text = v ?? string.Empty, FontFamily = new FontFamily("Segoe UI") };
+
+                root.Children.Add(L("Название / пресет"));
+                var nameBox = TB(c.Preset);
+                root.Children.Add(nameBox);
+
+                root.Children.Add(L("Область (папка, пусто = текущая папка виджета)"));
+                var scopeBox = TB(string.IsNullOrWhiteSpace(c.Scope) ? rootPath : c.Scope);
+                root.Children.Add(scopeBox);
+
+                var recBox = new CheckBox { Content = "Искать во вложенных папках", IsChecked = c.Recursive, Margin = new Thickness(0, 8, 0, 0), Foreground = ResBrush("DsText") };
+                root.Children.Add(recBox);
+
+                root.Children.Add(L("Типы (можно выбрать несколько)"));
+                var kindsPanel = new WrapPanel();
+                (string key, string label)[] kindDefs = { ("image","Изображения"), ("doc","Документы"), ("pdf","PDF"), ("archive","Архивы"), ("video","Видео"), ("audio","Аудио") };
+                var kindChecks = new Dictionary<string, CheckBox>(StringComparer.OrdinalIgnoreCase);
+                var knownKinds = new HashSet<string>(kindDefs.Select(k => k.key), StringComparer.OrdinalIgnoreCase);
+                foreach (var kd in kindDefs)
+                {
+                    var cb = new CheckBox
+                    {
+                        Content = kd.label,
+                        Margin = new Thickness(0, 0, 12, 4),
+                        Foreground = ResBrush("DsText"),
+                        IsChecked = c.Kinds.Any(k => string.Equals(k, kd.key, StringComparison.OrdinalIgnoreCase)),
+                    };
+                    kindChecks[kd.key] = cb;
+                    kindsPanel.Children.Add(cb);
+                }
+                root.Children.Add(kindsPanel);
+
+                var customKinds = string.Join(", ", (c.Kinds ?? new List<string>()).Where(k => !knownKinds.Contains(k)));
+                root.Children.Add(L("Доп. типы/расширения (через запятую, например: .psd, .fig)"));
+                var customKindsBox = TB(customKinds);
+                root.Children.Add(customKindsBox);
+
+                root.Children.Add(L("Имя содержит"));
+                var nameContainsBox = TB(c.NameContains);
+                root.Children.Add(nameContainsBox);
+
+                var grid = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+                var daysBox = TB(c.WithinDays > 0 ? c.WithinDays.ToString() : "");
+                var sizeBox = TB(c.MinSizeMb > 0 ? c.MinSizeMb.ToString() : "");
+                var limitBox = TB(c.Limit > 0 ? c.Limit.ToString() : "50");
+
+                var daysPanel = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
+                daysPanel.Children.Add(L("За N дней (0/пусто = все)"));
+                daysPanel.Children.Add(daysBox);
+                Grid.SetColumn(daysPanel, 0); grid.Children.Add(daysPanel);
+
+                var sizePanel = new StackPanel { Margin = new Thickness(6, 0, 6, 0) };
+                sizePanel.Children.Add(L("Мин. размер, МБ"));
+                sizePanel.Children.Add(sizeBox);
+                Grid.SetColumn(sizePanel, 1); grid.Children.Add(sizePanel);
+
+                var limitPanel = new StackPanel { Margin = new Thickness(6, 0, 0, 0) };
+                limitPanel.Children.Add(L("Лимит результатов"));
+                limitPanel.Children.Add(limitBox);
+                Grid.SetColumn(limitPanel, 2); grid.Children.Add(limitPanel);
+                root.Children.Add(grid);
+
+                var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
+                var ok = new Button { Content = "Сохранить", MinWidth = 110, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+                var cancel = new Button { Content = "Отмена", MinWidth = 100, IsCancel = true };
+                ok.Click += (_, _) =>
+                {
+                    int ParseInt(string s, int def) => int.TryParse((s ?? "").Trim(), out var v) ? v : def;
+                    c.Enabled = true;
+                    c.Preset = (nameBox.Text ?? string.Empty).Trim();
+                    c.Scope = (scopeBox.Text ?? string.Empty).Trim();
+                    c.Recursive = recBox.IsChecked == true;
+                    c.Kinds = kindChecks.Where(kv => kv.Value.IsChecked == true).Select(kv => kv.Key).ToList();
+                    foreach (var part in (customKindsBox.Text ?? string.Empty).Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    {
+                        var k = part.Trim();
+                        if (k.Length == 0) continue;
+                        if (!k.StartsWith(".") && !knownKinds.Contains(k.ToLowerInvariant())) k = "." + k.ToLowerInvariant();
+                        if (!c.Kinds.Contains(k, StringComparer.OrdinalIgnoreCase)) c.Kinds.Add(k);
+                    }
+                    c.NameContains = (nameContainsBox.Text ?? string.Empty).Trim();
+                    c.WithinDays = Math.Max(0, ParseInt(daysBox.Text, 0));
+                    c.MinSizeMb = Math.Max(0, ParseInt(sizeBox.Text, 0));
+                    c.Limit = Math.Clamp(ParseInt(limitBox.Text, 50), 1, 2000);
+                    collection = c;
+                    dialog.DialogResult = true;
+                };
+                cancel.Click += (_, _) => dialog.DialogResult = false;
+                buttons.Children.Add(ok);
+                buttons.Children.Add(cancel);
+                root.Children.Add(buttons);
+
+                dialog.Content = root;
+                try { nameBox.Focus(); nameBox.SelectAll(); } catch { }
+                if (dialog.ShowDialog() == true)
+                    SaveAndRefresh();
+            }
+
             cm.Items.Add(MI(collection.Enabled ? "✓ Выключить подборку" : "Включить подборку", () => { collection.Enabled = !collection.Enabled; }));
             cm.Items.Add(new Separator());
             cm.Items.Add(MI("Недавние (7 дней)", () => ApplyPreset("Недавние (7 дней)", c => { c.WithinDays = 7; c.Recursive = true; c.Limit = 60; })));
@@ -2642,10 +2799,69 @@ public sealed partial class WidgetWindow : Window
             cm.Items.Add(MI("Крупные (>100 МБ)", () => ApplyPreset("Крупные (>100 МБ)", c => { c.MinSizeMb = 100; c.Recursive = true; c.Limit = 60; })));
             cm.Items.Add(MI("Архивы (30 дней)", () => ApplyPreset("Архивы (30 дней)", c => { c.WithinDays = 30; c.Recursive = true; c.Kinds.Add("archive"); c.Limit = 80; })));
             cm.Items.Add(new Separator());
-            var rec = new MenuItem { Header = "Искать в подпапках", IsCheckable = true, IsChecked = collection.Recursive };
+
+            var editMi = new MenuItem { Header = "Настроить правила…" };
+            editMi.Click += (_, _) => EditRulesDialog();
+            cm.Items.Add(editMi);
+
+            var savePortalMi = new MenuItem { Header = "Сохранить как портал…" };
+            savePortalMi.Click += (_, _) =>
+            {
+                var name = PromptText("Сохранить портал", "Имя портала/набора:", string.IsNullOrWhiteSpace(collection?.Preset) ? "Мой портал" : collection!.Preset);
+                if (string.IsNullOrWhiteSpace(name)) return;
+                var portals = DotShell.Core.Widgets.FolderPortalStore.Load();
+                var spec = (collection ?? new DotShell.Core.Widgets.FolderCollectionSpec()).Clone();
+                spec.Enabled = true;
+                if (string.IsNullOrWhiteSpace(spec.Preset)) spec.Preset = name.Trim();
+                var existing = portals.FirstOrDefault(p => string.Equals(p.Name, name.Trim(), StringComparison.OrdinalIgnoreCase));
+                if (existing is not null) existing.Spec = spec; else portals.Add(new DotShell.Core.Widgets.FolderPortal { Name = name.Trim(), Spec = spec });
+                DotShell.Core.Widgets.FolderPortalStore.Save(portals.OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase).ToList());
+                collection = spec.Clone();
+                SaveAndRefresh();
+            };
+            cm.Items.Add(savePortalMi);
+
+            var portalsRoot = new MenuItem { Header = "Порталы" };
+            var savedPortals = DotShell.Core.Widgets.FolderPortalStore.Load();
+            if (savedPortals.Count == 0)
+            {
+                portalsRoot.Items.Add(new MenuItem { Header = "(нет сохранённых)", IsEnabled = false });
+            }
+            else
+            {
+                foreach (var portal in savedPortals.OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase).ToList())
+                {
+                    var pitem = new MenuItem { Header = portal.Name };
+                    var pcopy = portal;
+                    pitem.Click += (_, _) =>
+                    {
+                        collection = (pcopy.Spec ?? new DotShell.Core.Widgets.FolderCollectionSpec()).Clone();
+                        collection.Enabled = true;
+                        if (string.IsNullOrWhiteSpace(collection.Preset)) collection.Preset = pcopy.Name;
+                        SaveAndRefresh();
+                    };
+                    portalsRoot.Items.Add(pitem);
+                }
+                portalsRoot.Items.Add(new Separator());
+                var delPortal = new MenuItem { Header = "Удалить портал…" };
+                delPortal.Click += (_, _) =>
+                {
+                    var names = string.Join(", ", DotShell.Core.Widgets.FolderPortalStore.Load().Select(p => p.Name));
+                    var name = PromptText("Удалить портал", $"Имя портала для удаления:\n{names}", "");
+                    if (string.IsNullOrWhiteSpace(name)) return;
+                    var list = DotShell.Core.Widgets.FolderPortalStore.Load();
+                    int removed = list.RemoveAll(p => string.Equals(p.Name, name.Trim(), StringComparison.OrdinalIgnoreCase));
+                    if (removed > 0) DotShell.Core.Widgets.FolderPortalStore.Save(list);
+                };
+                portalsRoot.Items.Add(delPortal);
+            }
+            cm.Items.Add(portalsRoot);
+
+            cm.Items.Add(new Separator());
+            var rec = new MenuItem { Header = "Искать во вложенных", IsCheckable = true, IsChecked = collection.Recursive };
             rec.Click += (_, _) => { collection.Recursive = !collection.Recursive; SaveAndRefresh(); };
             cm.Items.Add(rec);
-            cm.Items.Add(MI("Сбросить (обычная папка)", () => { collection.Enabled = false; collection.Preset = string.Empty; collection.Kinds.Clear(); collection.NameContains = string.Empty; collection.WithinDays = 0; collection.MinSizeMb = 0; collection.Scope = string.Empty; }));
+            cm.Items.Add(MI("Сбросить (обычная папка)", () => { collection.Enabled = false; collection.Preset = string.Empty; collection.Kinds.Clear(); collection.NameContains = string.Empty; collection.WithinDays = 0; collection.MinSizeMb = 0; collection.Scope = string.Empty; collection.Limit = 50; }));
             cm.PlacementTarget = collBtn;
             cm.IsOpen = true;
         };
