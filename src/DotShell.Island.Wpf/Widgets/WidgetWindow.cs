@@ -2220,9 +2220,21 @@ public sealed partial class WidgetWindow : Window
         _root.ContextMenu = null;
 
         container.Focusable = true;
+        void SelectSingle(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return;
+            selected.Clear();
+            selected.Add(path);
+            lastClickedPath = path;
+            RefreshSelectionVisuals();
+            ShowPreview(path, Directory.Exists(path));
+            if (rowByPath.TryGetValue(path, out var b)) b.BringIntoView();
+        }
+
         void HandleKeys(object? _, KeyEventArgs e)
         {
             bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+            bool shift = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
             if (filterBox.IsKeyboardFocusWithin) return;
 
             if (ctrl && e.Key == Key.A)
@@ -2250,6 +2262,36 @@ public sealed partial class WidgetWindow : Window
             else if (ctrl && e.Key == Key.V)
             {
                 PasteIntoCurrent();
+                e.Handled = true;
+            }
+            else if ((e.Key == Key.Down || e.Key == Key.Up) && visiblePaths.Count > 0)
+            {
+                int idx = lastClickedPath is not null ? visiblePaths.IndexOf(lastClickedPath) : -1;
+                if (idx < 0) idx = selected.Count > 0 ? visiblePaths.FindIndex(p => selected.Contains(p)) : -1;
+                if (idx < 0) idx = e.Key == Key.Down ? -1 : visiblePaths.Count;
+                int next = e.Key == Key.Down ? Math.Min(idx + 1, visiblePaths.Count - 1) : Math.Max(idx - 1, 0);
+                if (shift && lastClickedPath is not null)
+                {
+                    // Простое расширение выделения стрелками от якоря не реализуем полноценно — ведём как одиночный выбор.
+                }
+                SelectSingle(visiblePaths[next]);
+                e.Handled = true;
+            }
+            else if ((e.Key == Key.Enter || e.Key == Key.Right) && !string.IsNullOrWhiteSpace(lastClickedPath))
+            {
+                string p = lastClickedPath;
+                if (Directory.Exists(p)) NavigateTo(p);
+                else if (File.Exists(p))
+                {
+                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(p) { UseShellExecute = true }); }
+                    catch (Exception ex) { Log.Info($"folder widget: open failed {p} — {ex.Message}"); }
+                }
+                e.Handled = true;
+            }
+            else if ((e.Key == Key.Left || e.Key == Key.Back) && !string.Equals(currentPath, rootPath, StringComparison.OrdinalIgnoreCase))
+            {
+                string? parent = System.IO.Path.GetDirectoryName(currentPath);
+                if (!string.IsNullOrWhiteSpace(parent)) NavigateTo(parent);
                 e.Handled = true;
             }
             else if (e.Key == Key.Escape)
