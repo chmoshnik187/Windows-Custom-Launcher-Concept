@@ -10,6 +10,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using System.Runtime.InteropServices;
 using DotShell.Core;
 using DotShell.Core.Native;
 using DotShell.Island.Wpf.Controls;
@@ -1542,6 +1543,36 @@ public sealed partial class WidgetWindow : Window
             menu.Items.Add(copy);
 
             menu.Items.Add(new Separator());
+
+            var rename = new MenuItem { Header = "Переименовать" };
+            rename.Click += (_, _) =>
+            {
+                string oldName = System.IO.Path.GetFileName(path);
+                var input = PromptText("Переименовать", $"Новое имя для «{oldName}»:", oldName);
+                if (string.IsNullOrWhiteSpace(input)) return;
+                input = input.Trim();
+                if (string.Equals(input, oldName, StringComparison.Ordinal)) return;
+                try
+                {
+                    string dest = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(path) ?? currentPath, input);
+                    if (Directory.Exists(path)) Directory.Move(path, dest);
+                    else if (File.Exists(path)) File.Move(path, dest);
+                }
+                catch (Exception ex) { Log.Info($"folder widget: rename failed {path} — {ex.Message}"); }
+                finally { Rebuild(); }
+            };
+            menu.Items.Add(rename);
+
+            var delete = new MenuItem { Header = "Удалить в корзину" };
+            delete.Click += (_, _) =>
+            {
+                try { RecyclePath(path); }
+                catch (Exception ex) { Log.Info($"folder widget: delete failed {path} — {ex.Message}"); }
+                finally { Rebuild(); }
+            };
+            menu.Items.Add(delete);
+
+            menu.Items.Add(new Separator());
             menu.Items.Add(RemoveWidgetItem());
             border.ContextMenu = menu;
 
@@ -1679,6 +1710,19 @@ public sealed partial class WidgetWindow : Window
         sortBtn.Click += (_, _) => { sortMode = (sortMode + 1) % 4; Rebuild(); };
         sortBtnRef = sortBtn;
 
+        var newBtn = WBtn("+", "Создать папку");
+        newBtn.Padding = new Thickness(6, 2, 6, 2);
+        newBtn.Margin = new Thickness(4, 0, 0, 0);
+        newBtn.Click += (_, _) =>
+        {
+            if (missing || !Directory.Exists(currentPath)) return;
+            var input = PromptText("Новая папка", "Имя папки:", "Новая папка");
+            if (string.IsNullOrWhiteSpace(input)) return;
+            try { Directory.CreateDirectory(System.IO.Path.Combine(currentPath, input.Trim())); }
+            catch (Exception ex) { Log.Info($"folder widget: create folder failed — {ex.Message}"); }
+            finally { Rebuild(); }
+        };
+
         var refreshBtn = WBtn("⟳", "Обновить");
         refreshBtn.Padding = new Thickness(6, 2, 6, 2);
         refreshBtn.Margin = new Thickness(4, 0, 0, 0);
@@ -1686,6 +1730,7 @@ public sealed partial class WidgetWindow : Window
         actions.Children.Add(upBtn);
         actions.Children.Add(openBtn);
         actions.Children.Add(sortBtn);
+        actions.Children.Add(newBtn);
         actions.Children.Add(refreshBtn);
         Grid.SetColumn(actions, 1);
         header.Children.Add(actions);
@@ -1717,6 +1762,20 @@ public sealed partial class WidgetWindow : Window
         var copyPath = new MenuItem { Header = "Копировать путь папки" };
         copyPath.Click += (_, _) => CopyToClipboardText(currentPath);
         menu.Items.Add(copyPath);
+
+        menu.Items.Add(new Separator());
+        var newFolder = new MenuItem { Header = "Создать папку" };
+        newFolder.Click += (_, _) =>
+        {
+            if (missing || !Directory.Exists(currentPath)) return;
+            var input = PromptText("Новая папка", "Имя папки:", "Новая папка");
+            if (string.IsNullOrWhiteSpace(input)) return;
+            try { Directory.CreateDirectory(System.IO.Path.Combine(currentPath, input.Trim())); }
+            catch (Exception ex) { Log.Info($"folder widget: create folder failed — {ex.Message}"); }
+            finally { Rebuild(); }
+        };
+        menu.Items.Add(newFolder);
+
         menu.Items.Add(new Separator());
         var refreshItem = new MenuItem { Header = "Обновить" };
         refreshItem.Click += (_, _) => Rebuild();
@@ -1803,6 +1862,91 @@ public sealed partial class WidgetWindow : Window
         timer.Tick += (_, _) => SendToDesktopLayer();
         _timers.Add(timer);
         timer.Start();
+    }
+
+    // --- Утилиты для умной папки: безопасное удаление, переименование, создание ---
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct SHFILEOPSTRUCT
+    {
+        public IntPtr hwnd;
+        public uint wFunc;
+        [MarshalAs(UnmanagedType.LPWStr)] public string pFrom;
+        [MarshalAs(UnmanagedType.LPWStr)] public string? pTo;
+        public ushort fFlags;
+        public bool fAnyOperationsAborted;
+        public IntPtr hNameMappings;
+        [MarshalAs(UnmanagedType.LPWStr)] public string? lpszProgressTitle;
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern int SHFileOperation(ref SHFILEOPSTRUCT lpFileOp);
+
+    private static bool RecyclePath(string path)
+    {
+        try
+        {
+            var op = new SHFILEOPSTRUCT
+            {
+                wFunc = 3, // FO_DELETE
+                pFrom = path + "\0\0",
+                fFlags = 0x0040 /*FOF_ALLOWUNDO*/ | 0x0010 /*FOF_NOCONFIRMATION*/ | 0x0400 /*FOF_NOERRORUI*/ | 0x0004 /*FOF_SILENT*/,
+            };
+            return SHFileOperation(ref op) == 0 && !op.fAnyOperationsAborted;
+        }
+        catch (Exception ex)
+        {
+            Log.Info($"folder widget: recycle failed {path} — {ex.Message}");
+            return false;
+        }
+    }
+
+    private string? PromptText(string title, string label, string initial = "")
+    {
+        try
+        {
+            var dialog = new Window
+            {
+                Title = title,
+                Width = 420,
+                SizeToContent = SizeToContent.Height,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = this,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStyle = WindowStyle.ToolWindow,
+                Background = ResBrush("DsBg"),
+            };
+
+            var root = new StackPanel { Margin = new Thickness(14) };
+            root.Children.Add(new TextBlock
+            {
+                Text = label,
+                Foreground = ResBrush("DsText"),
+                FontFamily = new FontFamily("Segoe UI"),
+                Margin = new Thickness(0, 0, 0, 8),
+                TextWrapping = TextWrapping.Wrap,
+            });
+            var box = new TextBox { Text = initial ?? string.Empty, FontFamily = new FontFamily("Segoe UI") };
+            root.Children.Add(box);
+
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
+            var ok = new Button { Content = "OK", MinWidth = 84, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+            var cancel = new Button { Content = "Отмена", MinWidth = 84, IsCancel = true };
+            string? result = null;
+            ok.Click += (_, _) => { result = box.Text; dialog.DialogResult = true; };
+            cancel.Click += (_, _) => { dialog.DialogResult = false; };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+            root.Children.Add(buttons);
+            dialog.Content = root;
+            dialog.Loaded += (_, _) => { box.Focus(); box.SelectAll(); };
+            return dialog.ShowDialog() == true ? result : null;
+        }
+        catch (Exception ex)
+        {
+            Log.Info($"folder widget: prompt failed — {ex.Message}");
+            return null;
+        }
     }
 }
 
