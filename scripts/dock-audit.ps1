@@ -241,10 +241,23 @@ function Run-Drag([int]$screenWidth, [int]$screenHeight) {
     # Доводим до правой половины экрана и отпускаем: док должен прилипнуть справа.
     Move-Steps ($grabX + 120) $grabY ([int]($screenWidth * 0.8)) $grabY 16
     Release-Mouse
-    Start-Sleep -Milliseconds 700
+
+    # После броска док может прятаться с задержкой; ждём auto-hide.
+    $json = $null
+    $hidden = $null
+    $deadline = [DateTime]::UtcNow.AddSeconds(4)
+    while ([DateTime]::UtcNow -lt $deadline) {
+        Start-Sleep -Milliseconds 200
+        $json = Get-Content $settingsPath -Raw | ConvertFrom-Json
+        $hidden = Measure-Dock $script:dockPid
+        if ($json.dockSide -eq 'right' -and $null -ne $hidden) {
+            $visible = $screenWidth - $hidden.L
+            if ($visible -gt 0 -and $visible -le ($screenWidth * 0.1)) { break }
+        }
+    }
 
     $json = Get-Content $settingsPath -Raw | ConvertFrom-Json
-    Check 'бросок вправо меняет сторону' ($json.dockSide -eq 'right') "dockSide=$($json.dockSide)"
+    Check 'бросок вправо сменил сторону' ($json.dockSide -eq 'right') "dockSide=$($json.dockSide)"
 
     $hidden = Measure-Dock $script:dockPid
     if ($null -ne $hidden) {
