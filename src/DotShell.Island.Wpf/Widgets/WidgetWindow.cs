@@ -12,6 +12,8 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using System.Runtime.InteropServices;
 using System.Collections.Specialized;
+using System.Threading;
+using System.Threading.Tasks;
 using DotShell.Core;
 using DotShell.Core.Native;
 using DotShell.Island.Wpf.Controls;
@@ -1358,27 +1360,57 @@ public sealed partial class WidgetWindow : Window
         DockPanel.SetDock(undoBtn, Dock.Right);
         undoBar.Children.Add(undoBtn);
         undoBar.Children.Add(undoText);
-        void UpdateUndoUi(string? message = null)
+
+        CancellationTokenSource? fileOpCts = null;
+        bool fileOpRunning = false;
+
+        void SetFileOpUi(bool running, string? text = null)
         {
-            if (undoStack.Count == 0)
+            fileOpRunning = running;
+            undoBar.Visibility = (running || undoStack.Count > 0) ? Visibility.Visible : Visibility.Collapsed;
+            if (running)
             {
-                undoBar.Visibility = Visibility.Collapsed;
-                undoText.Text = string.Empty;
-                undoBtn.IsEnabled = false;
-                return;
+                undoBtn.Content = "Отмена";
+                undoBtn.ToolTip = "Отменить текущую операцию";
+                undoBtn.IsEnabled = true;
+                undoText.Text = text ?? "Выполняется…";
             }
-            undoBar.Visibility = Visibility.Visible;
-            undoBtn.IsEnabled = true;
-            undoText.Text = message ?? $"Можно отменить: {undoStack.Count}";
+            else
+            {
+                undoBtn.Content = "Отменить";
+                undoBtn.ToolTip = "Отменить последнее действие (Ctrl+Z)";
+                if (undoStack.Count == 0)
+                {
+                    undoBar.Visibility = Visibility.Collapsed;
+                    undoText.Text = string.Empty;
+                    undoBtn.IsEnabled = false;
+                }
+                else
+                {
+                    undoBtn.IsEnabled = true;
+                    if (text is not null) undoText.Text = text;
+                    else if (string.IsNullOrWhiteSpace(undoText.Text)) undoText.Text = $"Можно отменить: {undoStack.Count}";
+                }
+            }
+            scroll.MaxHeight = Math.Max(80, ActualHeight - 110
+                - (previewPanel.Visibility == Visibility.Visible ? 90 : 0)
+                - (undoBar.Visibility == Visibility.Visible ? 28 : 0));
         }
+
         void PushUndo(string kind, string from, string to, bool isDir, string message)
         {
+            if (fileOpRunning) return;
             undoStack.Push((kind, from, to, isDir));
-            UpdateUndoUi(message);
+            SetFileOpUi(false, message);
         }
         Button?[] btnRefs = new Button?[2];
         bool TryUndo()
         {
+            if (fileOpRunning)
+            {
+                try { fileOpCts?.Cancel(); } catch { }
+                return true;
+            }
             while (undoStack.Count > 0)
             {
                 var a = undoStack.Pop();
@@ -1396,7 +1428,7 @@ public sealed partial class WidgetWindow : Window
                         string? parent = System.IO.Path.GetDirectoryName(a.from);
                         if (!string.IsNullOrWhiteSpace(parent)) Directory.CreateDirectory(parent);
                         if (a.isDir) Directory.Move(a.to, a.from); else File.Move(a.to, a.from);
-                        UpdateUndoUi("Действие отменено");
+                        SetFileOpUi(false, "Действие отменено");
                         Rebuild();
                         return true;
                     }
@@ -1405,7 +1437,7 @@ public sealed partial class WidgetWindow : Window
                         if (Directory.Exists(a.from) && !Directory.EnumerateFileSystemEntries(a.from).Any())
                         {
                             Directory.Delete(a.from);
-                            UpdateUndoUi("Папка удалена (отмена)");
+                            SetFileOpUi(false, "Папка удалена (отмена)");
                             Rebuild();
                             return true;
                         }
@@ -1414,11 +1446,11 @@ public sealed partial class WidgetWindow : Window
                 catch (Exception ex)
                 {
                     Log.Info($"folder widget: undo failed ({a.kind}) — {ex.Message}");
-                    UpdateUndoUi("Не удалось отменить");
+                    SetFileOpUi(false, "Не удалось отменить");
                     return false;
                 }
             }
-            UpdateUndoUi();
+            SetFileOpUi(false);
             return false;
         }
         undoBtn.Click += (_, _) => TryUndo();
@@ -1607,52 +1639,6 @@ public sealed partial class WidgetWindow : Window
             catch (Exception ex) { Log.Info($"folder widget: clipboard failed — {ex.Message}"); }
         }
 
-        void MoveOrCopyInto(string sourcePath, string targetDir)
-        {
-            if (string.IsNullOrWhiteSpace(sourcePath)) return;
-            string name = System.IO.Path.GetFileName(sourcePath);
-            string dest = System.IO.Path.Combine(targetDir, name);
-            if (string.Equals(System.IO.Path.GetFullPath(sourcePath), System.IO.Path.GetFullPath(dest), StringComparison.OrdinalIgnoreCase))
-                return;
-
-            // Конфликт имён при drag&drop: безопасно сохраняем оба (автопереименование).
-            if (Directory.Exists(dest) || File.Exists(dest))
-            {
-                string baseName = System.IO.Path.GetFileNameWithoutExtension(name);
-                string ext = System.IO.Path.GetExtension(name);
-                for (int i = 2; i < 10000; i++)
-                {
-                    string candidate = System.IO.Path.Combine(targetDir, $"{baseName} ({i}){ext}");
-                    if (!File.Exists(candidate) && !Directory.Exists(candidate)) { dest = candidate; break; }
-                }
-            }
-
-            try
-            {
-                if (Directory.Exists(sourcePath)) Directory.Move(sourcePath, dest);
-                else if (File.Exists(sourcePath)) File.Move(sourcePath, dest);
-                return;
-            }
-            catch (IOException)
-            {
-                // Между дисками/томами Move не работает — пробуем копирование.
-            }
-            catch (Exception ex)
-            {
-                Log.Info($"folder widget: move failed {sourcePath} — {ex.Message}");
-                return;
-            }
-
-            try
-            {
-                if (Directory.Exists(sourcePath)) CopyDirectory(sourcePath, dest);
-                else if (File.Exists(sourcePath)) File.Copy(sourcePath, dest, overwrite: false);
-            }
-            catch (Exception ex)
-            {
-                Log.Info($"folder widget: copy fallback failed {sourcePath} — {ex.Message}");
-            }
-        }
 
         void NavigateTo(string path)
         {
@@ -2288,6 +2274,8 @@ public sealed partial class WidgetWindow : Window
         int AskConflict(string name)
         {
             if (conflictAll.HasValue) return conflictAll.Value;
+            if (!Dispatcher.CheckAccess())
+                return Dispatcher.Invoke(() => AskConflict(name));
             try
             {
                 var dialog = new Window
@@ -2330,6 +2318,12 @@ public sealed partial class WidgetWindow : Window
             catch { return 1; }
         }
 
+        void ReportProgress(string text)
+        {
+            if (Dispatcher.CheckAccess()) SetFileOpUi(true, text);
+            else Dispatcher.BeginInvoke(() => SetFileOpUi(true, text));
+        }
+
         void CopySelectionToClipboard(bool cut)
         {
             if (selected.Count == 0) return;
@@ -2349,105 +2343,165 @@ public sealed partial class WidgetWindow : Window
             catch (Exception ex) { Log.Info($"folder widget: {(cut ? "cut" : "copy")} failed — {ex.Message}"); }
         }
 
-        void PasteIntoCurrent()
+        async void PasteIntoCurrent()
         {
+            if (fileOpRunning) return;
             if (missing || !Directory.Exists(currentPath)) return;
             if (!Clipboard.ContainsFileDropList()) return;
+
+            var files = Clipboard.GetFileDropList();
+            var fileList = new List<string>();
+            foreach (var p in files)
+            {
+                if (!string.IsNullOrWhiteSpace(p)) fileList.Add(p);
+            }
+            if (fileList.Count == 0) return;
+
             conflictAll = null;
+            bool doMove = cutPending && fileList.Count > 0;
+            if (doMove)
+            {
+                foreach (var p in fileList)
+                {
+                    if (!cutPaths.Contains(p)) { doMove = false; break; }
+                }
+            }
+
+            fileOpCts?.Dispose();
+            fileOpCts = new CancellationTokenSource();
+            var ct = fileOpCts.Token;
+            var movedPairs = new List<(string src, string dst, bool isDir)>();
+            int errors = 0;
+            bool cancelled = false;
+
+            SetFileOpUi(true, doMove ? "Перемещение…" : "Копирование…");
             try
             {
-                var files = Clipboard.GetFileDropList();
-                // Считаем операцию вырезания, если виджет сам ставил cut и список совпадает с помеченными.
-                bool doMove = cutPending && files.Count > 0;
-                if (doMove)
+                await Task.Run(() =>
                 {
-                    foreach (var p in files)
+                    for (int i = 0; i < fileList.Count; i++)
                     {
-                        if (string.IsNullOrWhiteSpace(p) || !cutPaths.Contains(p)) { doMove = false; break; }
-                    }
-                }
-
-                var moved = new List<(string src, string dst, bool isDir)>();
-                foreach (var p in files)
-                {
-                    if (string.IsNullOrWhiteSpace(p)) continue;
-                    try
-                    {
-                        if (!File.Exists(p) && !Directory.Exists(p)) continue;
-                        bool isDirSrc = Directory.Exists(p);
-                        string name = System.IO.Path.GetFileName(p);
-                        string dest = System.IO.Path.Combine(currentPath, name);
-
-                        if (string.Equals(System.IO.Path.GetFullPath(p), System.IO.Path.GetFullPath(dest), StringComparison.OrdinalIgnoreCase))
-                            continue;
-
-                        bool exists = isDirSrc ? Directory.Exists(dest) : File.Exists(dest);
-                        if (exists || (isDirSrc ? File.Exists(dest) : Directory.Exists(dest)))
+                        if (ct.IsCancellationRequested) { cancelled = true; break; }
+                        string p = fileList[i];
+                        string label = System.IO.Path.GetFileName(p);
+                        ReportProgress($"{(doMove ? "Перемещение" : "Копирование")} {i + 1}/{fileList.Count}: {label}");
+                        try
                         {
-                            int action = AskConflict(name);
-                            if (action == 1) continue; // skip
-                            if (action == 2) dest = UniqueDest(currentPath, name); // keep both
-                            if (action == 0)
+                            if (!File.Exists(p) && !Directory.Exists(p)) continue;
+                            bool isDirSrc = Directory.Exists(p);
+                            string name = System.IO.Path.GetFileName(p);
+                            string dest = System.IO.Path.Combine(currentPath, name);
+
+                            if (string.Equals(System.IO.Path.GetFullPath(p), System.IO.Path.GetFullPath(dest), StringComparison.OrdinalIgnoreCase))
+                                continue;
+
+                            bool exists = isDirSrc ? Directory.Exists(dest) : File.Exists(dest);
+                            if (exists || (isDirSrc ? File.Exists(dest) : Directory.Exists(dest)))
+                            {
+                                int action = AskConflict(name);
+                                if (action == 1) continue;
+                                if (action == 2) dest = UniqueDest(currentPath, name);
+                                if (action == 0)
+                                {
+                                    try
+                                    {
+                                        if (Directory.Exists(dest)) Directory.Delete(dest, true);
+                                        else if (File.Exists(dest)) File.Delete(dest);
+                                    }
+                                    catch (Exception ex) { Log.Info($"folder widget: replace delete failed {dest} — {ex.Message}"); errors++; continue; }
+                                }
+                            }
+
+                            if (ct.IsCancellationRequested) { cancelled = true; break; }
+
+                            if (doMove)
+                            {
+                                bool movedOk = false;
+                                try
+                                {
+                                    if (isDirSrc) Directory.Move(p, dest);
+                                    else File.Move(p, dest);
+                                    movedOk = true;
+                                }
+                                catch (IOException) { }
+                                catch (Exception ex)
+                                {
+                                    Log.Info($"folder widget: move paste failed {p} — {ex.Message}");
+                                    errors++;
+                                    continue;
+                                }
+
+                                if (!movedOk)
+                                {
+                                    try
+                                    {
+                                        if (isDirSrc) { CopyDirectoryCancellable(p, dest, ct); if (!ct.IsCancellationRequested) Directory.Delete(p, true); }
+                                        else { CopyFileCancellable(p, dest, ct); if (!ct.IsCancellationRequested) File.Delete(p); }
+                                        if (ct.IsCancellationRequested) { cancelled = true; break; }
+                                        movedOk = true;
+                                    }
+                                    catch (OperationCanceledException) { cancelled = true; break; }
+                                    catch (Exception ex) { Log.Info($"folder widget: move paste fallback failed {p} — {ex.Message}"); errors++; continue; }
+                                }
+
+                                if (movedOk) movedPairs.Add((p, dest, isDirSrc));
+                            }
+                            else
                             {
                                 try
                                 {
-                                    if (Directory.Exists(dest)) Directory.Delete(dest, true);
-                                    else if (File.Exists(dest)) File.Delete(dest);
+                                    if (isDirSrc) CopyDirectoryCancellable(p, dest, ct);
+                                    else CopyFileCancellable(p, dest, ct);
                                 }
-                                catch (Exception ex) { Log.Info($"folder widget: replace delete failed {dest} — {ex.Message}"); continue; }
+                                catch (OperationCanceledException) { cancelled = true; break; }
+                                catch (Exception ex) { Log.Info($"folder widget: paste failed {p} — {ex.Message}"); errors++; }
                             }
                         }
-
-                        if (doMove)
-                        {
-                            try
-                            {
-                                if (isDirSrc) Directory.Move(p, dest);
-                                else File.Move(p, dest);
-                                moved.Add((p, dest, isDirSrc));
-                                continue;
-                            }
-                            catch (IOException)
-                            {
-                                // Межтомное перемещение: копия, исходник удалим после успеха.
-                            }
-                            catch (Exception ex)
-                            {
-                                Log.Info($"folder widget: move paste failed {p} — {ex.Message}");
-                                continue;
-                            }
-
-                            try
-                            {
-                                if (isDirSrc) { CopyDirectory(p, dest); Directory.Delete(p, true); }
-                                else { File.Copy(p, dest, overwrite: false); File.Delete(p); }
-                                moved.Add((p, dest, isDirSrc));
-                            }
-                            catch (Exception ex) { Log.Info($"folder widget: move paste fallback failed {p} — {ex.Message}"); }
-                        }
-                        else
-                        {
-                            if (isDirSrc) CopyDirectory(p, dest);
-                            else File.Copy(p, dest, overwrite: true);
-                        }
+                        catch (OperationCanceledException) { cancelled = true; break; }
+                        catch (Exception ex) { Log.Info($"folder widget: paste failed {p} — {ex.Message}"); errors++; }
                     }
-                    catch (Exception ex) { Log.Info($"folder widget: paste failed {p} — {ex.Message}"); }
-                }
-
-                if (doMove && moved.Count > 0)
+                }, ct).ContinueWith(_ => { }, TaskScheduler.Default);
+            }
+            catch (Exception ex)
+            {
+                Log.Info($"folder widget: paste failed — {ex.Message}");
+                errors++;
+            }
+            finally
+            {
+                if (doMove && movedPairs.Count > 0)
                 {
-                    foreach (var m in moved)
+                    foreach (var m in movedPairs)
                     {
                         cutPaths.Remove(m.src);
-                        PushUndo("move", m.src, m.dst, m.isDir, $"Перемещено — можно отменить ({moved.Count})");
+                        PushUndo("move", m.src, m.dst, m.isDir, $"Перемещено — можно отменить ({movedPairs.Count})");
                     }
                     cutPending = cutPaths.Count > 0;
-                    try { Clipboard.Clear(); } catch { }
+                    try { if (!cancelled) Clipboard.Clear(); } catch { }
                 }
+
+                fileOpRunning = false;
+                string status = cancelled ? "Операция отменена" : (errors > 0 ? $"Готово (ошибок: {errors})" : "Готово");
+                if (doMove && movedPairs.Count > 0 && !cancelled && errors == 0)
+                    status = $"Перемещено — можно отменить ({movedPairs.Count})";
+                else if (!cancelled && errors == 0 && !doMove)
+                    status = "Скопировано";
+
+                SetFileOpUi(false, status);
+                if (undoStack.Count == 0)
+                {
+                    undoBar.Visibility = Visibility.Visible;
+                    undoBtn.IsEnabled = false;
+                    undoBtn.Content = "Отменить";
+                    undoText.Text = status;
+                    var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+                    t.Tick += (_, _) => { t.Stop(); if (!fileOpRunning && undoStack.Count == 0) { undoBar.Visibility = Visibility.Collapsed; } };
+                    t.Start();
+                }
+                Rebuild();
             }
-            catch (Exception ex) { Log.Info($"folder widget: paste failed — {ex.Message}"); }
-            finally { Rebuild(); }
         }
+
 
         var menu = new ContextMenu();
         var openRoot = new MenuItem { Header = "Открыть текущую папку" };
@@ -2620,24 +2674,105 @@ public sealed partial class WidgetWindow : Window
 
         void OnDragOver(object? s, DragEventArgs e)
         {
-            e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) && !missing ? DragDropEffects.Copy : DragDropEffects.None;
+            e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) && !missing && !fileOpRunning ? DragDropEffects.Copy : DragDropEffects.None;
             e.Handled = true;
         }
-        void OnDrop(object? s, DragEventArgs e)
+        async void OnDrop(object? s, DragEventArgs e)
         {
+            e.Handled = true;
+            if (fileOpRunning || missing || !Directory.Exists(currentPath)) return;
+            if (e.Data.GetData(DataFormats.FileDrop) is not string[] paths || paths.Length == 0) return;
+
+            fileOpCts?.Dispose();
+            fileOpCts = new CancellationTokenSource();
+            var ct = fileOpCts.Token;
+            int errors = 0;
+            bool cancelled = false;
+
+            SetFileOpUi(true, "Перенос…");
             try
             {
-                if (missing || !Directory.Exists(currentPath)) return;
-                if (e.Data.GetData(DataFormats.FileDrop) is not string[] paths) return;
-                foreach (var p in paths)
+                await Task.Run(() =>
                 {
-                    try { MoveOrCopyInto(p, currentPath); }
-                    catch (Exception ex) { Log.Info($"folder widget: drop failed {p} — {ex.Message}"); }
-                }
+                    for (int i = 0; i < paths.Length; i++)
+                    {
+                        if (ct.IsCancellationRequested) { cancelled = true; break; }
+                        string sourcePath = paths[i];
+                        if (string.IsNullOrWhiteSpace(sourcePath)) continue;
+                        string label = System.IO.Path.GetFileName(sourcePath);
+                        ReportProgress($"Перенос {i + 1}/{paths.Length}: {label}");
+                        try
+                        {
+                            string name = System.IO.Path.GetFileName(sourcePath);
+                            string dest = System.IO.Path.Combine(currentPath, name);
+                            if (string.Equals(System.IO.Path.GetFullPath(sourcePath), System.IO.Path.GetFullPath(dest), StringComparison.OrdinalIgnoreCase))
+                                continue;
+
+                            if (Directory.Exists(dest) || File.Exists(dest))
+                            {
+                                string baseName = System.IO.Path.GetFileNameWithoutExtension(name);
+                                string ext = System.IO.Path.GetExtension(name);
+                                for (int k = 2; k < 10000; k++)
+                                {
+                                    string candidate = System.IO.Path.Combine(currentPath, $"{baseName} ({k}){ext}");
+                                    if (!File.Exists(candidate) && !Directory.Exists(candidate)) { dest = candidate; break; }
+                                }
+                            }
+
+                            bool moved = false;
+                            try
+                            {
+                                if (Directory.Exists(sourcePath)) Directory.Move(sourcePath, dest);
+                                else if (File.Exists(sourcePath)) File.Move(sourcePath, dest);
+                                else continue;
+                                moved = true;
+                            }
+                            catch (IOException) { }
+                            catch (Exception ex)
+                            {
+                                Log.Info($"folder widget: drop move failed {sourcePath} — {ex.Message}");
+                                errors++;
+                                continue;
+                            }
+
+                            if (!moved)
+                            {
+                                try
+                                {
+                                    if (Directory.Exists(sourcePath)) CopyDirectoryCancellable(sourcePath, dest, ct);
+                                    else if (File.Exists(sourcePath)) CopyFileCancellable(sourcePath, dest, ct);
+                                }
+                                catch (OperationCanceledException) { cancelled = true; break; }
+                                catch (Exception ex) { Log.Info($"folder widget: drop copy failed {sourcePath} — {ex.Message}"); errors++; }
+                            }
+                        }
+                        catch (OperationCanceledException) { cancelled = true; break; }
+                        catch (Exception ex) { Log.Info($"folder widget: drop failed {sourcePath} — {ex.Message}"); errors++; }
+                    }
+                }, ct).ContinueWith(_ => { }, TaskScheduler.Default);
             }
-            catch (Exception ex) { Log.Info($"folder widget: drop failed — {ex.Message}"); }
-            finally { Rebuild(); }
-            e.Handled = true;
+            catch (Exception ex)
+            {
+                Log.Info($"folder widget: drop failed — {ex.Message}");
+                errors++;
+            }
+            finally
+            {
+                fileOpRunning = false;
+                string status = cancelled ? "Перенос отменён" : (errors > 0 ? $"Готово (ошибок: {errors})" : "Перенос завершён");
+                SetFileOpUi(false, status);
+                if (undoStack.Count == 0)
+                {
+                    undoBar.Visibility = Visibility.Visible;
+                    undoBtn.IsEnabled = false;
+                    undoBtn.Content = "Отменить";
+                    undoText.Text = status;
+                    var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+                    t.Tick += (_, _) => { t.Stop(); if (!fileOpRunning && undoStack.Count == 0) { undoBar.Visibility = Visibility.Collapsed; } };
+                    t.Start();
+                }
+                Rebuild();
+            }
         }
 
         PreviewDragOver += OnDragOver;
@@ -2649,6 +2784,28 @@ public sealed partial class WidgetWindow : Window
             - (previewPanel.Visibility == Visibility.Visible ? 90 : 0)
             - (undoBar.Visibility == Visibility.Visible ? 28 : 0));
         return container;
+    }
+
+    private static void CopyFileCancellable(string source, string dest, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        File.Copy(source, dest, overwrite: false);
+    }
+
+    private static void CopyDirectoryCancellable(string sourceDir, string destDir, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        Directory.CreateDirectory(destDir);
+        foreach (var file in Directory.GetFiles(sourceDir))
+        {
+            ct.ThrowIfCancellationRequested();
+            File.Copy(file, System.IO.Path.Combine(destDir, System.IO.Path.GetFileName(file)), overwrite: false);
+        }
+        foreach (var dir in Directory.GetDirectories(sourceDir))
+        {
+            ct.ThrowIfCancellationRequested();
+            CopyDirectoryCancellable(dir, System.IO.Path.Combine(destDir, System.IO.Path.GetFileName(dir)), ct);
+        }
     }
 
     private static void CopyDirectory(string sourceDir, string destDir)
