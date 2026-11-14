@@ -240,6 +240,43 @@ public sealed class IslandViewModel : INotifyPropertyChanged
         set { _services.Settings.Update(s => s.DesktopWidgets = value); RaisePropertyChanged(); }
     }
 
+    public bool DockEnabled
+    {
+        get => _services.Settings.Current.DockEnabled;
+        set
+        {
+            if (value == _services.Settings.Current.DockEnabled) return;
+            _services.Settings.Update(s => s.DockEnabled = value);
+            DotShell.Island.Wpf.DockWindow.Sync();
+            RaisePropertyChanged();
+            StatusLine = value ? "док включён" : "док выключен";
+        }
+    }
+
+    public bool DockOnRight
+    {
+        get => string.Equals(_services.Settings.Current.DockSide, "right", StringComparison.OrdinalIgnoreCase);
+        set
+        {
+            string side = value ? "right" : "left";
+            if (string.Equals(_services.Settings.Current.DockSide, side, StringComparison.OrdinalIgnoreCase)) return;
+            _services.Settings.Update(s => s.DockSide = side);
+            RaisePropertyChanged();
+            StatusLine = value ? "док прикреплён справа" : "док прикреплён слева";
+        }
+    }
+
+    public bool DockAutoHide
+    {
+        get => _services.Settings.Current.DockAutoHide;
+        set
+        {
+            if (value == _services.Settings.Current.DockAutoHide) return;
+            _services.Settings.Update(s => s.DockAutoHide = value);
+            RaisePropertyChanged();
+        }
+    }
+
     public string UnitStyle
     {
         get => _services.Settings.Current.UnitStyle;
@@ -1214,6 +1251,9 @@ public sealed class IslandViewModel : INotifyPropertyChanged
         RaisePropertyChanged(nameof(CustomCursorOn));
         RaisePropertyChanged(nameof(UpdateCheckOnStart));
         RaisePropertyChanged(nameof(UpdateCheckHours));
+        RaisePropertyChanged(nameof(DockEnabled));
+        RaisePropertyChanged(nameof(DockAutoHide));
+        RaisePropertyChanged(nameof(DockOnRight));
     }
     /// <summary>
     /// Устройство для эквалайзера: пусто — системное по умолчанию.

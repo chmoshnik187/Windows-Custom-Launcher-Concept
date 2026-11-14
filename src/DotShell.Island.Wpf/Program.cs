@@ -60,7 +60,7 @@ public static class Program
     /// <summary>--slider-demo: витрина стилей ползунков и таймлайна.</summary>
     public static bool OpenSliderDemo { get; private set; }
 
-    /// <summary>--dock: показать док слева при старте.</summary>
+    /// <summary>--dock: показать док при старте.</summary>
     public static bool OpenDock { get; private set; }
 
     /// <summary>--control-center: открыть центр управления при старте.</summary>

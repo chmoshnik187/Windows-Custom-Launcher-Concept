@@ -47,6 +47,13 @@ public partial class IslandWindow
     private double _noticeSavedLeft;
     private double _noticeSavedWidth;
 
+    /// <summary>
+    /// Номер текущего показа. Анимация уведомления может идти, когда его уже
+    /// спрятали (остров раскрыли или пришло новое) — по номеру она понимает,
+    /// что её отменили, и не трогает ширину капсулы.
+    /// </summary>
+    private int _noticeGeneration;
+
     /// <summary>Живой остров: уведомления показываем в нём, если он на виду.</summary>
     public static IslandWindow? Current { get; private set; }
 
@@ -69,21 +76,28 @@ public partial class IslandWindow
             _noticeTimer?.Stop();
 
             double needed = _notice.MeasureWidth(title, text);
-            double target = Math.Clamp(needed + 120, CollapsedWidth, 1100);
+            // Даже короткое уведомление должно заметно раскрыть капсулу: иначе режим
+            // «капсула» визуально не отличается от обычного свёрнутого острова.
+            double target = Math.Clamp(needed + 120, CollapsedWidth + 100, 1100);
 
             _noticeSavedLeft = Left;
             _noticeSavedWidth = Width;
 
             // Окно сразу по максимальной ширине (оно прозрачное): капсуле будет куда
-            // расти, и текст не дёрнется, пока едет ширина.
+            // расти, и текст не дёрнется, пока едет ширина. Центр держим там, где
+            // стоял остров: так уведомление не прыгает на другой монитор.
             Width = target + 40;
-            Left = (SystemParameters.WorkArea.Width - Width) / 2;
+            double center = _noticeSavedLeft + _noticeSavedWidth / 2;
+            double virtualLeft = SystemParameters.VirtualScreenLeft;
+            double virtualWidth = SystemParameters.VirtualScreenWidth;
+            Left = Math.Clamp(center - Width / 2, virtualLeft, virtualLeft + virtualWidth - Width);
 
             CollapsedRow.Visibility = Visibility.Collapsed;
             _notice.Prepare(title, text);
             _notice.SetVisibleWidth(UnitOnlyWidth);
 
-            _ = PlayNoticeAsync(target);
+            int generation = ++_noticeGeneration;
+            _ = PlayNoticeAsync(target, generation);
 
             int seconds = Math.Clamp(ShellServices.Instance.Settings.Current.NotifySeconds, 3, 10);
 
@@ -109,15 +123,18 @@ public partial class IslandWindow
     /// Три шага: сжаться к юниту, раскрыть пасть, показать текст с ростом капсулы.
     /// Паузы — чтобы шаги читались глазом, а не сливались в один рывок.
     /// </summary>
-    private async Task PlayNoticeAsync(double target)
+    private async Task PlayNoticeAsync(double target, int generation)
     {
         try
         {
             await AnimateWidthAsync(UnitOnlyWidth, 300);
+            if (generation != _noticeGeneration) return;
             await Task.Delay(140);
+            if (generation != _noticeGeneration) return;
 
             _notice?.StartReading();
             await Task.Delay(200);
+            if (generation != _noticeGeneration) return;
 
             await AnimateWidthAsync(target, 460);
         }
@@ -145,16 +162,20 @@ public partial class IslandWindow
     {
         _noticeTimer?.Stop();
         _noticeTimer = null;
+        ++_noticeGeneration;
 
         if (_notice is null) return;
 
         // Если остров уже раскрыли (хоткей, трей), таймер уведомления не имеет права
         // сжимать капсулу: иначе содержимое обрезалось, а следующий клик «сворачивал»
         // вместо раскрытия. Убираем только слой уведомления.
+        //
+        // ВАЖНО: сам контрол не обнуляем. Раньше здесь стоял `_notice = null`, и после
+        // первого раскрытия острова уведомления больше никогда не показывались в капсуле —
+        // все уходили в карточку до перезапуска программы.
         if (_isExpanded)
         {
             try { _notice.Hide(); } catch { }
-            _notice = null;
             return;
         }
 
@@ -228,19 +249,15 @@ public partial class IslandWindow
         MiniEq.Visibility = Visibility.Collapsed;
         QuietLine.Visibility = Visibility.Visible;
 
-        Pill.Width = QuietWidth;
-        Pill.Height = QuietHeight;
         // В тихом режиме капсула становится почти прямоугольной, но не спорит с
         // настройкой: если радиус меньше 3, оставляем настройку.
         double quietRadius = Math.Min(ShellServices.Instance.Settings.Current.IslandRadius, 3);
         Pill.CornerRadius = new CornerRadius(quietRadius);
         Pill.Opacity = 0.9;
 
-        // Окно подгоняем вручную: ResizeWindowTo держит минимальную ширину пилюли.
-        Width = QuietWidth + 40;
-        Height = QuietHeight + 26;
-        Left = (SystemParameters.WorkArea.Width - Width) / 2;
-        Top = EdgeTop(Height);
+        // Раньше окно и капсула прыгали в новый размер одним кадром. Теперь то же
+        // движение, что у раскрытия: капсула сжимается в тонкую полоску плавно.
+        AnimateQuietShellTo(QuietWidth, QuietHeight);
     }
 
     private void ExitQuiet()
@@ -251,14 +268,36 @@ public partial class IslandWindow
         MiniEq.Visibility = Visibility.Visible;
         QuietLine.Visibility = Visibility.Collapsed;
 
-        Pill.Width = CollapsedWidth;
         Pill.Opacity = 1;
 
         // Возвращаем геометрию из настроек, а не «как было зашито»: раньше здесь
         // стоял радиус 23 и высота 46, и после выхода из «не мешать» остров
         // переставал соответствовать настройкам (радиус 4 «прыгал» на 23).
         ApplyCapsuleGeometry();
-        ResizeWindowTo(CollapsedWidth, Pill.Height);
+        AnimateShellTo(CollapsedWidth, Pill.Height);
+    }
+
+    /// <summary>
+    /// Тихое состояние — не обычная капсула: окно тоньше (QuietHeight + 26), поэтому
+    /// AnimateShellTo не подходит. Центр по горизонтали сохраняем, а не считаем от
+    /// основного монитора: остров может жить на втором экране.
+    /// </summary>
+    private void AnimateQuietShellTo(double pillWidth, double pillHeight)
+    {
+        const int ms = 220;
+        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+
+        double winW = pillWidth + 40;
+        double winH = pillHeight + 26;
+        double centerX = Left + Width / 2;
+        double targetLeft = centerX - winW / 2;
+
+        AnimateTo(this, WidthProperty, winW, ms, ease);
+        AnimateTo(this, HeightProperty, winH, ms, ease);
+        AnimateTo(this, LeftProperty, targetLeft, ms, ease);
+        AnimateTo(this, TopProperty, EdgeTop(winH), ms, ease);
+        AnimateTo(Pill, WidthProperty, pillWidth, ms, ease);
+        AnimateTo(Pill, HeightProperty, pillHeight, ms, ease);
     }
 
     /// <summary>Наведение на полоску: показать остров и не сжиматься, пока курсор рядом.</summary>

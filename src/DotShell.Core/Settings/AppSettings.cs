@@ -174,8 +174,23 @@ public sealed class AppSettings
     /// <summary>Кто живёт в свёрнутой капсуле: eyes (глазки) / goth (готка) / skeleton (скелетик).</summary>
     public string UnitStyle { get; set; } = "goth";
 
-    /// <summary>Показывать док слева при старте.</summary>
+    /// <summary>Показывать док при старте.</summary>
     public bool DockEnabled { get; set; }
+
+    /// <summary>Док прячется за край, оставляя тонкую ручку; наведение выдвигает.</summary>
+    public bool DockAutoHide { get; set; } = true;
+
+    /// <summary>К какому краю прикреплён док: left или right.</summary>
+    public string DockSide { get; set; } = "left";
+
+    /// <summary>Сколько пикселей дока оставлять видимыми, когда он спрятан за краем.</summary>
+    public int DockHandleWidth { get; set; } = 10;
+
+    /// <summary>Отступ дока от левого края рабочей области, когда он выдвинут.</summary>
+    public int DockMargin { get; set; } = 10;
+
+    /// <summary>Вертикальная позиция дока (Top) в пикселях экрана. -32000 = центрировать.</summary>
+    public int DockTop { get; set; } = -32000;
 
     /// <summary>
     /// Виджеты на обоях: окно уходит под все окна и не забирает фокус.

@@ -60,6 +60,8 @@ public sealed class ShellServices : IAsyncDisposable
     private ShellServices()
     {
         Settings = SettingsStore.Load();
+        if (!string.IsNullOrWhiteSpace(Settings.LastError))
+            Log.Info(Settings.LastError);
         Theme = new ThemeBus(Settings);
 
         MessageWindow = new NativeMessageWindow();

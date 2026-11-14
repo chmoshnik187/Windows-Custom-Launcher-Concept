@@ -40,7 +40,7 @@ def pick_font(size):
     raise SystemExit("не нашёл ни одного шрифта из списка")
 
 
-def render(text, size, cell, gap, accent_share, seed, pad_ratio=1/3):
+def render(text, size, cell, gap, accent_share, seed, pad_ratio=1/3, threshold=0.12):
     font = pick_font(size)
 
     # 1. маска текста
@@ -52,7 +52,8 @@ def render(text, size, cell, gap, accent_share, seed, pad_ratio=1/3):
 
     pad = int(size * pad_ratio)
     mask = Image.new("L", (text_w + pad * 2, text_h + pad * 2), 0)
-    ImageDraw.Draw(mask).text((pad - left, pad - top), text, font=font, fill=255)
+    draw_mask = ImageDraw.Draw(mask)
+    draw_mask.text((pad - left, pad - top), text, font=font, fill=255)
 
     # 2. сетка
     pitch = cell + gap
@@ -65,7 +66,9 @@ def render(text, size, cell, gap, accent_share, seed, pad_ratio=1/3):
 
     rnd = random.Random(seed)
 
-    # 3-4. яркость ячейки → точка
+    # 3-4. яркость ячейки → точка.
+    # Порог задаёт, насколько «густо» читается буква: для мелких баннеров README
+    # низкий порог важнее «воздуха», иначе текст превращается в шум из точек.
     for row in range(rows):
         for col in range(cols):
             box = (col * pitch, row * pitch,
@@ -75,13 +78,13 @@ def render(text, size, cell, gap, accent_share, seed, pad_ratio=1/3):
                 continue
 
             patch = mask.crop(box)
-            # средняя яркость как доля закрашенных пикселей
             values = patch.tobytes()
             level = sum(values) / (255.0 * len(values))
-            if level < 0.12:
+            if level < threshold:
                 continue
 
-            radius = cell / 2.0
+            # На краях штриха точки чуть меньше — так буква не расползается в кашу.
+            radius = (cell / 2.0) * (0.72 + 0.28 * min(1.0, level / 0.55))
             cx, cy = col * pitch + cell / 2.0, row * pitch + cell / 2.0
 
             color = ACCENT if rnd.random() < accent_share else INK
@@ -101,9 +104,10 @@ def main():
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--canvas", default="", help="подложка WxH, баннер вписывается по центру")
     parser.add_argument("--pad", type=float, default=0.34, help="поля вокруг текста, доля кегля")
+    parser.add_argument("--threshold", type=float, default=0.12, help="порог яркости 0..1, ниже = плотнее буквы")
     args = parser.parse_args()
 
-    image = render(args.text, args.size, args.cell, args.gap, args.accent, args.seed, args.pad)
+    image = render(args.text, args.size, args.cell, args.gap, args.accent, args.seed, args.pad, args.threshold)
 
     # Подложка нужного размера: баннер вписывается по центру без искажений.
     # Так делается соцпревью 1280x640 для шаринга ссылки.

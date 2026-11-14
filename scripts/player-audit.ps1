@@ -5,8 +5,12 @@
 #
 # Скрипт проверяет две вещи:
 #   1) метаданные доехали — в виджете видно название и исполнителя (через UI Automation);
-#   2) позиция живёт — два снимка с разницей 4 секунды отличаются в зоне прогресса
+#   2) позиция живёт — значение прогресс-бара через RangeValuePattern растёт
 #      (значит LivePosition считается, а не стоит на нуле).
+#
+# Раньше позиция проверялась скриншотами нижней полосы: полоса в режиме «pill»
+# всего 2 px, за 4 секунды сдвигается на ~8 px, и порог «изменилось >20 пикселей»
+# давал ложный провал. UIA-значение точное и не зависит от DPI/масштаба.
 #
 # Запуск:  pwsh -File scripts/player-audit.ps1
 # Код возврата: 0 — плеер работает, 1 — нет.
@@ -29,7 +33,6 @@ if (-not (Test-Path $Exe)) {
 }
 
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
-Add-Type -AssemblyName System.Drawing
 Add-Type -TypeDefinition @'
 using System;
 using System.Text;
@@ -39,8 +42,6 @@ public static class PlayerProbe
     public delegate bool E(IntPtr h, IntPtr l);
     [DllImport("user32.dll")] static extern bool EnumWindows(E cb, IntPtr l);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowTextW(IntPtr h, StringBuilder sb, int m);
-    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out REC r);
-    [StructLayout(LayoutKind.Sequential)] public struct REC { public int L, T, Rg, B; }
     public static IntPtr Find(string t)
     {
         IntPtr f = IntPtr.Zero;
@@ -55,10 +56,6 @@ public static class PlayerProbe
 }
 '@
 
-$temp = Join-Path $env:TEMP 'dsh-player-audit'
-if (Test-Path $temp) { Remove-Item $temp -Recurse -Force }
-New-Item -ItemType Directory $temp | Out-Null
-
 Get-Process -Name DotShell -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 2
 
@@ -66,14 +63,26 @@ $store = Join-Path $env:LOCALAPPDATA 'DotShell\widgets.json'
 Set-Content $store '[]' -Encoding UTF8
 
 $process = Start-Process $Exe -ArgumentList '--player-fixture', '--widget=media', '--widget-size=520x140' -PassThru
-Start-Sleep -Seconds 15
 
-$hwnd = [PlayerProbe]::Find('DotShell widget')
+# Окно ждём циклом: на холодном старте фиксированные 15 секунд либо тормозили
+# аудит, либо не хватали. Виджет создаётся после инициализации острова.
+$hwnd = [IntPtr]::Zero
+$deadline = [DateTime]::UtcNow.AddSeconds(20)
+while ([DateTime]::UtcNow -lt $deadline) {
+    if ($null -eq (Get-Process -Id $process.Id -ErrorAction SilentlyContinue)) { break }
+    $hwnd = [PlayerProbe]::Find('DotShell widget')
+    if ($hwnd -ne [IntPtr]::Zero) { break }
+    Start-Sleep -Milliseconds 250
+}
+
 if ($hwnd -eq [IntPtr]::Zero) {
     Write-Host 'ПРОВАЛ: виджет медиа не появился' -ForegroundColor Red
     Get-Process -Name DotShell -ErrorAction SilentlyContinue | Stop-Process -Force
     exit 1
 }
+
+# Даём виджету наполниться: текст и прогресс-бар появляются после первого тика.
+Start-Sleep -Seconds 2
 
 # --- 1. метаданные ---
 $element = [System.Windows.Automation.AutomationElement]::FromHandle($hwnd)
@@ -90,45 +99,31 @@ $joined = $texts -join ' '
 $titleOk = $joined -match 'Ночной дождь'
 $artistOk = $joined -match 'фикстура'
 
-# --- 2. позиция: два снимка зоны прогресса ---
-$rect = New-Object PlayerProbe+REC
-[void][PlayerProbe]::GetWindowRect($hwnd, [ref]$rect)
+# --- 2. позиция: значение прогресс-бара должно вырасти за 4 секунды ---
+$value1 = $null
+$value2 = $null
+$barFound = $false
 
-$width = $rect.Rg - $rect.L
-$height = $rect.B - $rect.T
-$barHeight = [int][Math]::Min(30, [Math]::Max(12, $height * 0.18))
+try {
+    $cond = New-Object System.Windows.Automation.PropertyCondition(
+        [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+        [System.Windows.Automation.ControlType]::ProgressBar)
 
-function Shot([string]$path) {
-    $bmp = New-Object System.Drawing.Bitmap $width, $barHeight
-    $g = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.CopyFromScreen($rect.L, $rect.B - $barHeight, 0, 0,
-        (New-Object System.Drawing.Size $width, $barHeight))
-    $g.Dispose()
-    $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
-    $bmp.Dispose()
+    $bar = $element.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
+    if ($bar -ne $null) {
+        $barFound = $true
+        $range = $bar.GetCurrentPattern([System.Windows.Automation.RangeValuePattern]::Pattern)
+        $value1 = $range.Current.Value
+        Start-Sleep -Seconds 4
+        $value2 = $range.Current.Value
+    }
+} catch {
+    # UIA может не отдать паттерн на холодном старте — это провал проверки,
+    # а не повод падать всему аудиту.
 }
 
-$shot1 = Join-Path $temp 'progress-1.png'
-$shot2 = Join-Path $temp 'progress-2.png'
-
-Shot $shot1
-Start-Sleep -Seconds 4
-Shot $shot2
-
-$py = 'C:\Users\maxim\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\python\python.exe'
-if (-not (Test-Path $py)) { $py = 'python' }
-
-$diff = & $py -c @"
-import numpy as np
-from PIL import Image
-a = np.asarray(Image.open(r'$shot1').convert('RGB'), dtype=np.int16)
-b = np.asarray(Image.open(r'$shot2').convert('RGB'), dtype=np.int16)
-delta = np.abs(a - b).sum(axis=2)
-print(int((delta > 24).sum()))
-"@
-
-$moved = $false
-if ($diff -match '^\d+$') { $moved = [int]$diff -gt 20 }
+$moved = ($value1 -ne $null) -and ($value2 -ne $null) -and
+         ([double]$value2 - [double]$value1 -gt 0.5)
 
 Get-Process -Name DotShell -ErrorAction SilentlyContinue | Stop-Process -Force
 
@@ -136,7 +131,15 @@ Get-Process -Name DotShell -ErrorAction SilentlyContinue | Stop-Process -Force
 Write-Host ''
 Write-Host ("название трека: " + $(if ($titleOk) { 'ok' } else { 'ПРОВАЛ' }))
 Write-Host ("исполнитель:    " + $(if ($artistOk) { 'ok' } else { 'ПРОВАЛ' }))
-Write-Host ("позиция едет:   " + $(if ($moved) { "ok (изменено пикселей: $diff)" } else { "ПРОВАЛ (изменено: $diff)" }))
+
+if (-not $barFound) {
+    Write-Host 'позиция едет:   ПРОВАЛ (прогресс-бар не найден)' -ForegroundColor Red
+} elseif ($moved) {
+    Write-Host ("позиция едет:   ok ({0:0.00}% → {1:0.00}%)" -f $value1, $value2)
+} else {
+    Write-Host ("позиция едет:   ПРОВАЛ ({0} → {1})" -f $value1, $value2) -ForegroundColor Red
+}
+
 Write-Host ''
 
 if ($titleOk -and $artistOk -and $moved) {

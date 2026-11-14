@@ -1,4 +1,4 @@
-﻿namespace DotShell.Island.Wpf.Widgets;
+namespace DotShell.Island.Wpf.Widgets;
 
 using System.Windows;
 using System.IO;
@@ -874,13 +874,20 @@ public sealed partial class WidgetWindow : Window
         var pair = new Grid();
         pair.Children.Add(two);
 
-        var twoLarge = new Controls.Units { Margin = new Thickness(6), Interactive = true };
+        // Крупный виджет — портрет: в 399×311 помещается 104×102 точек, это уже
+        // не «два человечка», а тот же юнит в подробном разрешении.
+        var portrait = new Controls.UnitPortrait
+        {
+            Margin = new Thickness(2),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+        };
 
         var largePanel = new Grid();
         largePanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         largePanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        largePanel.Children.Add(twoLarge);
-        note.Text = "следят за мышью, расстраиваются без внимания";
+        largePanel.Children.Add(portrait);
+        note.Text = "портрет в точках · клик — искры";
         note.Margin = new Thickness(0, 6, 0, 0);
         Grid.SetRow(note, 1);
         largePanel.Children.Add(note);

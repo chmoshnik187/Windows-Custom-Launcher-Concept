@@ -555,7 +555,7 @@ public partial class IslandWindow : Window
                 // Виджеты: открываем витрину с карточками, а не список в меню —
                 // в меню не видно, что ставишь, и нельзя выбрать место на столе.
                 menu.Add("Центр управления", () => Dispatcher.BeginInvoke(() => ControlCenterWindow.Toggle()));
-                menu.Add("Док слева", () => Dispatcher.BeginInvoke(() => DockWindow.Toggle()));
+                menu.Add("Док", () => Dispatcher.BeginInvoke(() => DockWindow.Toggle()));
                 menu.Add("Виджеты на обоях", () => Dispatcher.BeginInvoke(() =>
                 {
                     var now = ShellServices.Instance.Settings.Current.DesktopWidgets;
@@ -683,6 +683,12 @@ public partial class IslandWindow : Window
         }
     }
 
+    /// <summary>Открыть остров извне (док, трей, виджеты) на нужной вкладке.</summary>
+    public void OpenFromExternal(string tab = "home")
+    {
+        Dispatcher.BeginInvoke(() => ExpandAndGoToTab(tab));
+    }
+
     public void OpenStartupTab()
     {
         var tab = Program.StartupTab;
@@ -714,7 +720,7 @@ public partial class IslandWindow : Window
             DotShell.Core.Native.DisplayBrightness.Set(savedBrightness);
         }
 
-        // Док слева: либо по флагу, либо потому что был включён в прошлый раз.
+        // Док: либо по флагу, либо потому что был включён в прошлый раз.
         if (Program.OpenDock || ShellServices.Instance.Settings.Current.DockEnabled)
         {
             Dispatcher.BeginInvoke(() => DockWindow.Toggle());

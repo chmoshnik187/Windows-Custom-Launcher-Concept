@@ -362,6 +362,19 @@
                             <Button Style="{StaticResource DsButton}" Content="ВЕРНУТЬ ОСТРОВ НА МЕСТО"
                                     HorizontalAlignment="Left" Click="OnResetPosition"
                                     ToolTip="Сбросить позицию: остров вернётся к верхней кромке по центру" />
+
+                            <TextBlock Style="{StaticResource Section}" Text="ДОК" />
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Показывать док"
+                                      IsChecked="{Binding DockEnabled}" />
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Прикрепить справа (иначе слева)"
+                                      IsChecked="{Binding DockOnRight}"
+                                      ToolTip="Док можно перетащить мышью к любому краю — с какой стороны бросить, там он и закрепится" />
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Прятать док за край (peek по наведению)"
+                                      IsChecked="{Binding DockAutoHide}"
+                                      ToolTip="Когда включено, док уезжает за край и остаётся тонкая ручка; наведение выдвигает панель" />
                         </StackPanel>
 
                         <!-- ОКНА И WINDOWS -->

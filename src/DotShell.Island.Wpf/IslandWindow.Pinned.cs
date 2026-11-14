@@ -301,25 +301,8 @@ private void WireDrop(UIElement element, PinnedStore store, string groupId)
 }
 
 /// <summary>Добавить файл из проводника: ярлык, exe, bat, url.</summary>
-private bool TryAddFile(string path, PinnedStore store, string groupId)
-{
-    try
-    {
-        if (Directory.Exists(path)) return false;
-
-        var ext = Path.GetExtension(path).ToLowerInvariant();
-        if (ext is not (".lnk" or ".exe" or ".bat" or ".cmd" or ".url" or ".msc")) return false;
-
-        var name = Path.GetFileNameWithoutExtension(path);
-        store.Add(name, path, ext == ".lnk" ? path : string.Empty, groupId);
-        return true;
-    }
-    catch (Exception ex)
-    {
-        Log.Info($"drop add failed: {ex.Message}");
-        return false;
-    }
-}
+private bool TryAddFile(string path, PinnedStore store, string groupId) =>
+    store.TryAddFile(path, groupId);
 
 /// <summary>Перебор значков группы: у каждой полки должно быть своё «лицо».</summary>
 private void CycleGlyph(PinnedStore store, PinnedGroup group)

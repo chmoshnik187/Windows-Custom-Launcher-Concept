@@ -215,6 +215,28 @@ public sealed class PinnedStore
         Changed?.Invoke();
     }
 
+    /// <summary>
+    /// Добавить программу из проводника: ярлык, exe, bat, url.
+    /// Общий путь для острова и дока, чтобы правила отбора не разъезжались.
+    /// </summary>
+    public bool TryAddFile(string path, string? groupId = null)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(path) || Directory.Exists(path)) return false;
+
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (ext is not (".lnk" or ".exe" or ".bat" or ".cmd" or ".url" or ".msc")) return false;
+
+            Add(Path.GetFileNameWithoutExtension(path), path, ext == ".lnk" ? path : string.Empty, groupId);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     /// <summary>Назначить или снять сочетание у программы. Пустая строка — снять.</summary>
     public void SetHotkey(string target, string hotkey)
     {

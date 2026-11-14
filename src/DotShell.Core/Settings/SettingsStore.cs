@@ -19,6 +19,12 @@ public sealed class SettingsStore
 
     public AppSettings Current { get; private set; } = new();
 
+    /// <summary>
+    /// Последняя ошибка загрузки/сохранения. UI пишет её в crash.log: молча
+    /// потерять настройки человек не должен.
+    /// </summary>
+    public string? LastError { get; private set; }
+
     /// <summary>Срабатывает после каждого сохранения — на него подписан ThemeBus.</summary>
     public event Action<AppSettings>? Changed;
 
@@ -34,10 +40,22 @@ public sealed class SettingsStore
                 if (parsed is not null) store.Current = parsed;
             }
         }
-        catch
+        catch (Exception ex)
         {
             // Битый конфиг не должен мешать программе запуститься — работаем с дефолтами.
-            // TODO: сохранить битый файл как settings.json.bak и показать уведомление.
+            // Но и молча стирать его нельзя: сохраняем копию, чтобы человек мог
+            // вернуть свои настройки руками.
+            string backup = AppSettings.SettingsPath + ".bak";
+            try
+            {
+                if (File.Exists(AppSettings.SettingsPath))
+                    File.Copy(AppSettings.SettingsPath, backup, overwrite: true);
+                store.LastError = $"settings.json не прочитан ({ex.Message}); копия: {backup}";
+            }
+            catch (Exception copyEx)
+            {
+                store.LastError = $"settings.json не прочитан ({ex.Message}); копию сделать не удалось ({copyEx.Message})";
+            }
         }
         return store;
     }
@@ -57,11 +75,12 @@ public sealed class SettingsStore
             var tmp = AppSettings.SettingsPath + ".tmp";
             File.WriteAllText(tmp, JsonSerializer.Serialize(Current, JsonOptions));
             File.Move(tmp, AppSettings.SettingsPath, overwrite: true);
+            LastError = null;
             Changed?.Invoke(Current);
         }
-        catch
+        catch (Exception ex)
         {
-            // TODO: лог
+            LastError = $"настройки не сохранились: {ex.Message}";
         }
     }
 }
