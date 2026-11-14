@@ -129,7 +129,7 @@ public partial class IslandWindow
     private void RefreshWidgetsLabel()
     {
         if (ToolWidgets is null) return;
-        int n = WidgetsManager.Types.Count(WidgetsManager.Has);
+        int n = WidgetsManager.Types.Count(t => WidgetsManager.Has(t));
         ToolWidgets.Content = n > 0 ? $"ВИДЖЕТЫ · {n}" : "ВИДЖЕТЫ";
     }
 

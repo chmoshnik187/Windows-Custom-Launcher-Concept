@@ -30,14 +30,17 @@ using DotShell.Island.Wpf.Controls;
 public sealed partial class WidgetWindow : Window
 {
     private readonly string _type;
+    private readonly string _path;
     private readonly Border _root;
     private readonly List<DispatcherTimer> _timers = new();
 
     public string WidgetType => _type;
+    public string WidgetPath => _path;
 
-    public WidgetWindow(string type, int x, int y, int width = 0, int height = 0)
+    public WidgetWindow(string type, int x, int y, int width = 0, int height = 0, string path = "")
     {
         _type = type;
+        _path = path ?? string.Empty;
         Title = "DotShell widget";
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
@@ -109,14 +112,14 @@ public sealed partial class WidgetWindow : Window
         _root.MouseLeftButtonUp += (_, _) => WidgetsManager.OnMoved(this);
 
         var remove = new MenuItem { Header = "Убрать виджет" };
-        remove.Click += (_, _) => WidgetsManager.Close(type);
+        remove.Click += (_, _) => WidgetsManager.CloseWindow(this);
         _root.ContextMenu = new ContextMenu();
         _root.ContextMenu.Items.Add(remove);
 
-        // У виджетов со своим меню (трей, курсы, погода) меню окна убираем:
+        // У виджетов со своим меню (трей, курсы, погода, папка) меню окна убираем:
         // иначе правый клик открывал только «Убрать виджет», а настройки
         // виджета были недоступны. Пункт «Убрать» добавляется внутрь своего меню.
-        if (type is "tray" or "currency" or "weather") _root.ContextMenu = null;
+        if (type is "tray" or "currency" or "weather" or "folder") _root.ContextMenu = null;
 
         SourceInitialized += (_, _) =>
         {
@@ -258,7 +261,7 @@ public sealed partial class WidgetWindow : Window
     private MenuItem RemoveWidgetItem()
     {
         var item = new MenuItem { Header = "Убрать виджет" };
-        item.Click += (_, _) => WidgetsManager.Close(_type);
+        item.Click += (_, _) => WidgetsManager.CloseWindow(this);
         return item;
     }
     private UIElement BuildContent(string type)
@@ -311,6 +314,7 @@ public sealed partial class WidgetWindow : Window
         "tray" => BuildTray(),
         "weather" => BuildWeather(),
         "calendar" => BuildCalendar(),
+        "folder" => BuildFolder(),
         _ => new TextBlock { Text = "?" },
     };
 
@@ -1263,6 +1267,346 @@ public sealed partial class WidgetWindow : Window
         return root;
     }
     /// <summary>Кисть из ресурсов окна (для контролов, созданных кодом).</summary>
+    /// <summary>
+    /// «Умная папка» на рабочем столе: живой вид содержимого папки.
+    /// MVP: список файлов/папок с иконками, открытие по клику, drag&drop файлов
+    /// в папку, автообновление, быстрые действия (открыть папку, обновить).
+    /// </summary>
+    private UIElement BuildFolder()
+    {
+        string folderPath = _path;
+        bool missing = string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath);
+
+        var title = new TextBlock
+        {
+            FontFamily = new FontFamily("Bahnschrift"),
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = ResBrush("DsText"),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        var subtitle = new TextBlock
+        {
+            FontFamily = new FontFamily("Segoe UI"),
+            FontSize = 9,
+            Foreground = ResBrush("DsTextMuted"),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(0, 2, 0, 0),
+        };
+
+        var list = new StackPanel();
+        var scroll = new ScrollViewer
+        {
+            Content = list,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+
+        void RefreshHeader(int count = -1)
+        {
+            if (missing || !Directory.Exists(folderPath))
+            {
+                missing = true;
+                title.Text = "ПАПКА НЕ НАЙДЕНА";
+                subtitle.Text = folderPath;
+                return;
+            }
+
+            string name = System.IO.Path.GetFileName(folderPath.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar));
+            if (string.IsNullOrWhiteSpace(name)) name = folderPath;
+            title.Text = name.ToUpperInvariant();
+            subtitle.Text = count >= 0 ? $"{count} объект(ов) · {folderPath}" : folderPath;
+        }
+
+        ImageSource? IconForPath(string path, bool isDir)
+        {
+            try
+            {
+                if (isDir)
+                {
+                    // Пытаемся взять иконку самой папки; при неудаче — стандартную иконку оболочки.
+                    try
+                    {
+                        using var dirIcon = System.Drawing.Icon.ExtractAssociatedIcon(path);
+                        if (dirIcon is not null)
+                        {
+                            var src = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
+                                dirIcon.Handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+                            src.Freeze();
+                            return src;
+                        }
+                    }
+                    catch { }
+
+                    try
+                    {
+                        using var sys = System.Drawing.Icon.ExtractAssociatedIcon(Environment.GetFolderPath(Environment.SpecialFolder.Windows));
+                        if (sys is not null)
+                        {
+                            var src = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
+                                sys.Handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+                            src.Freeze();
+                            return src;
+                        }
+                    }
+                    catch { }
+                    return null;
+                }
+
+                string png = DotShell.Core.Launcher.IconCache.Extract(string.Empty, path);
+                if (!string.IsNullOrWhiteSpace(png) && File.Exists(png))
+                {
+                    var image = new BitmapImage();
+                    image.BeginInit();
+                    image.CacheOption = BitmapCacheOption.OnLoad;
+                    image.UriSource = new Uri(png);
+                    image.DecodePixelWidth = 32;
+                    image.EndInit();
+                    image.Freeze();
+                    return image;
+                }
+
+                using var ico = System.Drawing.Icon.ExtractAssociatedIcon(path);
+                if (ico is null) return null;
+                var source = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
+                    ico.Handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+                source.Freeze();
+                return source;
+            }
+            catch { return null; }
+        }
+
+        UIElement Row(string path, bool isDir)
+        {
+            var icon = new Image
+            {
+                Width = 18,
+                Height = 18,
+                Margin = new Thickness(0, 0, 8, 0),
+                Source = IconForPath(path, isDir),
+                Opacity = 0.95,
+            };
+
+            var name = new TextBlock
+            {
+                Text = System.IO.Path.GetFileName(path),
+                FontFamily = new FontFamily("Segoe UI"),
+                FontSize = 12,
+                Foreground = ResBrush("DsText"),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+
+            var row = new DockPanel { LastChildFill = true };
+            DockPanel.SetDock(icon, Dock.Left);
+            row.Children.Add(icon);
+            row.Children.Add(name);
+
+            var border = new Border
+            {
+                Child = row,
+                Padding = new Thickness(6, 4, 6, 4),
+                CornerRadius = new CornerRadius(6),
+                Background = Brushes.Transparent,
+                Cursor = Cursors.Hand,
+                ToolTip = path,
+                Tag = path,
+            };
+
+            border.MouseEnter += (_, _) => border.Background = new SolidColorBrush(Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF));
+            border.MouseLeave += (_, _) => border.Background = Brushes.Transparent;
+            border.MouseLeftButtonUp += (_, e) =>
+            {
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); }
+                catch (Exception ex) { Log.Info($"folder widget: open failed {path} — {ex.Message}"); }
+                e.Handled = true;
+            };
+
+            var menu = new ContextMenu();
+            var open = new MenuItem { Header = "Открыть" };
+            open.Click += (_, _) =>
+            {
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); }
+                catch (Exception ex) { Log.Info($"folder widget: open failed {path} — {ex.Message}"); }
+            };
+            menu.Items.Add(open);
+
+            var reveal = new MenuItem { Header = "Показать в проводнике" };
+            reveal.Click += (_, _) =>
+            {
+                try
+                {
+                    if (File.Exists(path)) System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{path}\"");
+                    else System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(System.IO.Path.GetDirectoryName(path) ?? folderPath) { UseShellExecute = true });
+                }
+                catch (Exception ex) { Log.Info($"folder widget: reveal failed {path} — {ex.Message}"); }
+            };
+            menu.Items.Add(reveal);
+
+            menu.Items.Add(new Separator());
+            menu.Items.Add(RemoveWidgetItem());
+            border.ContextMenu = menu;
+
+            return border;
+        }
+
+        void Rebuild()
+        {
+            try
+            {
+                list.Children.Clear();
+                if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath))
+                {
+                    missing = true;
+                    RefreshHeader();
+                    list.Children.Add(new TextBlock
+                    {
+                        Text = "Папка недоступна. Можно убрать виджет или выбрать другую папку.",
+                        FontFamily = new FontFamily("Segoe UI"),
+                        FontSize = 11,
+                        Foreground = ResBrush("DsTextMuted"),
+                        TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(4, 8, 4, 4),
+                    });
+                    return;
+                }
+
+                missing = false;
+                var dirs = Directory.EnumerateDirectories(folderPath)
+                    .OrderBy(p => System.IO.Path.GetFileName(p), StringComparer.CurrentCultureIgnoreCase)
+                    .ToList();
+                var files = Directory.EnumerateFiles(folderPath)
+                    .OrderBy(p => System.IO.Path.GetFileName(p), StringComparer.CurrentCultureIgnoreCase)
+                    .ToList();
+
+                RefreshHeader(dirs.Count + files.Count);
+
+                foreach (var d in dirs.Take(120)) list.Children.Add(Row(d, true));
+                foreach (var f in files.Take(200)) list.Children.Add(Row(f, false));
+
+                if (dirs.Count + files.Count == 0)
+                {
+                    list.Children.Add(new TextBlock
+                    {
+                        Text = "Папка пуста. Перетащите сюда файлы из проводника.",
+                        FontFamily = new FontFamily("Segoe UI"),
+                        FontSize = 11,
+                        Foreground = ResBrush("DsTextMuted"),
+                        TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(4, 8, 4, 4),
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Info($"folder widget: rebuild failed — {ex.Message}");
+                RefreshHeader();
+                list.Children.Add(new TextBlock
+                {
+                    Text = "Не удалось прочитать папку.",
+                    FontFamily = new FontFamily("Segoe UI"),
+                    FontSize = 11,
+                    Foreground = ResBrush("DsTextMuted"),
+                    Margin = new Thickness(4, 8, 4, 4),
+                });
+            }
+        }
+
+        RefreshHeader();
+        Rebuild();
+
+        var header = new Grid();
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var titles = new StackPanel();
+        titles.Children.Add(title);
+        titles.Children.Add(subtitle);
+        header.Children.Add(titles);
+
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
+        var openBtn = WBtn("↗", "Открыть папку");
+        openBtn.Padding = new Thickness(6, 2, 6, 2);
+        openBtn.Margin = new Thickness(4, 0, 0, 0);
+        openBtn.Click += (_, _) =>
+        {
+            try { if (Directory.Exists(folderPath)) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(folderPath) { UseShellExecute = true }); }
+            catch (Exception ex) { Log.Info($"folder widget: open root failed — {ex.Message}"); }
+        };
+        var refreshBtn = WBtn("⟳", "Обновить");
+        refreshBtn.Padding = new Thickness(6, 2, 6, 2);
+        refreshBtn.Margin = new Thickness(4, 0, 0, 0);
+        refreshBtn.Click += (_, _) => Rebuild();
+        actions.Children.Add(openBtn);
+        actions.Children.Add(refreshBtn);
+        Grid.SetColumn(actions, 1);
+        header.Children.Add(actions);
+
+        var container = new DockPanel();
+        DockPanel.SetDock(header, Dock.Top);
+        container.Children.Add(header);
+        container.Children.Add(scroll);
+
+        var menu = new ContextMenu();
+        var openRoot = new MenuItem { Header = "Открыть папку" };
+        openRoot.Click += (_, _) =>
+        {
+            try { if (Directory.Exists(folderPath)) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(folderPath) { UseShellExecute = true }); }
+            catch (Exception ex) { Log.Info($"folder widget: open root failed — {ex.Message}"); }
+        };
+        menu.Items.Add(openRoot);
+        var refreshItem = new MenuItem { Header = "Обновить" };
+        refreshItem.Click += (_, _) => Rebuild();
+        menu.Items.Add(refreshItem);
+        menu.Items.Add(new Separator());
+        menu.Items.Add(RemoveWidgetItem());
+        container.ContextMenu = menu;
+        _root.ContextMenu = null;
+
+        AllowDrop = true;
+        container.AllowDrop = true;
+        scroll.AllowDrop = true;
+        list.AllowDrop = true;
+
+        void OnDragOver(object? s, DragEventArgs e)
+        {
+            e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) && !missing ? DragDropEffects.Move : DragDropEffects.None;
+            e.Handled = true;
+        }
+        void OnDrop(object? s, DragEventArgs e)
+        {
+            try
+            {
+                if (missing || !Directory.Exists(folderPath)) return;
+                if (e.Data.GetData(DataFormats.FileDrop) is not string[] paths) return;
+                foreach (var p in paths)
+                {
+                    try
+                    {
+                        string dest = System.IO.Path.Combine(folderPath, System.IO.Path.GetFileName(p));
+                        if (string.Equals(System.IO.Path.GetFullPath(p), System.IO.Path.GetFullPath(dest), StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        if (Directory.Exists(p)) Directory.Move(p, dest);
+                        else if (File.Exists(p)) File.Move(p, dest);
+                    }
+                    catch (Exception ex) { Log.Info($"folder widget: drop move failed {p} — {ex.Message}"); }
+                }
+            }
+            catch (Exception ex) { Log.Info($"folder widget: drop failed — {ex.Message}"); }
+            finally { Rebuild(); }
+            e.Handled = true;
+        }
+
+        PreviewDragOver += OnDragOver;
+        PreviewDrop += OnDrop;
+
+        Timer(5000, Rebuild);
+
+        _relayout = (_, h) => scroll.MaxHeight = Math.Max(80, h - 60);
+        return container;
+    }
+
     private Brush ResBrush(string key) => TryFindResource(key) as Brush ?? Brushes.White;
 
     /// <summary>

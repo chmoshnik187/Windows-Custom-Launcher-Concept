@@ -135,7 +135,9 @@ public sealed class WidgetGalleryWindow : Window
         int onDesktop = 0;
         foreach (var type in WidgetsManager.Types)
         {
-            bool active = WidgetsManager.Has(type);
+            bool active = string.Equals(type, "folder", StringComparison.OrdinalIgnoreCase)
+                ? WidgetsManager.Count(type) > 0
+                : WidgetsManager.Has(type);
             if (active) onDesktop++;
             _grid.Children.Add(Card(type, active));
         }
@@ -195,9 +197,12 @@ public sealed class WidgetGalleryWindow : Window
 
         if (active)
         {
+            string badge = string.Equals(type, "folder", StringComparison.OrdinalIgnoreCase)
+                ? $"НА СТОЛЕ: {WidgetsManager.Count(type)}"
+                : "НА СТОЛЕ";
             stack.Children.Add(new TextBlock
             {
-                Text = "НА СТОЛЕ",
+                Text = badge,
                 FontFamily = Display,
                 FontSize = 8,
                 FontWeight = FontWeights.SemiBold,
@@ -243,6 +248,13 @@ public sealed class WidgetGalleryWindow : Window
 
             if (!_dragging)
             {
+                if (string.Equals(type, "folder", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Папка — отдельный экземпляр с выбором пути (не toggle).
+                    WidgetsManager.OpenWidget(type);
+                    return;
+                }
+
                 // Клик: включить/выключить на столе.
                 WidgetsManager.Toggle(type);
                 return;
@@ -278,6 +290,14 @@ public sealed class WidgetGalleryWindow : Window
         var wa = SystemParameters.WorkArea;
         x = (int)Math.Clamp(x, wa.Left, wa.Right - 80);
         y = (int)Math.Clamp(y, wa.Top, wa.Bottom - 60);
+
+        if (string.Equals(type, "folder", StringComparison.OrdinalIgnoreCase))
+        {
+            // Для папки создаём новый экземпляр в указанной точке (с выбором пути).
+            WidgetsManager.OpenWidget(type, x, y);
+            Close();
+            return;
+        }
 
         WidgetsManager.Close(type); // если уже стоит — снимаем и ставим в новое место
         WidgetsManager.OpenWidget(type, x, y);
@@ -336,6 +356,8 @@ public sealed class WidgetGalleryWindow : Window
         "currency" => "\uE8C7",
         "tray" => "\uE7F4",
         "weather" => "\uE706",
+        "calendar" => "\uE787",
+        "folder" => "\uE8B7",
         _ => "\uE946",
     };
 
@@ -356,6 +378,8 @@ public sealed class WidgetGalleryWindow : Window
         "tray" => "значки из области уведомлений, вместо стрелки",
         "weather" => "температура и состояние, без ключей",
         "currency" => "доллар и юань к рублю, с графиком",
+        "calendar" => "календарь месяца на рабочем столе",
+        "folder" => "живая папка на рабочем столе: файлы, открытие, drag&drop",
         _ => string.Empty,
     };
 }

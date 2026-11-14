@@ -3,7 +3,8 @@ namespace DotShell.Core.Widgets;
 using System.Text.Json;
 using DotShell.Core.Settings;
 
-/// <summary>Один виджет на рабочем столе: тип, последнее положение и размер.
+/// <summary>Один виджет на рабочем столе: тип, последнее положение, размер и
+/// необязательный параметр (например, путь папки для «умной папки»).
 /// Нулевой размер означает «подгонять под содержимое», как было до 0.7.0.</summary>
 public sealed class WidgetSpec
 {
@@ -12,6 +13,9 @@ public sealed class WidgetSpec
     public int Y { get; set; } = -32000;
     public int W { get; set; }
     public int H { get; set; }
+
+    /// <summary>Дополнительные данные виджета. Для типа "folder" — путь к папке.</summary>
+    public string Path { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -39,19 +43,36 @@ public sealed class WidgetStore
 
     public bool Has(string type) => Find(type) is not null;
 
-    /// <summary>Добавить виджет, если его ещё нет; вернуть его spec.</summary>
-    public WidgetSpec Add(string type, int x, int y)
+    /// <summary>Добавить виджет, если его ещё нет; вернуть его spec.
+    /// Для виджетов, у которых может быть несколько экземпляров (например, папки),
+    /// уникальность определяется парой (Type, Path).</summary>
+    public WidgetSpec Add(string type, int x, int y, string path = "")
     {
         lock (_lock)
         {
-            var existing = Items.FirstOrDefault(i => i.Type == type);
+            var existing = string.Equals(type, "folder", StringComparison.OrdinalIgnoreCase)
+                ? Items.FirstOrDefault(i => i.Type == type && string.Equals(i.Path, path, StringComparison.OrdinalIgnoreCase))
+                : Items.FirstOrDefault(i => i.Type == type);
             if (existing is not null) return existing;
-            var spec = new WidgetSpec { Type = type, X = x, Y = y };
+
+            var spec = new WidgetSpec { Type = type, X = x, Y = y, Path = path ?? string.Empty };
             Items.Add(spec);
             Save();
             Changed?.Invoke();
             return spec;
         }
+    }
+
+    /// <summary>Обновить параметр Path (для папки-виджета).</summary>
+    public void UpdatePath(string type, string oldPath, string newPath)
+    {
+        lock (_lock)
+        {
+            var spec = Items.FirstOrDefault(i => i.Type == type && string.Equals(i.Path, oldPath, StringComparison.OrdinalIgnoreCase));
+            if (spec is null) return;
+            spec.Path = newPath ?? string.Empty;
+        }
+        Save();
     }
 
     /// <summary>Убрать весь сохранённый состав виджетов.</summary>
@@ -63,18 +84,24 @@ public sealed class WidgetStore
         Save();
     }
 
-    public void Remove(string type)
+    public void Remove(string type, string path = "")
     {
-        lock (_lock) Items.RemoveAll(i => i.Type == type);
+        lock (_lock)
+        {
+            if (string.Equals(type, "folder", StringComparison.OrdinalIgnoreCase))
+                Items.RemoveAll(i => i.Type == type && string.Equals(i.Path, path ?? string.Empty, StringComparison.OrdinalIgnoreCase));
+            else
+                Items.RemoveAll(i => i.Type == type);
+        }
         Save();
         Changed?.Invoke();
     }
 
-    public void UpdatePosition(string type, int x, int y)
+    public void UpdatePosition(string type, int x, int y, string path = "")
     {
         lock (_lock)
         {
-            var spec = Items.FirstOrDefault(i => i.Type == type);
+            var spec = FindSpec(type, path);
             if (spec is null) return;
             spec.X = x;
             spec.Y = y;
@@ -83,16 +110,23 @@ public sealed class WidgetStore
     }
 
     /// <summary>Виджет потянули за угол: запоминаем размер.</summary>
-    public void UpdateSize(string type, int width, int height)
+    public void UpdateSize(string type, int width, int height, string path = "")
     {
         lock (_lock)
         {
-            var spec = Items.FirstOrDefault(i => i.Type == type);
+            var spec = FindSpec(type, path);
             if (spec is null) return;
             spec.W = width;
             spec.H = height;
         }
         Save();
+    }
+
+    private WidgetSpec? FindSpec(string type, string path)
+    {
+        if (string.Equals(type, "folder", StringComparison.OrdinalIgnoreCase))
+            return Items.FirstOrDefault(i => i.Type == type && string.Equals(i.Path, path ?? string.Empty, StringComparison.OrdinalIgnoreCase));
+        return Items.FirstOrDefault(i => i.Type == type);
     }
 
     // ------------------------------------------------------------------
