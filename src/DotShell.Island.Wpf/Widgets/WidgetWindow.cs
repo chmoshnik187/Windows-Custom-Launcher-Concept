@@ -1301,6 +1301,12 @@ public sealed partial class WidgetWindow : Window
         bool cutPending = false;
         var changedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var dotByPath = new Dictionary<string, UIElement>(StringComparer.OrdinalIgnoreCase);
+        bool marqueeActive = false;
+        bool marqueePressed = false;
+        Point marqueeStart = new();
+        HashSet<string> marqueeSnapshot = new(StringComparer.OrdinalIgnoreCase);
+        ModifierKeys marqueeMods = ModifierKeys.None;
+        DispatcherTimer? marqueeAutoScroll = null;
         var prevSig = new Dictionary<string, (long size, long ticks)>(StringComparer.OrdinalIgnoreCase);
         string snapshotPath = string.Empty;
         bool haveSnapshot = false;
@@ -1323,14 +1329,28 @@ public sealed partial class WidgetWindow : Window
             ToolTip = rootPath,
         };
 
-        var list = new StackPanel();
+        var list = new StackPanel { Background = Brushes.Transparent };
+        var marqueeRect = new System.Windows.Shapes.Rectangle
+        {
+            Stroke = new SolidColorBrush(Color.FromArgb(0xA0, 0xFF, 0xFF, 0xFF)),
+            StrokeThickness = 1,
+            Fill = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
+            Visibility = Visibility.Collapsed,
+            IsHitTestVisible = false,
+        };
+        var marqueeCanvas = new Canvas { IsHitTestVisible = false };
+        marqueeCanvas.Children.Add(marqueeRect);
+        var listHost = new Grid { Background = Brushes.Transparent };
+        listHost.Children.Add(list);
+        listHost.Children.Add(marqueeCanvas);
         var scroll = new ScrollViewer
         {
-            Content = list,
+            Content = listHost,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Margin = new Thickness(0, 6, 0, 0),
             Focusable = true,
+            Background = Brushes.Transparent,
         };
 
         // Панель быстрого предпросмотра (Quick Look-идея, адаптированная под компактный виджет).
@@ -2934,6 +2954,176 @@ public sealed partial class WidgetWindow : Window
 
         PreviewDragOver += OnDragOver;
         PreviewDrop += OnDrop;
+
+        bool IsOnRow(DependencyObject? src)
+        {
+            while (src is not null)
+            {
+                if (ReferenceEquals(src, scroll) || ReferenceEquals(src, listHost)) break;
+                if (src is FrameworkElement fe && fe.Tag is string tag && !string.IsNullOrEmpty(tag) && rowByPath.ContainsKey(tag))
+                    return true;
+                src = VisualTreeHelper.GetParent(src);
+            }
+            return false;
+        }
+
+        Rect MarqueeBounds(Point a, Point b)
+        {
+            double x = Math.Min(a.X, b.X);
+            double y = Math.Min(a.Y, b.Y);
+            return new Rect(x, y, Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
+        }
+
+        void ApplyMarqueeSelection(Rect rect)
+        {
+            var hit = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in rowByPath)
+            {
+                try
+                {
+                    if (!kv.Value.IsVisible) continue;
+                    var p = kv.Value.TranslatePoint(new Point(0, 0), list);
+                    var r = new Rect(p, kv.Value.RenderSize);
+                    if (r.IntersectsWith(rect)) hit.Add(kv.Key);
+                }
+                catch { }
+            }
+
+            if (marqueeMods.HasFlag(ModifierKeys.Control))
+            {
+                selected.Clear();
+                foreach (var p in marqueeSnapshot) selected.Add(p);
+                foreach (var p in hit)
+                {
+                    if (!selected.Remove(p)) selected.Add(p);
+                }
+            }
+            else if (marqueeMods.HasFlag(ModifierKeys.Shift))
+            {
+                selected.Clear();
+                foreach (var p in marqueeSnapshot) selected.Add(p);
+                foreach (var p in hit) selected.Add(p);
+            }
+            else
+            {
+                selected.Clear();
+                foreach (var p in hit) selected.Add(p);
+            }
+            RefreshSelectionVisuals();
+        }
+
+        void EndMarquee(bool cancel)
+        {
+            if (marqueeAutoScroll is not null) { marqueeAutoScroll.Stop(); marqueeAutoScroll = null; }
+            if (!marqueePressed && !marqueeActive) return;
+            marqueePressed = false;
+            if (marqueeActive)
+            {
+                marqueeActive = false;
+                marqueeRect.Visibility = Visibility.Collapsed;
+                if (cancel)
+                {
+                    selected.Clear();
+                    foreach (var p in marqueeSnapshot) selected.Add(p);
+                    RefreshSelectionVisuals();
+                }
+            }
+            try { scroll.ReleaseMouseCapture(); } catch { }
+        }
+
+        scroll.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (missing || fileOpRunning) return;
+            if (IsOnRow(e.OriginalSource as DependencyObject)) return;
+            marqueePressed = true;
+            marqueeActive = false;
+            marqueeMods = Keyboard.Modifiers;
+            marqueeSnapshot = new HashSet<string>(selected, StringComparer.OrdinalIgnoreCase);
+            marqueeStart = e.GetPosition(list);
+            scroll.Focus();
+            scroll.CaptureMouse();
+        };
+
+        scroll.PreviewMouseMove += (_, e) =>
+        {
+            if (!marqueePressed || e.LeftButton != MouseButtonState.Pressed) return;
+            Point cur = e.GetPosition(list);
+            Vector d = cur - marqueeStart;
+            if (!marqueeActive)
+            {
+                if (Math.Abs(d.X) < SystemParameters.MinimumHorizontalDragDistance && Math.Abs(d.Y) < SystemParameters.MinimumVerticalDragDistance)
+                    return;
+                marqueeActive = true;
+                marqueeRect.Visibility = Visibility.Visible;
+            }
+
+            Point inScroll = e.GetPosition(scroll);
+            double edge = 24;
+            double dy = 0;
+            if (inScroll.Y < edge) dy = -Math.Max(2, (edge - inScroll.Y) * 0.4);
+            else if (inScroll.Y > scroll.ViewportHeight - edge) dy = Math.Max(2, (inScroll.Y - (scroll.ViewportHeight - edge)) * 0.4);
+            if (Math.Abs(dy) > 0.1)
+            {
+                scroll.ScrollToVerticalOffset(Math.Max(0, Math.Min(scroll.ScrollableHeight, scroll.VerticalOffset + dy)));
+                cur = e.GetPosition(list);
+            }
+
+            var rect = MarqueeBounds(marqueeStart, cur);
+            Canvas.SetLeft(marqueeRect, rect.X);
+            Canvas.SetTop(marqueeRect, rect.Y);
+            marqueeRect.Width = rect.Width;
+            marqueeRect.Height = rect.Height;
+            ApplyMarqueeSelection(rect);
+            e.Handled = true;
+        };
+
+        void MarqueeAutoTick(object? s2, EventArgs e2)
+        {
+            if (!marqueeActive || Mouse.LeftButton != MouseButtonState.Pressed) { EndMarquee(false); return; }
+            try
+            {
+                Point ms = Mouse.GetPosition(scroll);
+                double edge2 = 24; double dy2 = 0;
+                if (ms.Y < edge2) dy2 = -Math.Max(2, (edge2 - ms.Y) * 0.4);
+                else if (ms.Y > scroll.ViewportHeight - edge2) dy2 = Math.Max(2, (ms.Y - (scroll.ViewportHeight - edge2)) * 0.4);
+                if (Math.Abs(dy2) > 0.1)
+                {
+                    scroll.ScrollToVerticalOffset(Math.Max(0, Math.Min(scroll.ScrollableHeight, scroll.VerticalOffset + dy2)));
+                    Point cur2 = Mouse.GetPosition(list);
+                    var r2 = MarqueeBounds(marqueeStart, cur2);
+                    Canvas.SetLeft(marqueeRect, r2.X);
+                    Canvas.SetTop(marqueeRect, r2.Y);
+                    marqueeRect.Width = r2.Width;
+                    marqueeRect.Height = r2.Height;
+                    ApplyMarqueeSelection(r2);
+                }
+            }
+            catch { }
+        }
+        marqueeAutoScroll = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(30) };
+        marqueeAutoScroll.Tick += MarqueeAutoTick;
+
+        scroll.PreviewMouseLeftButtonUp += (_, e) =>
+        {
+            if (!marqueePressed) return;
+            bool wasActive = marqueeActive;
+            EndMarquee(false);
+            if (wasActive)
+            {
+                e.Handled = true;
+            }
+            else
+            {
+                if (!marqueeMods.HasFlag(ModifierKeys.Control) && !marqueeMods.HasFlag(ModifierKeys.Shift))
+                {
+                    selected.Clear();
+                    RefreshSelectionVisuals();
+                    ClearPreview();
+                }
+            }
+        };
+
+        scroll.LostMouseCapture += (_, _) => EndMarquee(true);
 
         Timer(5000, Rebuild);
 
