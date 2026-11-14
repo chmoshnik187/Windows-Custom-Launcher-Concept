@@ -224,10 +224,17 @@ public partial class IslandWindow : Window
         // включался только после первого раскрытия острова.
         _tickTimer.Tick += (_, _) =>
         {
-            _vm.Tick();
-            RefreshGroupDots();
-            UpdateQuietMode();
-            UpdateMiniEq();
+            try
+            {
+                _vm.Tick();
+                RefreshGroupDots();
+                UpdateQuietMode();
+                UpdateMiniEq();
+            }
+            catch (Exception ex)
+            {
+                Log.Info($"island tick failed: {ex.Message}");
+            }
         };
 
         // Страховка от "остров пропал": периодически возвращаем себя наверх

@@ -68,9 +68,13 @@ public static class FocusBlinders
         _window.Show();
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
-        _timer.Tick += (_, _) => UpdateHole();
+        _timer.Tick += (_, _) =>
+        {
+            try { UpdateHole(); }
+            catch (Exception ex) { Log.Info($"focus-blinders: update failed — {ex.Message}"); }
+        };
         _timer.Start();
-        UpdateHole();
+        try { UpdateHole(); } catch (Exception ex) { Log.Info($"focus-blinders: initial update failed — {ex.Message}"); }
     }
 
     public static void Hide()

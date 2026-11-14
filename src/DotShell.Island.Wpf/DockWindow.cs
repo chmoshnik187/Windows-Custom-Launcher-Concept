@@ -182,7 +182,11 @@ public sealed class DockWindow : Window
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
 
         _tick = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-        _tick.Tick += (_, _) => RefreshRunning();
+        _tick.Tick += (_, _) =>
+        {
+            try { RefreshRunning(); }
+            catch (Exception ex) { Log.Info($"dock: tick failed — {ex.Message}"); }
+        };
         _tick.Start();
 
         _hideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };

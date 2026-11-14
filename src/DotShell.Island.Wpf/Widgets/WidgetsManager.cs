@@ -1,6 +1,7 @@
 namespace DotShell.Island.Wpf.Widgets;
 
 using System.Windows;
+using DotShell.Core;
 using DotShell.Core.Widgets;
 
 /// <summary>
@@ -120,7 +121,8 @@ public static class WidgetsManager
     {
         foreach (var window in Open.Values.ToList())
         {
-            try { window.Reload(); } catch { }
+            try { window.Reload(); }
+            catch (Exception ex) { Log.Info($"widgets: reload failed ({window.WidgetType}) — {ex.Message}"); }
         }
     }
     public static void Close(string type)
@@ -154,7 +156,8 @@ public static class WidgetsManager
     {
         foreach (var window in Open.Values.ToList())
         {
-            try { window.Close(); } catch { }
+            try { window.Close(); }
+            catch (Exception ex) { Log.Info($"widgets: close failed ({window.WidgetType}) — {ex.Message}"); }
         }
 
         Open.Clear();

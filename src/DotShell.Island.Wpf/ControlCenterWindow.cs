@@ -297,9 +297,13 @@ public sealed class ControlCenterWindow : Window
         Content = new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
 
         _statsTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
-        _statsTimer.Tick += (_, _) => RefreshStats();
+        _statsTimer.Tick += (_, _) =>
+        {
+            try { RefreshStats(); }
+            catch (Exception ex) { Log.Info($"control-center: tick failed — {ex.Message}"); }
+        };
         _statsTimer.Start();
-        RefreshStats();
+        try { RefreshStats(); } catch (Exception ex) { Log.Info($"control-center: initial refresh failed — {ex.Message}"); }
 
         KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
 
@@ -451,34 +455,41 @@ public sealed class ControlCenterWindow : Window
 
     private async Task RefreshRadiosAsync()
     {
-        var state = await DotShell.Core.Network.RadioControl.GetAsync();
-
-        if (_wifiRadioLabel is not null)
+        try
         {
-            _wifiRadioLabel.Text = state.Available
-                ? (state.WifiOn ? "WI-FI · ВКЛ" : "WI-FI · ВЫКЛ")
-                : "WI-FI · НЕТ";
+            var state = await DotShell.Core.Network.RadioControl.GetAsync();
 
-            _wifiRadioLabel.Foreground = new SolidColorBrush(
-                state is { Available: true, WifiOn: true }
-                    ? ColorPalette.Accent
-                    : Color.FromRgb(0x8A, 0x8A, 0x93));
+            if (_wifiRadioLabel is not null)
+            {
+                _wifiRadioLabel.Text = state.Available
+                    ? (state.WifiOn ? "WI-FI · ВКЛ" : "WI-FI · ВЫКЛ")
+                    : "WI-FI · НЕТ";
+
+                _wifiRadioLabel.Foreground = new SolidColorBrush(
+                    state is { Available: true, WifiOn: true }
+                        ? ColorPalette.Accent
+                        : Color.FromRgb(0x8A, 0x8A, 0x93));
+            }
+
+            if (_bluetoothRadioLabel is not null)
+            {
+                _bluetoothRadioLabel.Text = state.Available
+                    ? (state.BluetoothOn ? "BT · ВКЛ" : "BT · ВЫКЛ")
+                    : "BT · НЕТ";
+
+                _bluetoothRadioLabel.Foreground = new SolidColorBrush(
+                    state is { Available: true, BluetoothOn: true }
+                        ? ColorPalette.Accent
+                        : Color.FromRgb(0x8A, 0x8A, 0x93));
+            }
+
+            if (!state.Available && _wifiLine is not null && !string.IsNullOrEmpty(state.Note))
+                _wifiLine.Text += $" · радио: {state.Note}";
         }
-
-        if (_bluetoothRadioLabel is not null)
+        catch (Exception ex)
         {
-            _bluetoothRadioLabel.Text = state.Available
-                ? (state.BluetoothOn ? "BT · ВКЛ" : "BT · ВЫКЛ")
-                : "BT · НЕТ";
-
-            _bluetoothRadioLabel.Foreground = new SolidColorBrush(
-                state is { Available: true, BluetoothOn: true }
-                    ? ColorPalette.Accent
-                    : Color.FromRgb(0x8A, 0x8A, 0x93));
+            Log.Info($"control-center: radio refresh failed — {ex.Message}");
         }
-
-        if (!state.Available && _wifiLine is not null && !string.IsNullOrEmpty(state.Note))
-            _wifiLine.Text += $" · радио: {state.Note}";
     }
 
     private async Task ToggleRadioAsync(Windows.Devices.Radios.RadioKind kind)

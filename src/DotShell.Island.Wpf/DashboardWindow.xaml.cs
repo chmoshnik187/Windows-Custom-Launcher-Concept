@@ -76,11 +76,18 @@ public partial class DashboardWindow : Window
         _tick = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _tick.Tick += (_, _) =>
         {
-            RefreshClock();
-            RefreshStats();
-            RefreshMedia();
+            try
+            {
+                RefreshClock();
+                RefreshStats();
+                RefreshMedia();
 
-            if (DateTime.Now - _lastWeather > TimeSpan.FromMinutes(10)) _ = RefreshWeatherAsync();
+                if (DateTime.Now - _lastWeather > TimeSpan.FromMinutes(10)) _ = RefreshWeatherAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Info($"dashboard: tick failed — {ex.Message}");
+            }
         };
         _tick.Start();
 
