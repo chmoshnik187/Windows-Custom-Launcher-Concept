@@ -141,8 +141,12 @@ public partial class IslandWindow
         var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
         timer.Tick += (_, _) =>
         {
-            timer.Stop();
-            if (_docked && _peeked && !_isExpanded && !RootGrid.IsMouseOver) PeekOut();
+            try
+            {
+                timer.Stop();
+                if (_docked && _peeked && !_isExpanded && !RootGrid.IsMouseOver) PeekOut();
+            }
+            catch (Exception ex) { Log.Info($"island dock peek-out failed: {ex.Message}"); }
         };
         timer.Start();
     }

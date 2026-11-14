@@ -105,7 +105,11 @@ public partial class IslandWindow
             {
                 Interval = TimeSpan.FromSeconds(seconds),
             };
-            _noticeTimer.Tick += (_, _) => HideNotification();
+            _noticeTimer.Tick += (_, _) =>
+            {
+                try { HideNotification(); }
+                catch (Exception ex) { Log.Info($"notice timer hide failed: {ex.Message}"); }
+            };
             _noticeTimer.Start();
 
             return true;

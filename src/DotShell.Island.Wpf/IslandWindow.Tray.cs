@@ -52,10 +52,18 @@ public partial class IslandWindow
         var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
         timer.Tick += (_, _) =>
         {
-            timer.Stop();
-            bool ok = DotShell.Core.Native.ExplorerRestart.Restart();
-            Log.Info($"explorer restart: {ok}");
-            _vm.StatusLine = ok ? "проводник перезапущен" : "не удалось перезапустить проводник";
+            try
+            {
+                timer.Stop();
+                bool ok = DotShell.Core.Native.ExplorerRestart.Restart();
+                Log.Info($"explorer restart: {ok}");
+                _vm.StatusLine = ok ? "проводник перезапущен" : "не удалось перезапустить проводник";
+            }
+            catch (Exception ex)
+            {
+                Log.Info($"explorer restart failed: {ex.Message}");
+                _vm.StatusLine = "не удалось перезапустить проводник";
+            }
         };
         timer.Start();
     }

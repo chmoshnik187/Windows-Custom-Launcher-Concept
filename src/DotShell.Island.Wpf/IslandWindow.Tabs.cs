@@ -175,18 +175,22 @@ public partial class IslandWindow
         };
         guard.Tick += (_, _) =>
         {
-            guard.Stop();
-
-            foreach (var tab in all)
+            try
             {
-                if (ReferenceEquals(tab, _visibleTab)) continue;
-                if (tab.Visibility != Visibility.Visible) continue;
+                guard.Stop();
 
-                tab.BeginAnimation(OpacityProperty, null);
-                tab.Opacity = 1;
-                tab.Visibility = Visibility.Collapsed;
-                tab.IsHitTestVisible = true;
+                foreach (var tab in all)
+                {
+                    if (ReferenceEquals(tab, _visibleTab)) continue;
+                    if (tab.Visibility != Visibility.Visible) continue;
+
+                    tab.BeginAnimation(OpacityProperty, null);
+                    tab.Opacity = 1;
+                    tab.Visibility = Visibility.Collapsed;
+                    tab.IsHitTestVisible = true;
+                }
             }
+            catch (Exception ex) { Log.Info($"tab switch guard failed: {ex.Message}"); }
         };
         guard.Start();
 

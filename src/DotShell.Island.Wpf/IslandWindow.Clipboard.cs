@@ -66,13 +66,17 @@ public partial class IslandWindow
         var pasteTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
         pasteTimer.Tick += (_, _) =>
         {
-            pasteTimer.Stop();
             try
             {
-                Win32.SetForegroundWindow(target);
-                SendKeys.Paste();
+                pasteTimer.Stop();
+                try
+                {
+                    Win32.SetForegroundWindow(target);
+                    SendKeys.Paste();
+                }
+                catch (Exception ex) { Log.Info($"paste-back failed: {ex.Message}"); }
             }
-            catch (Exception ex) { Log.Info($"paste-back failed: {ex.Message}"); }
+            catch (Exception ex) { Log.Info($"clipboard paste timer failed: {ex.Message}"); }
         };
         pasteTimer.Start();
     }
