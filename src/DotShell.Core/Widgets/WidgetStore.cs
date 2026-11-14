@@ -6,6 +6,23 @@ using DotShell.Core.Settings;
 /// <summary>Один виджет на рабочем столе: тип, последнее положение, размер и
 /// необязательный параметр (например, путь папки для «умной папки»).
 /// Нулевой размер означает «подгонять под содержимое», как было до 0.7.0.</summary>
+/// <summary>Конфигурация живой подборки/упрощённых правил для виджета «Умная папка» (MVP).</summary>
+public sealed class FolderCollectionSpec
+{
+    public bool Enabled { get; set; }
+    public string Preset { get; set; } = string.Empty;
+    public string Scope { get; set; } = string.Empty;
+    public bool Recursive { get; set; }
+    /// <summary>Классы: image, video, audio, doc, pdf, archive или расширения (".png"). Пусто — все.</summary>
+    public List<string> Kinds { get; set; } = new();
+    public string NameContains { get; set; } = string.Empty;
+    /// <summary>Изменён за последние N дней. 0 — без фильтра.</summary>
+    public int WithinDays { get; set; }
+    /// <summary>Минимальный размер в МБ. 0 — без фильтра.</summary>
+    public int MinSizeMb { get; set; }
+    public int Limit { get; set; } = 50;
+}
+
 public sealed class WidgetSpec
 {
     public string Type { get; set; } = string.Empty;
@@ -19,6 +36,9 @@ public sealed class WidgetSpec
 
     /// <summary>Закреплённые элементы (полные пути) внутри виджета-папки.</summary>
     public List<string> PinnedPaths { get; set; } = new();
+
+    /// <summary>Живая подборка/правила (опционально, для folder).</summary>
+    public FolderCollectionSpec? Collection { get; set; }
 }
 
 /// <summary>
@@ -136,6 +156,18 @@ public sealed class WidgetStore
                 .Where(p => !string.IsNullOrWhiteSpace(p))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList() ?? new List<string>();
+        }
+        Save();
+    }
+
+    /// <summary>Сохранить конфигурацию живой подборки folder-виджета.</summary>
+    public void UpdateCollection(string type, string path, FolderCollectionSpec? collection)
+    {
+        lock (_lock)
+        {
+            var spec = FindSpec(type, path);
+            if (spec is null) return;
+            spec.Collection = collection;
         }
         Save();
     }

@@ -144,7 +144,9 @@ public static class WidgetsManager
         var saved = Store.Add(type, x, y, path);
         var window = new WidgetWindow(type, x, y, width, height, path,
             saved.PinnedPaths,
-            pins => Store.UpdatePinnedPaths(type, path, pins));
+            pins => Store.UpdatePinnedPaths(type, path, pins),
+            saved.Collection,
+            col => Store.UpdateCollection(type, path, col));
         var key = Key(type, path);
         Open[key] = window;
         window.Closed += (_, _) => Open.Remove(key);

@@ -39,18 +39,24 @@ public sealed partial class WidgetWindow : Window
     private readonly List<DispatcherTimer> _timers = new();
     private readonly Action<IReadOnlyList<string>>? _savePinned;
     private readonly IReadOnlyList<string> _initialPinned;
+    private readonly Action<DotShell.Core.Widgets.FolderCollectionSpec?>? _saveCollection;
+    private readonly DotShell.Core.Widgets.FolderCollectionSpec? _initialCollection;
 
     public string WidgetType => _type;
     public string WidgetPath => _path;
 
     public WidgetWindow(string type, int x, int y, int width = 0, int height = 0, string path = "",
-        IEnumerable<string>? initialPinned = null, Action<IReadOnlyList<string>>? savePinned = null)
+        IEnumerable<string>? initialPinned = null, Action<IReadOnlyList<string>>? savePinned = null,
+        DotShell.Core.Widgets.FolderCollectionSpec? initialCollection = null,
+        Action<DotShell.Core.Widgets.FolderCollectionSpec?>? saveCollection = null)
     {
         _type = type;
         _path = path ?? string.Empty;
         _savePinned = savePinned;
         _initialPinned = initialPinned?.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
             ?? (IReadOnlyList<string>)Array.Empty<string>();
+        _initialCollection = initialCollection;
+        _saveCollection = saveCollection;
         Title = "DotShell widget";
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
@@ -1307,6 +1313,21 @@ public sealed partial class WidgetWindow : Window
         HashSet<string> marqueeSnapshot = new(StringComparer.OrdinalIgnoreCase);
         ModifierKeys marqueeMods = ModifierKeys.None;
         DispatcherTimer? marqueeAutoScroll = null;
+
+        var collection = _initialCollection is null ? null : new DotShell.Core.Widgets.FolderCollectionSpec
+        {
+            Enabled = _initialCollection.Enabled,
+            Preset = _initialCollection.Preset ?? string.Empty,
+            Scope = _initialCollection.Scope ?? string.Empty,
+            Recursive = _initialCollection.Recursive,
+            Kinds = _initialCollection.Kinds?.ToList() ?? new List<string>(),
+            NameContains = _initialCollection.NameContains ?? string.Empty,
+            WithinDays = _initialCollection.WithinDays,
+            MinSizeMb = _initialCollection.MinSizeMb,
+            Limit = _initialCollection.Limit > 0 ? _initialCollection.Limit : 50,
+        };
+        void SaveCollection() => _saveCollection?.Invoke(collection);
+        bool CollectionActive() => collection is { Enabled: true };
         var prevSig = new Dictionary<string, (long size, long ticks)>(StringComparer.OrdinalIgnoreCase);
         string snapshotPath = string.Empty;
         bool haveSnapshot = false;
@@ -2125,6 +2146,97 @@ public sealed partial class WidgetWindow : Window
                 }
 
                 missing = false;
+
+                if (CollectionActive() && collection is not null)
+                {
+                    string scope = !string.IsNullOrWhiteSpace(collection.Scope) ? collection.Scope : rootPath;
+                    if (string.IsNullOrWhiteSpace(scope) || !Directory.Exists(scope)) scope = rootPath;
+                    if (!Directory.Exists(scope))
+                    {
+                        list.Children.Add(new TextBlock { Text = "Источник подборки недоступен.", FontFamily = new FontFamily("Segoe UI"), FontSize = 11, Foreground = ResBrush("DsTextMuted"), Margin = new Thickness(4, 8, 4, 4) });
+                        subtitle.Text = "Подборка: источник недоступен";
+                        return;
+                    }
+
+                    bool KindMatch(string ext)
+                    {
+                        if (collection.Kinds is null || collection.Kinds.Count == 0) return true;
+                        ext = (ext ?? string.Empty).ToLowerInvariant();
+                        foreach (var k in collection.Kinds)
+                        {
+                            var kk = (k ?? string.Empty).Trim().ToLowerInvariant();
+                            if (string.IsNullOrEmpty(kk)) continue;
+                            if (kk.StartsWith(".")) { if (ext == kk) return true; continue; }
+                            bool isImage = ext is ".png" or ".jpg" or ".jpeg" or ".bmp" or ".gif" or ".webp" or ".svg" or ".ico" or ".heic";
+                            bool isDoc = ext is ".doc" or ".docx" or ".xls" or ".xlsx" or ".ppt" or ".pptx" or ".txt" or ".md" or ".rtf" or ".csv";
+                            bool isPdf = ext == ".pdf";
+                            bool isArchive = ext is ".zip" or ".rar" or ".7z" or ".tar" or ".gz";
+                            bool isVideo = ext is ".mp4" or ".mkv" or ".avi" or ".mov" or ".wmv" or ".webm";
+                            bool isAudio = ext is ".mp3" or ".wav" or ".flac" or ".m4a" or ".ogg" or ".aac";
+                            if (kk == "image" && isImage) return true;
+                            if (kk == "doc" && isDoc) return true;
+                            if (kk == "pdf" && isPdf) return true;
+                            if (kk == "archive" && isArchive) return true;
+                            if (kk == "video" && isVideo) return true;
+                            if (kk == "audio" && isAudio) return true;
+                        }
+                        return false;
+                    }
+
+                    var matched = new List<FileInfo>();
+                    try
+                    {
+                        var opt = new EnumerationOptions { RecurseSubdirectories = collection.Recursive, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.System };
+                        foreach (var fpath in Directory.EnumerateFiles(scope, "*", opt))
+                        {
+                            FileInfo fi;
+                            try { fi = new FileInfo(fpath); } catch { continue; }
+                            if (!string.IsNullOrWhiteSpace(collection.NameContains) && fi.Name.IndexOf(collection.NameContains, StringComparison.CurrentCultureIgnoreCase) < 0) continue;
+                            if (!KindMatch(fi.Extension)) continue;
+                            if (collection.WithinDays > 0 && fi.LastWriteTime < DateTime.Now.AddDays(-collection.WithinDays)) continue;
+                            if (collection.MinSizeMb > 0 && fi.Length < (long)collection.MinSizeMb * 1024L * 1024L) continue;
+                            matched.Add(fi);
+                            if (matched.Count > 2000) break; // safety cap
+                        }
+                    }
+                    catch (Exception ex) { Log.Info($"folder widget: collection enum failed — {ex.Message}"); }
+
+                    matched = matched.OrderByDescending(f => f.LastWriteTimeUtc).Take(Math.Max(1, collection.Limit)).ToList();
+                    visiblePaths.Clear();
+                    selected.RemoveWhere(p => !File.Exists(p));
+
+                    string chips = collection.Preset;
+                    var parts = new List<string>();
+                    if (!string.IsNullOrWhiteSpace(collection.Preset)) parts.Add(collection.Preset);
+                    if (collection.Recursive) parts.Add("с подпапками");
+                    if (collection.WithinDays > 0) parts.Add($"{collection.WithinDays} дн.");
+                    if (collection.Kinds.Count > 0) parts.Add(string.Join(",", collection.Kinds.Take(3)));
+                    if (collection.MinSizeMb > 0) parts.Add($">{collection.MinSizeMb} МБ");
+                    if (!string.IsNullOrWhiteSpace(collection.NameContains)) parts.Add($"«{collection.NameContains}»");
+                    chips = parts.Count > 0 ? string.Join(" · ", parts) : "Подборка";
+                    title.Text = "ПОДБОРКА";
+                    subtitle.Text = $"{chips} — {matched.Count} объект(ов) · {scope}";
+                    subtitle.ToolTip = scope;
+
+                    foreach (var fi in matched)
+                        list.Children.Add(Row(fi.FullName, false));
+
+                    if (matched.Count == 0)
+                    {
+                        list.Children.Add(new TextBlock
+                        {
+                            Text = "Ничего не найдено по текущим правилам. Попробуйте ослабить фильтры или выбрать другой пресет.",
+                            FontFamily = new FontFamily("Segoe UI"),
+                            FontSize = 11,
+                            Foreground = ResBrush("DsTextMuted"),
+                            TextWrapping = TextWrapping.Wrap,
+                            Margin = new Thickness(4, 8, 4, 4),
+                        });
+                    }
+                    RefreshSelectionVisuals();
+                    return;
+                }
+
                 var dirInfos = new DirectoryInfo(currentPath).EnumerateDirectories().ToList();
                 var fileInfos = new DirectoryInfo(currentPath).EnumerateFiles().ToList();
 
@@ -2373,6 +2485,51 @@ public sealed partial class WidgetWindow : Window
         groupBtn.Click += (_, _) => { groupMode = (groupMode + 1) % 3; collapsedGroups.Clear(); Rebuild(); };
 
 
+        var collBtn = WBtn("⚡", "Живая подборка / правила");
+        collBtn.Padding = new Thickness(6, 2, 6, 2);
+        collBtn.Margin = new Thickness(4, 0, 0, 0);
+        collBtn.Click += (_, _) =>
+        {
+            collection ??= new DotShell.Core.Widgets.FolderCollectionSpec();
+            var cm = new ContextMenu();
+            void SaveAndRefresh() { SaveCollection(); Rebuild(); }
+            MenuItem MI(string header, Action action)
+            {
+                var m = new MenuItem { Header = header };
+                m.Click += (_, _) => { action(); SaveAndRefresh(); };
+                return m;
+            }
+            void ApplyPreset(string name, Action<DotShell.Core.Widgets.FolderCollectionSpec> cfg)
+            {
+                collection ??= new DotShell.Core.Widgets.FolderCollectionSpec();
+                collection.Enabled = true;
+                collection.Preset = name;
+                collection.Scope = string.IsNullOrWhiteSpace(collection.Scope) ? rootPath : collection.Scope;
+                collection.Kinds.Clear();
+                collection.NameContains = string.Empty;
+                collection.WithinDays = 0;
+                collection.MinSizeMb = 0;
+                collection.Recursive = collection.Recursive;
+                collection.Limit = 50;
+                cfg(collection);
+            }
+            cm.Items.Add(MI(collection.Enabled ? "✓ Выключить подборку" : "Включить подборку", () => { collection.Enabled = !collection.Enabled; }));
+            cm.Items.Add(new Separator());
+            cm.Items.Add(MI("Недавние (7 дней)", () => ApplyPreset("Недавние (7 дней)", c => { c.WithinDays = 7; c.Recursive = true; c.Limit = 60; })));
+            cm.Items.Add(MI("Изображения (30 дней)", () => ApplyPreset("Изображения (30 дней)", c => { c.WithinDays = 30; c.Recursive = true; c.Kinds.Add("image"); c.Limit = 80; })));
+            cm.Items.Add(MI("Документы (30 дней)", () => ApplyPreset("Документы (30 дней)", c => { c.WithinDays = 30; c.Recursive = true; c.Kinds.AddRange(new[]{"doc","pdf"}); c.Limit = 80; })));
+            cm.Items.Add(MI("PDF (30 дней)", () => ApplyPreset("PDF (30 дней)", c => { c.WithinDays = 30; c.Recursive = true; c.Kinds.Add("pdf"); c.Limit = 80; })));
+            cm.Items.Add(MI("Крупные (>100 МБ)", () => ApplyPreset("Крупные (>100 МБ)", c => { c.MinSizeMb = 100; c.Recursive = true; c.Limit = 60; })));
+            cm.Items.Add(MI("Архивы (30 дней)", () => ApplyPreset("Архивы (30 дней)", c => { c.WithinDays = 30; c.Recursive = true; c.Kinds.Add("archive"); c.Limit = 80; })));
+            cm.Items.Add(new Separator());
+            var rec = new MenuItem { Header = "Искать в подпапках", IsCheckable = true, IsChecked = collection.Recursive };
+            rec.Click += (_, _) => { collection.Recursive = !collection.Recursive; SaveAndRefresh(); };
+            cm.Items.Add(rec);
+            cm.Items.Add(MI("Сбросить (обычная папка)", () => { collection.Enabled = false; collection.Preset = string.Empty; collection.Kinds.Clear(); collection.NameContains = string.Empty; collection.WithinDays = 0; collection.MinSizeMb = 0; collection.Scope = string.Empty; }));
+            cm.PlacementTarget = collBtn;
+            cm.IsOpen = true;
+        };
+
         var newBtn = WBtn("+", "Создать папку");
         newBtn.Padding = new Thickness(6, 2, 6, 2);
         newBtn.Margin = new Thickness(4, 0, 0, 0);
@@ -2399,6 +2556,7 @@ public sealed partial class WidgetWindow : Window
         actions.Children.Add(openBtn);
         actions.Children.Add(sortBtn);
         actions.Children.Add(groupBtn);
+        actions.Children.Add(collBtn);
         actions.Children.Add(newBtn);
         actions.Children.Add(refreshBtn);
         Grid.SetColumn(actions, 1);
