@@ -1507,9 +1507,23 @@ public sealed partial class WidgetWindow : Window
 
         void MoveOrCopyInto(string sourcePath, string targetDir)
         {
-            string dest = System.IO.Path.Combine(targetDir, System.IO.Path.GetFileName(sourcePath));
+            if (string.IsNullOrWhiteSpace(sourcePath)) return;
+            string name = System.IO.Path.GetFileName(sourcePath);
+            string dest = System.IO.Path.Combine(targetDir, name);
             if (string.Equals(System.IO.Path.GetFullPath(sourcePath), System.IO.Path.GetFullPath(dest), StringComparison.OrdinalIgnoreCase))
                 return;
+
+            // Конфликт имён при drag&drop: безопасно сохраняем оба (автопереименование).
+            if (Directory.Exists(dest) || File.Exists(dest))
+            {
+                string baseName = System.IO.Path.GetFileNameWithoutExtension(name);
+                string ext = System.IO.Path.GetExtension(name);
+                for (int i = 2; i < 10000; i++)
+                {
+                    string candidate = System.IO.Path.Combine(targetDir, $"{baseName} ({i}){ext}");
+                    if (!File.Exists(candidate) && !Directory.Exists(candidate)) { dest = candidate; break; }
+                }
+            }
 
             try
             {
@@ -1519,12 +1533,12 @@ public sealed partial class WidgetWindow : Window
             }
             catch (IOException)
             {
-                // Между дисками Move не работает — пробуем копирование.
+                // Между дисками/томами Move не работает — пробуем копирование.
             }
             catch (Exception ex)
             {
                 Log.Info($"folder widget: move failed {sourcePath} — {ex.Message}");
-                throw;
+                return;
             }
 
             try
@@ -1894,6 +1908,112 @@ public sealed partial class WidgetWindow : Window
         container.Children.Add(previewPanel);
         container.Children.Add(scroll);
 
+        string UniqueDest(string dir, string name)
+        {
+            string dest = System.IO.Path.Combine(dir, name);
+            if (!File.Exists(dest) && !Directory.Exists(dest)) return dest;
+            string baseName = System.IO.Path.GetFileNameWithoutExtension(name);
+            string ext = System.IO.Path.GetExtension(name);
+            for (int i = 2; i < 10000; i++)
+            {
+                string candidate = System.IO.Path.Combine(dir, $"{baseName} ({i}){ext}");
+                if (!File.Exists(candidate) && !Directory.Exists(candidate)) return candidate;
+            }
+            return System.IO.Path.Combine(dir, $"{baseName} ({Guid.NewGuid():N}){ext}");
+        }
+
+        // 0=replace,1=skip,2=keep-both
+        int? conflictAll = null;
+        int AskConflict(string name)
+        {
+            if (conflictAll.HasValue) return conflictAll.Value;
+            try
+            {
+                var dialog = new Window
+                {
+                    Title = "Конфликт имён",
+                    Width = 460,
+                    SizeToContent = SizeToContent.Height,
+                    WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                    Owner = this,
+                    ResizeMode = ResizeMode.NoResize,
+                    WindowStyle = WindowStyle.ToolWindow,
+                    Background = ResBrush("DsBg"),
+                };
+                var root = new StackPanel { Margin = new Thickness(14) };
+                root.Children.Add(new TextBlock
+                {
+                    Text = $"«{name}» уже существует в папке назначения.",
+                    Foreground = ResBrush("DsText"),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 10),
+                });
+                var applyAll = new CheckBox { Content = "Применить ко всем оставшимся", Margin = new Thickness(0, 0, 0, 10), Foreground = ResBrush("DsTextMuted") };
+                root.Children.Add(applyAll);
+                var buttons = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
+                int choice = 1;
+                Button Mk(string text, int value, bool def = false)
+                {
+                    var b = new Button { Content = text, MinWidth = 110, Margin = new Thickness(6, 0, 0, 0), IsDefault = def };
+                    b.Click += (_, _) => { choice = value; if (applyAll.IsChecked == true) conflictAll = value; dialog.DialogResult = true; };
+                    return b;
+                }
+                buttons.Children.Add(Mk("Заменить", 0));
+                buttons.Children.Add(Mk("Пропустить", 1, true));
+                buttons.Children.Add(Mk("Сохранить оба", 2));
+                root.Children.Add(buttons);
+                dialog.Content = root;
+                dialog.ShowDialog();
+                return choice;
+            }
+            catch { return 1; }
+        }
+
+        void PasteIntoCurrent()
+        {
+            if (missing || !Directory.Exists(currentPath)) return;
+            if (!Clipboard.ContainsFileDropList()) return;
+            conflictAll = null;
+            try
+            {
+                var files = Clipboard.GetFileDropList();
+                foreach (var p in files)
+                {
+                    if (string.IsNullOrWhiteSpace(p)) continue;
+                    try
+                    {
+                        if (!File.Exists(p) && !Directory.Exists(p)) continue;
+                        bool isDirSrc = Directory.Exists(p);
+                        string name = System.IO.Path.GetFileName(p);
+                        string dest = System.IO.Path.Combine(currentPath, name);
+
+                        bool exists = isDirSrc ? Directory.Exists(dest) : File.Exists(dest);
+                        if (exists || (isDirSrc ? File.Exists(dest) : Directory.Exists(dest)))
+                        {
+                            int action = AskConflict(name);
+                            if (action == 1) continue; // skip
+                            if (action == 2) dest = UniqueDest(currentPath, name); // keep both
+                            if (action == 0)
+                            {
+                                try
+                                {
+                                    if (Directory.Exists(dest)) Directory.Delete(dest, true);
+                                    else if (File.Exists(dest)) File.Delete(dest);
+                                }
+                                catch (Exception ex) { Log.Info($"folder widget: replace delete failed {dest} — {ex.Message}"); continue; }
+                            }
+                        }
+
+                        if (isDirSrc) CopyDirectory(p, dest);
+                        else File.Copy(p, dest, overwrite: true);
+                    }
+                    catch (Exception ex) { Log.Info($"folder widget: paste failed {p} — {ex.Message}"); }
+                }
+            }
+            catch (Exception ex) { Log.Info($"folder widget: paste failed — {ex.Message}"); }
+            finally { Rebuild(); }
+        }
+
         var menu = new ContextMenu();
         var openRoot = new MenuItem { Header = "Открыть текущую папку" };
         openRoot.Click += (_, _) =>
@@ -1923,28 +2043,7 @@ public sealed partial class WidgetWindow : Window
         menu.Items.Add(newFolder);
 
         var paste = new MenuItem { Header = "Вставить" };
-        paste.Click += (_, _) =>
-        {
-            try
-            {
-                if (missing || !Directory.Exists(currentPath)) return;
-                if (!Clipboard.ContainsFileDropList()) return;
-                var files = Clipboard.GetFileDropList();
-                foreach (var p in files)
-                {
-                    if (string.IsNullOrWhiteSpace(p)) continue;
-                    try
-                    {
-                        string dest = System.IO.Path.Combine(currentPath, System.IO.Path.GetFileName(p));
-                        if (Directory.Exists(p)) CopyDirectory(p, dest);
-                        else if (File.Exists(p)) File.Copy(p, dest, overwrite: false);
-                    }
-                    catch (Exception ex) { Log.Info($"folder widget: paste failed {p} — {ex.Message}"); }
-                }
-            }
-            catch (Exception ex) { Log.Info($"folder widget: paste failed — {ex.Message}"); }
-            finally { Rebuild(); }
-        };
+        paste.Click += (_, _) => PasteIntoCurrent();
         menu.Items.Add(paste);
 
         menu.Items.Add(new Separator());
