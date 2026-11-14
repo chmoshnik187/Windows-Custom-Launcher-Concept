@@ -180,7 +180,11 @@ public sealed class GroupWindow : Window
         // Точки «работает»: раз в 3 секунды. Запуск и выход программы
         // случаются вне нашего окна, событий нет — только опрос.
         var watchdog = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-        watchdog.Tick += (_, _) => RefreshRunDots();
+        watchdog.Tick += (_, _) =>
+        {
+            try { RefreshRunDots(); }
+            catch (Exception ex) { Log.Info($"group window watchdog failed: {ex.Message}"); }
+        };
         watchdog.Start();
         Closed += (_, _) => watchdog.Stop();
     }

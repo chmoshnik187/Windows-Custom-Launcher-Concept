@@ -62,8 +62,12 @@ public partial class IslandWindow : Window
 
         timer.Tick += (_, _) =>
         {
-            timer.Stop();
-            if (_isExpanded && !IsMouseOver) Collapse();
+            try
+            {
+                timer.Stop();
+                if (_isExpanded && !IsMouseOver) Collapse();
+            }
+            catch (Exception ex) { Log.Info($"island auto-hide tick failed: {ex.Message}"); }
         };
 
         return timer;
@@ -241,7 +245,11 @@ public partial class IslandWindow : Window
         // topmost-стопки. Дёшево (один SetWindowPos), зато оверлеи и DWM-глюки
         // не способны спрятать шелл надолго.
         _topmostWatchdog = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
-        _topmostWatchdog.Tick += (_, _) => ReassertTopmost();
+        _topmostWatchdog.Tick += (_, _) =>
+        {
+            try { ReassertTopmost(); }
+            catch (Exception ex) { Log.Info($"island topmost watchdog failed: {ex.Message}"); }
+        };
 
         // Сохранённое устройство эквалайзера применяем сразу: иначе захват
         // останется на системном, и полоска будет молчать при музыке в наушниках.
@@ -361,11 +369,19 @@ public partial class IslandWindow : Window
         // Чат растёт ПОСЛЕ окончания анимации раскрытия: мерить viewport во время
         // анимации — значит получить ложную высоту.
         _growTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(360) };
-        _growTimer.Tick += (_, _) => { _growTimer.Stop(); GrowChat(); };
+        _growTimer.Tick += (_, _) =>
+        {
+            try { _growTimer.Stop(); GrowChat(); }
+            catch (Exception ex) { Log.Info($"island chat grow failed: {ex.Message}"); }
+        };
 
         // Громкость: ползунок на главной, чип при кручении колеса, внешние изменения
         _volChipTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1200) };
-        _volChipTimer.Tick += (_, _) => { _volChipTimer.Stop(); VolChip.Visibility = Visibility.Collapsed; };
+        _volChipTimer.Tick += (_, _) =>
+        {
+            try { _volChipTimer.Stop(); VolChip.Visibility = Visibility.Collapsed; }
+            catch (Exception ex) { Log.Info($"island volume chip hide failed: {ex.Message}"); }
+        };
         _services.Volume.Changed += () => Dispatcher.BeginInvoke(SyncVolumeUI);
         Pill.MouseWheel += OnPillWheel;
 
@@ -806,8 +822,12 @@ public partial class IslandWindow : Window
 
             timer.Tick += (_, _) =>
             {
-                timer.Stop();
-                NotificationHub.Show("DotShell", "Проверка уведомлений: режим из настроек.");
+                try
+                {
+                    timer.Stop();
+                    NotificationHub.Show("DotShell", "Проверка уведомлений: режим из настроек.");
+                }
+                catch (Exception ex) { Log.Info($"notify-test tick failed: {ex.Message}"); }
             };
 
             timer.Start();

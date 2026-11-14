@@ -80,7 +80,11 @@ public static class HotkeyHud
                 if (_hideTimer is null)
                 {
                     _hideTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-                    _hideTimer.Tick += (_, _) => { _hideTimer.Stop(); HideNow(); };
+                    _hideTimer.Tick += (_, _) =>
+                    {
+                        try { _hideTimer.Stop(); HideNow(); }
+                        catch (Exception ex) { Log.Info($"hotkey hud hide failed: {ex.Message}"); }
+                    };
                 }
                 _hideTimer.Stop();
                 _hideTimer.Start();
