@@ -1344,7 +1344,7 @@ public sealed partial class WidgetWindow : Window
         previewPanel.Children.Add(previewMeta);
         previewPanel.Children.Add(previewText);
 
-        var undoStack = new Stack<(string kind, string from, string to, bool isDir)>();
+        var undoStack = new Stack<(string message, List<(string kind, string from, string to, bool isDir)> actions)>();
         var undoText = new TextBlock
         {
             FontFamily = new FontFamily("Segoe UI"),
@@ -1397,13 +1397,100 @@ public sealed partial class WidgetWindow : Window
                 - (undoBar.Visibility == Visibility.Visible ? 28 : 0));
         }
 
-        void PushUndo(string kind, string from, string to, bool isDir, string message)
+        void PushUndoBatch(IEnumerable<(string kind, string from, string to, bool isDir)> actions, string message)
         {
             if (fileOpRunning) return;
-            undoStack.Push((kind, from, to, isDir));
+            var list = actions?.ToList() ?? new List<(string kind, string from, string to, bool isDir)>();
+            if (list.Count == 0) return;
+            undoStack.Push((message, list));
             SetFileOpUi(false, message);
         }
+
+        void PushUndo(string kind, string from, string to, bool isDir, string message)
+            => PushUndoBatch(new[] { (kind, from, to, isDir) }, message);
         Button?[] btnRefs = new Button?[2];
+        bool TryRestoreFromRecycleBin(IReadOnlyCollection<string> originalPaths)
+        {
+            if (originalPaths.Count == 0) return false;
+            try
+            {
+                var t = Type.GetTypeFromProgID("Shell.Application");
+                if (t is null) return false;
+                dynamic? shell = Activator.CreateInstance(t);
+                if (shell is null) return false;
+                dynamic? bin = shell.NameSpace(10);
+                if (bin is null) return false;
+
+                var wanted = new HashSet<string>(originalPaths, StringComparer.OrdinalIgnoreCase);
+                int restored = 0;
+
+                // Итерируем по снимку имён; восстановление меняет коллекцию.
+                var items = bin.Items();
+                int count = (int)items.Count;
+                for (int idx = 0; idx < count; idx++)
+                {
+                    if (wanted.Count == 0) break;
+                    dynamic? item = items.Item(idx);
+                    if (item is null) continue;
+                    string itemName = string.Empty;
+                    try { itemName = (string)(item.Name ?? string.Empty); } catch { }
+
+                    // Пытаемся сопоставить по имени файла с любым из запрошенных путей.
+                    string? match = wanted.FirstOrDefault(p => string.Equals(System.IO.Path.GetFileName(p), itemName, StringComparison.OrdinalIgnoreCase));
+                    // Если неоднозначно, пробуем уточнить через "Original Location" (детали корзины).
+                    if (match is not null)
+                    {
+                        try
+                        {
+                            string origLoc = (string)(bin.GetDetailsOf(item, 1) ?? string.Empty);
+                            if (!string.IsNullOrWhiteSpace(origLoc))
+                            {
+                                string candidate = System.IO.Path.Combine(origLoc, itemName);
+                                if (wanted.Contains(candidate)) match = candidate;
+                            }
+                        }
+                        catch { }
+                    }
+                    if (match is null) continue;
+
+                    try
+                    {
+                        dynamic verbs = item.Verbs();
+                        int vcount = (int)verbs.Count;
+                        bool done = false;
+                        for (int v = 0; v < vcount; v++)
+                        {
+                            dynamic verb = verbs.Item(v);
+                            string vname = string.Empty;
+                            try { vname = ((string)(verb.Name ?? string.Empty)).Replace("&", string.Empty).Trim(); } catch { }
+                            if (string.IsNullOrWhiteSpace(vname)) continue;
+                            // Локализованные варианты "Восстановить"/"Restore".
+                            if (vname.IndexOf("восстанов", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                vname.Equals("Restore", StringComparison.OrdinalIgnoreCase) ||
+                                vname.Equals("Undelete", StringComparison.OrdinalIgnoreCase) ||
+                                vname.IndexOf("undelete", StringComparison.OrdinalIgnoreCase) >= 0)
+                            {
+                                try { verb.DoIt(); restored++; wanted.Remove(match); done = true; } catch { }
+                                break;
+                            }
+                        }
+                        if (!done)
+                        {
+                            // Не нашли явный verb — пропускаем этот элемент.
+                        }
+                    }
+                    catch { }
+                }
+
+                return restored > 0 && wanted.Count < originalPaths.Count;
+            }
+            catch (Exception ex)
+            {
+                Log.Info($"folder widget: recycle restore failed — {ex.Message}");
+                return false;
+            }
+        }
+
         bool TryUndo()
         {
             if (fileOpRunning)
@@ -1413,31 +1500,83 @@ public sealed partial class WidgetWindow : Window
             }
             while (undoStack.Count > 0)
             {
-                var a = undoStack.Pop();
+                var batch = undoStack.Pop();
                 try
                 {
-                    if (a.kind == "move" || a.kind == "rename")
+                    if (batch.actions.Count == 1)
                     {
-                        // from -> to было сделано; отмена: to -> from
-                        if (string.Equals(System.IO.Path.GetFullPath(a.from), System.IO.Path.GetFullPath(a.to), StringComparison.OrdinalIgnoreCase))
-                            continue;
-                        if ((a.isDir && !Directory.Exists(a.to)) || (!a.isDir && !File.Exists(a.to)))
-                            continue;
-                        if (Directory.Exists(a.from) || File.Exists(a.from))
-                            continue;
-                        string? parent = System.IO.Path.GetDirectoryName(a.from);
-                        if (!string.IsNullOrWhiteSpace(parent)) Directory.CreateDirectory(parent);
-                        if (a.isDir) Directory.Move(a.to, a.from); else File.Move(a.to, a.from);
-                        SetFileOpUi(false, "Действие отменено");
-                        Rebuild();
-                        return true;
-                    }
-                    if (a.kind == "mkdir")
-                    {
-                        if (Directory.Exists(a.from) && !Directory.EnumerateFileSystemEntries(a.from).Any())
+                        var a = batch.actions[0];
+                        if (a.kind == "move" || a.kind == "rename")
                         {
-                            Directory.Delete(a.from);
-                            SetFileOpUi(false, "Папка удалена (отмена)");
+                            if (string.Equals(System.IO.Path.GetFullPath(a.from), System.IO.Path.GetFullPath(a.to), StringComparison.OrdinalIgnoreCase))
+                                continue;
+                            if ((a.isDir && !Directory.Exists(a.to)) || (!a.isDir && !File.Exists(a.to)))
+                                continue;
+                            if (Directory.Exists(a.from) || File.Exists(a.from))
+                                continue;
+                            string? parent = System.IO.Path.GetDirectoryName(a.from);
+                            if (!string.IsNullOrWhiteSpace(parent)) Directory.CreateDirectory(parent);
+                            if (a.isDir) Directory.Move(a.to, a.from); else File.Move(a.to, a.from);
+                            SetFileOpUi(false, "Действие отменено");
+                            Rebuild();
+                            return true;
+                        }
+                        if (a.kind == "mkdir")
+                        {
+                            if (Directory.Exists(a.from) && !Directory.EnumerateFileSystemEntries(a.from).Any())
+                            {
+                                Directory.Delete(a.from);
+                                SetFileOpUi(false, "Папка удалена (отмена)");
+                                Rebuild();
+                                return true;
+                            }
+                        }
+                        if (a.kind == "recycle")
+                        {
+                            bool ok = TryRestoreFromRecycleBin(new[] { a.from });
+                            SetFileOpUi(false, ok ? "Восстановлено из корзины" : "Не удалось восстановить");
+                            Rebuild();
+                            return ok;
+                        }
+                    }
+                    else
+                    {
+                        // Пакет: применяем отмену в обратном порядке.
+                        bool allOk = true;
+                        int undone = 0;
+                        for (int i = batch.actions.Count - 1; i >= 0; i--)
+                        {
+                            var a = batch.actions[i];
+                            try
+                            {
+                                if (a.kind == "move" || a.kind == "rename")
+                                {
+                                    if ((a.isDir && !Directory.Exists(a.to)) || (!a.isDir && !File.Exists(a.to))) { allOk = false; continue; }
+                                    if (Directory.Exists(a.from) || File.Exists(a.from)) { allOk = false; continue; }
+                                    string? parent = System.IO.Path.GetDirectoryName(a.from);
+                                    if (!string.IsNullOrWhiteSpace(parent)) Directory.CreateDirectory(parent);
+                                    if (a.isDir) Directory.Move(a.to, a.from); else File.Move(a.to, a.from);
+                                    undone++;
+                                }
+                                else if (a.kind == "mkdir")
+                                {
+                                    if (Directory.Exists(a.from) && !Directory.EnumerateFileSystemEntries(a.from).Any())
+                                    {
+                                        Directory.Delete(a.from);
+                                        undone++;
+                                    }
+                                    else allOk = false;
+                                }
+                                else if (a.kind == "recycle")
+                                {
+                                    if (TryRestoreFromRecycleBin(new[] { a.from })) undone++; else allOk = false;
+                                }
+                            }
+                            catch { allOk = false; }
+                        }
+                        if (undone > 0)
+                        {
+                            SetFileOpUi(false, allOk ? $"Отменено действий: {undone}" : $"Отменено частично: {undone}/{batch.actions.Count}");
                             Rebuild();
                             return true;
                         }
@@ -1445,7 +1584,7 @@ public sealed partial class WidgetWindow : Window
                 }
                 catch (Exception ex)
                 {
-                    Log.Info($"folder widget: undo failed ({a.kind}) — {ex.Message}");
+                    Log.Info($"folder widget: undo failed — {ex.Message}");
                     SetFileOpUi(false, "Не удалось отменить");
                     return false;
                 }
@@ -1882,12 +2021,19 @@ public sealed partial class WidgetWindow : Window
                 try
                 {
                     bool pinsChanged = false;
+                    var recycled = new List<string>();
                     foreach (var p in TargetPaths().ToList())
                     {
-                        RecyclePath(p);
-                        if (pinned.Remove(p)) pinsChanged = true;
+                        if (RecyclePath(p))
+                        {
+                            recycled.Add(p);
+                            if (pinned.Remove(p)) pinsChanged = true;
+                        }
                     }
                     if (pinsChanged) SavePins();
+                    if (recycled.Count > 0)
+                        PushUndoBatch(recycled.Select(p => ("recycle", p, string.Empty, Directory.Exists(p) || p.EndsWith("\\"))),
+                            recycled.Count == 1 ? "Удалено в корзину — можно отменить" : $"Удалено в корзину ({recycled.Count}) — можно отменить");
                 }
                 catch (Exception ex) { Log.Info($"folder widget: delete failed — {ex.Message}"); }
                 finally { Rebuild(); }
@@ -2471,13 +2617,11 @@ public sealed partial class WidgetWindow : Window
             {
                 if (doMove && movedPairs.Count > 0)
                 {
-                    foreach (var m in movedPairs)
-                    {
-                        cutPaths.Remove(m.src);
-                        PushUndo("move", m.src, m.dst, m.isDir, $"Перемещено — можно отменить ({movedPairs.Count})");
-                    }
+                    foreach (var m in movedPairs) cutPaths.Remove(m.src);
                     cutPending = cutPaths.Count > 0;
                     try { if (!cancelled) Clipboard.Clear(); } catch { }
+                    PushUndoBatch(movedPairs.Select(m => ("move", m.src, m.dst, m.isDir)),
+                        $"Перемещено — можно отменить ({movedPairs.Count})");
                 }
 
                 fileOpRunning = false;
@@ -2659,7 +2803,20 @@ public sealed partial class WidgetWindow : Window
             }
             else if (e.Key == Key.Delete && selected.Count > 0)
             {
-                foreach (var p in selected.ToList()) RecyclePath(p);
+                var recycled = new List<string>();
+                bool pinsChanged = false;
+                foreach (var p in selected.ToList())
+                {
+                    if (RecyclePath(p))
+                    {
+                        recycled.Add(p);
+                        if (pinned.Remove(p)) pinsChanged = true;
+                    }
+                }
+                if (pinsChanged) SavePins();
+                if (recycled.Count > 0)
+                    PushUndoBatch(recycled.Select(p => ("recycle", p, string.Empty, false)),
+                        recycled.Count == 1 ? "Удалено в корзину — можно отменить" : $"Удалено в корзину ({recycled.Count}) — можно отменить");
                 Rebuild();
                 e.Handled = true;
             }
