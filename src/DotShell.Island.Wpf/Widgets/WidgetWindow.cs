@@ -1342,6 +1342,87 @@ public sealed partial class WidgetWindow : Window
         previewPanel.Children.Add(previewMeta);
         previewPanel.Children.Add(previewText);
 
+        var undoStack = new Stack<(string kind, string from, string to, bool isDir)>();
+        var undoText = new TextBlock
+        {
+            FontFamily = new FontFamily("Segoe UI"),
+            FontSize = 10,
+            Foreground = ResBrush("DsTextMuted"),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var undoBtn = WBtn("Отменить", "Отменить последнее действие (Ctrl+Z)");
+        undoBtn.Padding = new Thickness(6, 2, 6, 2);
+        undoBtn.Margin = new Thickness(8, 0, 0, 0);
+        var undoBar = new DockPanel { Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed };
+        DockPanel.SetDock(undoBtn, Dock.Right);
+        undoBar.Children.Add(undoBtn);
+        undoBar.Children.Add(undoText);
+        void UpdateUndoUi(string? message = null)
+        {
+            if (undoStack.Count == 0)
+            {
+                undoBar.Visibility = Visibility.Collapsed;
+                undoText.Text = string.Empty;
+                undoBtn.IsEnabled = false;
+                return;
+            }
+            undoBar.Visibility = Visibility.Visible;
+            undoBtn.IsEnabled = true;
+            undoText.Text = message ?? $"Можно отменить: {undoStack.Count}";
+        }
+        void PushUndo(string kind, string from, string to, bool isDir, string message)
+        {
+            undoStack.Push((kind, from, to, isDir));
+            UpdateUndoUi(message);
+        }
+        Button?[] btnRefs = new Button?[2];
+        bool TryUndo()
+        {
+            while (undoStack.Count > 0)
+            {
+                var a = undoStack.Pop();
+                try
+                {
+                    if (a.kind == "move" || a.kind == "rename")
+                    {
+                        // from -> to было сделано; отмена: to -> from
+                        if (string.Equals(System.IO.Path.GetFullPath(a.from), System.IO.Path.GetFullPath(a.to), StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        if ((a.isDir && !Directory.Exists(a.to)) || (!a.isDir && !File.Exists(a.to)))
+                            continue;
+                        if (Directory.Exists(a.from) || File.Exists(a.from))
+                            continue;
+                        string? parent = System.IO.Path.GetDirectoryName(a.from);
+                        if (!string.IsNullOrWhiteSpace(parent)) Directory.CreateDirectory(parent);
+                        if (a.isDir) Directory.Move(a.to, a.from); else File.Move(a.to, a.from);
+                        UpdateUndoUi("Действие отменено");
+                        Rebuild();
+                        return true;
+                    }
+                    if (a.kind == "mkdir")
+                    {
+                        if (Directory.Exists(a.from) && !Directory.EnumerateFileSystemEntries(a.from).Any())
+                        {
+                            Directory.Delete(a.from);
+                            UpdateUndoUi("Папка удалена (отмена)");
+                            Rebuild();
+                            return true;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Info($"folder widget: undo failed ({a.kind}) — {ex.Message}");
+                    UpdateUndoUi("Не удалось отменить");
+                    return false;
+                }
+            }
+            UpdateUndoUi();
+            return false;
+        }
+        undoBtn.Click += (_, _) => TryUndo();
+
         void ClearPreview()
         {
             previewPanel.Visibility = Visibility.Collapsed;
@@ -1350,7 +1431,7 @@ public sealed partial class WidgetWindow : Window
             previewText.Visibility = Visibility.Collapsed;
             previewName.Text = string.Empty;
             previewMeta.Text = string.Empty;
-            scroll.MaxHeight = Math.Max(80, ActualHeight - 140);
+            scroll.MaxHeight = Math.Max(80, ActualHeight - 140 - (undoBar.Visibility == Visibility.Visible ? 28 : 0));
         }
 
         string FmtSize(long bytes)
@@ -1367,7 +1448,7 @@ public sealed partial class WidgetWindow : Window
             {
                 lastClickedPath = path;
                 previewPanel.Visibility = Visibility.Visible;
-                scroll.MaxHeight = Math.Max(80, ActualHeight - 230);
+                scroll.MaxHeight = Math.Max(80, ActualHeight - 230 - (undoBar.Visibility == Visibility.Visible ? 28 : 0));
                 previewImage.Source = null;
                 previewImage.Visibility = Visibility.Collapsed;
                 previewText.Text = string.Empty;
@@ -1435,18 +1516,16 @@ public sealed partial class WidgetWindow : Window
         string SortLabel() => sortMode switch { 1 => "дата", 2 => "размер", 3 => "тип", _ => "имя" };
         string GroupLabel() => groupMode switch { 1 => "тип", 2 => "дата", _ => "нет" };
 
-        Button? upBtnRef = null;
-        Button? sortBtnRef = null;
-        Button? groupBtnRef = null;
 
-        void RefreshHeader(int shown = -1, int total = -1)
+
+        void RefreshHeader(Button?[] refs, int shown = -1, int total = -1)
         {
             if (missing || !Directory.Exists(currentPath))
             {
                 missing = true;
                 title.Text = "ПАПКА НЕ НАЙДЕНА";
                 subtitle.Text = currentPath;
-                if (upBtnRef is not null) upBtnRef.IsEnabled = false;
+                if (refs[0] is not null) refs[0]!.IsEnabled = false;
                 return;
             }
 
@@ -1461,8 +1540,8 @@ public sealed partial class WidgetWindow : Window
                 : shown >= 0 ? $"{shown} объект(ов) · {modeInfo} · {where}" : where;
             subtitle.ToolTip = where;
 
-            if (upBtnRef is not null) upBtnRef.IsEnabled = !AtRoot();
-            if (sortBtnRef is not null) sortBtnRef.Content = "⇅";
+            if (refs[0] is not null) refs[0]!.IsEnabled = !AtRoot();
+            if (refs[1] is not null) refs[1]!.Content = "⇅";
         }
 
         ImageSource? IconForPath(string path, bool isDir)
@@ -1800,8 +1879,11 @@ public sealed partial class WidgetWindow : Window
                 try
                 {
                     string dest = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(path) ?? currentPath, input);
-                    if (Directory.Exists(path)) Directory.Move(path, dest);
+                    bool isDirItem = Directory.Exists(path);
+                    if (isDirItem) Directory.Move(path, dest);
                     else if (File.Exists(path)) File.Move(path, dest);
+                    else return;
+                    PushUndo("rename", path, dest, isDirItem, "Переименовано — можно отменить");
                 }
                 catch (Exception ex) { Log.Info($"folder widget: rename failed {path} — {ex.Message}"); }
                 finally { Rebuild(); }
@@ -1876,7 +1958,7 @@ public sealed partial class WidgetWindow : Window
                     else
                     {
                         missing = true;
-                        RefreshHeader();
+                        RefreshHeader(btnRefs);
                         list.Children.Add(new TextBlock
                         {
                             Text = "Папка недоступна. Можно убрать виджет или открыть корень заново.",
@@ -1954,7 +2036,7 @@ public sealed partial class WidgetWindow : Window
                 var restDirs = dirsShown.Where(d => !pinned.Contains(d.FullName)).ToList();
                 var restFiles = filesShown.Where(f => !pinned.Contains(f.FullName)).ToList();
 
-                RefreshHeader(shown, total);
+                RefreshHeader(btnRefs, shown, total);
 
                 string TypeGroup(FileInfo f)
                 {
@@ -2081,7 +2163,7 @@ public sealed partial class WidgetWindow : Window
             catch (Exception ex)
             {
                 Log.Info($"folder widget: rebuild failed — {ex.Message}");
-                RefreshHeader();
+                RefreshHeader(btnRefs);
                 list.Children.Add(new TextBlock
                 {
                     Text = "Не удалось прочитать папку.",
@@ -2093,7 +2175,7 @@ public sealed partial class WidgetWindow : Window
             }
         }
 
-        RefreshHeader();
+        RefreshHeader(btnRefs);
         Rebuild();
 
         var header = new Grid();
@@ -2116,7 +2198,7 @@ public sealed partial class WidgetWindow : Window
             var parent = Directory.GetParent(currentPath);
             if (parent is not null) NavigateTo(parent.FullName);
         };
-        upBtnRef = upBtn;
+        btnRefs[0] = upBtn;
 
         var openBtn = WBtn("↗", "Открыть текущую папку в проводнике");
         openBtn.Padding = new Thickness(6, 2, 6, 2);
@@ -2131,13 +2213,13 @@ public sealed partial class WidgetWindow : Window
         sortBtn.Padding = new Thickness(6, 2, 6, 2);
         sortBtn.Margin = new Thickness(4, 0, 0, 0);
         sortBtn.Click += (_, _) => { sortMode = (sortMode + 1) % 4; Rebuild(); };
-        sortBtnRef = sortBtn;
+        btnRefs[1] = sortBtn;
 
         var groupBtn = WBtn("≡", "Группировка: нет → тип → дата");
         groupBtn.Padding = new Thickness(6, 2, 6, 2);
         groupBtn.Margin = new Thickness(4, 0, 0, 0);
         groupBtn.Click += (_, _) => { groupMode = (groupMode + 1) % 3; collapsedGroups.Clear(); Rebuild(); };
-        groupBtnRef = groupBtn;
+
 
         var newBtn = WBtn("+", "Создать папку");
         newBtn.Padding = new Thickness(6, 2, 6, 2);
@@ -2147,7 +2229,12 @@ public sealed partial class WidgetWindow : Window
             if (missing || !Directory.Exists(currentPath)) return;
             var input = PromptText("Новая папка", "Имя папки:", "Новая папка");
             if (string.IsNullOrWhiteSpace(input)) return;
-            try { Directory.CreateDirectory(System.IO.Path.Combine(currentPath, input.Trim())); }
+            try
+            {
+                string created = System.IO.Path.Combine(currentPath, input.Trim());
+                Directory.CreateDirectory(created);
+                PushUndo("mkdir", created, "", true, "Папка создана — можно отменить");
+            }
             catch (Exception ex) { Log.Info($"folder widget: create folder failed — {ex.Message}"); }
             finally { Rebuild(); }
         };
@@ -2176,8 +2263,10 @@ public sealed partial class WidgetWindow : Window
         var container = new DockPanel();
         DockPanel.SetDock(top, Dock.Top);
         DockPanel.SetDock(previewPanel, Dock.Bottom);
+        DockPanel.SetDock(undoBar, Dock.Bottom);
         container.Children.Add(top);
         container.Children.Add(previewPanel);
+        container.Children.Add(undoBar);
         container.Children.Add(scroll);
 
         string UniqueDest(string dir, string name)
@@ -2278,7 +2367,7 @@ public sealed partial class WidgetWindow : Window
                     }
                 }
 
-                var moved = new List<string>();
+                var moved = new List<(string src, string dst, bool isDir)>();
                 foreach (var p in files)
                 {
                     if (string.IsNullOrWhiteSpace(p)) continue;
@@ -2315,7 +2404,7 @@ public sealed partial class WidgetWindow : Window
                             {
                                 if (isDirSrc) Directory.Move(p, dest);
                                 else File.Move(p, dest);
-                                moved.Add(p);
+                                moved.Add((p, dest, isDirSrc));
                                 continue;
                             }
                             catch (IOException)
@@ -2332,7 +2421,7 @@ public sealed partial class WidgetWindow : Window
                             {
                                 if (isDirSrc) { CopyDirectory(p, dest); Directory.Delete(p, true); }
                                 else { File.Copy(p, dest, overwrite: false); File.Delete(p); }
-                                moved.Add(p);
+                                moved.Add((p, dest, isDirSrc));
                             }
                             catch (Exception ex) { Log.Info($"folder widget: move paste fallback failed {p} — {ex.Message}"); }
                         }
@@ -2347,7 +2436,11 @@ public sealed partial class WidgetWindow : Window
 
                 if (doMove && moved.Count > 0)
                 {
-                    foreach (var p in moved) cutPaths.Remove(p);
+                    foreach (var m in moved)
+                    {
+                        cutPaths.Remove(m.src);
+                        PushUndo("move", m.src, m.dst, m.isDir, $"Перемещено — можно отменить ({moved.Count})");
+                    }
                     cutPending = cutPaths.Count > 0;
                     try { Clipboard.Clear(); } catch { }
                 }
@@ -2378,7 +2471,12 @@ public sealed partial class WidgetWindow : Window
             if (missing || !Directory.Exists(currentPath)) return;
             var input = PromptText("Новая папка", "Имя папки:", "Новая папка");
             if (string.IsNullOrWhiteSpace(input)) return;
-            try { Directory.CreateDirectory(System.IO.Path.Combine(currentPath, input.Trim())); }
+            try
+            {
+                string created = System.IO.Path.Combine(currentPath, input.Trim());
+                Directory.CreateDirectory(created);
+                PushUndo("mkdir", created, "", true, "Папка создана — можно отменить");
+            }
             catch (Exception ex) { Log.Info($"folder widget: create folder failed — {ex.Message}"); }
             finally { Rebuild(); }
         };
@@ -2463,6 +2561,11 @@ public sealed partial class WidgetWindow : Window
                 PasteIntoCurrent();
                 e.Handled = true;
             }
+            else if (ctrl && e.Key == Key.Z)
+            {
+                TryUndo();
+                e.Handled = true;
+            }
             else if ((e.Key == Key.Down || e.Key == Key.Up) && visiblePaths.Count > 0)
             {
                 int idx = lastClickedPath is not null ? visiblePaths.IndexOf(lastClickedPath) : -1;
@@ -2542,7 +2645,9 @@ public sealed partial class WidgetWindow : Window
 
         Timer(5000, Rebuild);
 
-        _relayout = (_, h) => scroll.MaxHeight = Math.Max(80, h - 110 - (previewPanel.Visibility == Visibility.Visible ? 90 : 0));
+        _relayout = (_, h) => scroll.MaxHeight = Math.Max(80, h - 110
+            - (previewPanel.Visibility == Visibility.Visible ? 90 : 0)
+            - (undoBar.Visibility == Visibility.Visible ? 28 : 0));
         return container;
     }
 
