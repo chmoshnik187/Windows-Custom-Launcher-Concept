@@ -1281,6 +1281,7 @@ public sealed partial class WidgetWindow : Window
         bool missing = string.IsNullOrWhiteSpace(currentPath) || !Directory.Exists(currentPath);
         string filter = string.Empty;
         int sortMode = 0; // 0 имя, 1 дата, 2 размер, 3 тип
+        int groupMode = 0; // 0 нет, 1 тип, 2 дата
         var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var rowByPath = new Dictionary<string, Border>(StringComparer.OrdinalIgnoreCase);
         var visiblePaths = new List<string>();
@@ -1423,9 +1424,11 @@ public sealed partial class WidgetWindow : Window
             System.IO.Path.GetFullPath(rootPath).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
 
         string SortLabel() => sortMode switch { 1 => "дата", 2 => "размер", 3 => "тип", _ => "имя" };
+        string GroupLabel() => groupMode switch { 1 => "тип", 2 => "дата", _ => "нет" };
 
         Button? upBtnRef = null;
         Button? sortBtnRef = null;
+        Button? groupBtnRef = null;
 
         void RefreshHeader(int shown = -1, int total = -1)
         {
@@ -1443,9 +1446,10 @@ public sealed partial class WidgetWindow : Window
             title.Text = name.ToUpperInvariant();
 
             string where = AtRoot() ? rootPath : currentPath;
+            string modeInfo = groupMode == 0 ? SortLabel() : $"{SortLabel()} · группы: {GroupLabel()}";
             subtitle.Text = (shown >= 0 && total >= 0 && shown != total)
-                ? $"{shown} из {total} · {SortLabel()} · {where}"
-                : shown >= 0 ? $"{shown} объект(ов) · {SortLabel()} · {where}" : where;
+                ? $"{shown} из {total} · {modeInfo} · {where}"
+                : shown >= 0 ? $"{shown} объект(ов) · {modeInfo} · {where}" : where;
             subtitle.ToolTip = where;
 
             if (upBtnRef is not null) upBtnRef.IsEnabled = !AtRoot();
@@ -1910,15 +1914,78 @@ public sealed partial class WidgetWindow : Window
                     _ => src.OrderBy(f => f.Name, StringComparer.CurrentCultureIgnoreCase),
                 };
 
-                var dirs = SortDirs(dirInfos.Where(d => Match(d.Name))).Select(d => d.FullName).ToList();
-                var files = SortFiles(fileInfos.Where(f => Match(f.Name))).Select(f => f.FullName).ToList();
+                var dirsShown = SortDirs(dirInfos.Where(d => Match(d.Name))).Take(160).ToList();
+                var filesShown = SortFiles(fileInfos.Where(f => Match(f.Name))).Take(240).ToList();
                 int total = dirInfos.Count + fileInfos.Count;
-                int shown = dirs.Count + files.Count;
+                int shown = dirsShown.Count + filesShown.Count;
 
                 RefreshHeader(shown, total);
 
-                foreach (var d in dirs.Take(160)) list.Children.Add(Row(d, true));
-                foreach (var f in files.Take(240)) list.Children.Add(Row(f, false));
+                UIElement GroupHeader(string text, int count)
+                {
+                    return new TextBlock
+                    {
+                        Text = $"{text} · {count}",
+                        FontFamily = new FontFamily("Segoe UI"),
+                        FontSize = 10,
+                        FontWeight = FontWeights.SemiBold,
+                        Foreground = ResBrush("DsTextMuted"),
+                        Margin = new Thickness(2, 8, 2, 2),
+                    };
+                }
+
+                string TypeGroup(FileInfo f)
+                {
+                    string ext = f.Extension.ToLowerInvariant();
+                    if (ext is ".png" or ".jpg" or ".jpeg" or ".bmp" or ".gif" or ".webp" or ".svg" or ".ico") return "Изображения";
+                    if (ext is ".mp4" or ".mkv" or ".avi" or ".mov" or ".mp3" or ".wav" or ".flac" or ".m4a") return "Медиа";
+                    if (ext is ".pdf" or ".doc" or ".docx" or ".xls" or ".xlsx" or ".ppt" or ".pptx" or ".txt" or ".md" or ".rtf") return "Документы";
+                    if (ext is ".zip" or ".rar" or ".7z" or ".tar" or ".gz") return "Архивы";
+                    return "Прочее";
+                }
+
+                string DateGroup(DateTime dtLocal)
+                {
+                    var today = DateTime.Today;
+                    if (dtLocal.Date == today) return "Сегодня";
+                    if (dtLocal.Date == today.AddDays(-1)) return "Вчера";
+                    if (dtLocal.Date >= today.AddDays(-7)) return "За неделю";
+                    return "Ранее";
+                }
+
+                if (groupMode == 1)
+                {
+                    list.Children.Add(GroupHeader("Папки", dirsShown.Count));
+                    foreach (var d in dirsShown) list.Children.Add(Row(d.FullName, true));
+                    foreach (var g in filesShown.GroupBy(TypeGroup).OrderBy(g => g.Key, StringComparer.CurrentCulture))
+                    {
+                        var items = g.ToList();
+                        list.Children.Add(GroupHeader(g.Key, items.Count));
+                        foreach (var f in items) list.Children.Add(Row(f.FullName, false));
+                    }
+                }
+                else if (groupMode == 2)
+                {
+                    if (dirsShown.Count > 0)
+                    {
+                        list.Children.Add(GroupHeader("Папки", dirsShown.Count));
+                        foreach (var d in dirsShown) list.Children.Add(Row(d.FullName, true));
+                    }
+                    var dateGroups = filesShown
+                        .GroupBy(f => DateGroup(f.LastWriteTime))
+                        .OrderBy(g => g.Key switch { "Сегодня" => 0, "Вчера" => 1, "За неделю" => 2, _ => 3 });
+                    foreach (var g in dateGroups)
+                    {
+                        var items = g.ToList();
+                        list.Children.Add(GroupHeader(g.Key, items.Count));
+                        foreach (var f in items) list.Children.Add(Row(f.FullName, false));
+                    }
+                }
+                else
+                {
+                    foreach (var d in dirsShown) list.Children.Add(Row(d.FullName, true));
+                    foreach (var f in filesShown) list.Children.Add(Row(f.FullName, false));
+                }
 
                 // Чистим исчезнувшие из выделения и предпросмотр.
                 selected.RemoveWhere(p => !Directory.Exists(p) && !File.Exists(p));
@@ -2000,6 +2067,12 @@ public sealed partial class WidgetWindow : Window
         sortBtn.Click += (_, _) => { sortMode = (sortMode + 1) % 4; Rebuild(); };
         sortBtnRef = sortBtn;
 
+        var groupBtn = WBtn("≡", "Группировка: нет → тип → дата");
+        groupBtn.Padding = new Thickness(6, 2, 6, 2);
+        groupBtn.Margin = new Thickness(4, 0, 0, 0);
+        groupBtn.Click += (_, _) => { groupMode = (groupMode + 1) % 3; Rebuild(); };
+        groupBtnRef = groupBtn;
+
         var newBtn = WBtn("+", "Создать папку");
         newBtn.Padding = new Thickness(6, 2, 6, 2);
         newBtn.Margin = new Thickness(4, 0, 0, 0);
@@ -2020,6 +2093,7 @@ public sealed partial class WidgetWindow : Window
         actions.Children.Add(upBtn);
         actions.Children.Add(openBtn);
         actions.Children.Add(sortBtn);
+        actions.Children.Add(groupBtn);
         actions.Children.Add(newBtn);
         actions.Children.Add(refreshBtn);
         Grid.SetColumn(actions, 1);
