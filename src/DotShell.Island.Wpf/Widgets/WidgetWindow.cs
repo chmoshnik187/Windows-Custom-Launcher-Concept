@@ -1327,9 +1327,12 @@ public sealed partial class WidgetWindow : Window
             Limit = _initialCollection.Limit > 0 ? _initialCollection.Limit : 50,
         };
         void SaveCollection() => _saveCollection?.Invoke(collection);
-        bool CollectionActive() => collection is { Enabled: true };
-        bool fileOpRunning = false;
-
+        bool CollectionActive() => collection is { Enabled: true };
+
+        bool fileOpRunning = false;
+
+
+
         FileSystemWatcher? collectionWatcher = null;
         DispatcherTimer? collectionDebounce = null;
         string? collectionWatcherPath = null;
@@ -1343,17 +1346,6 @@ public sealed partial class WidgetWindow : Window
             collectionWatcherRecursive = false;
         }
 
-        void ScheduleCollectionRefresh()
-        {
-            if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(ScheduleCollectionRefresh); return; }
-            collectionDebounce ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };
-            collectionDebounce.Stop();
-            collectionDebounce.Tick -= null;
-            // rebuild timer handler once
-            collectionDebounce.Tick += (_, _) => { collectionDebounce?.Stop(); if (CollectionActive() && !fileOpRunning) Rebuild(); };
-            // ensure not double-subscribed: recreate timer cleanly
-        }
-
         void EnsureCollectionDebounce()
         {
             if (collectionDebounce is not null) return;
@@ -1364,28 +1356,35 @@ public sealed partial class WidgetWindow : Window
 
         void TriggerCollectionRefresh()
         {
-            if (!CollectionActive()) return;
+            if (fileOpRunning) return;
             if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(TriggerCollectionRefresh); return; }
             EnsureCollectionDebounce();
             collectionDebounce!.Stop();
             collectionDebounce.Start();
         }
 
-        void UpdateCollectionWatcher()
+        void UpdateFolderWatcher()
         {
-            if (!CollectionActive() || collection is null)
+            string scope;
+            bool rec;
+            if (CollectionActive() && collection is not null)
             {
-                DisposeCollectionWatcher();
-                return;
+                scope = !string.IsNullOrWhiteSpace(collection.Scope) ? collection.Scope : rootPath;
+                if (string.IsNullOrWhiteSpace(scope) || !Directory.Exists(scope)) scope = rootPath;
+                rec = collection.Recursive;
             }
-            string scope = !string.IsNullOrWhiteSpace(collection.Scope) ? collection.Scope : rootPath;
-            if (string.IsNullOrWhiteSpace(scope) || !Directory.Exists(scope)) scope = rootPath;
+            else
+            {
+                scope = currentPath;
+                rec = false;
+            }
+
             if (string.IsNullOrWhiteSpace(scope) || !Directory.Exists(scope))
             {
                 DisposeCollectionWatcher();
                 return;
             }
-            bool rec = collection.Recursive;
+
             if (collectionWatcher is not null && string.Equals(collectionWatcherPath, scope, StringComparison.OrdinalIgnoreCase) && collectionWatcherRecursive == rec)
                 return;
 
@@ -1407,7 +1406,7 @@ public sealed partial class WidgetWindow : Window
             }
             catch (Exception ex)
             {
-                Log.Info($"folder widget: collection watcher failed {scope} - {ex.Message}");
+                Log.Info($"folder widget: watcher failed {scope} - {ex.Message}");
                 DisposeCollectionWatcher();
             }
         }
@@ -1942,6 +1941,7 @@ public sealed partial class WidgetWindow : Window
             changedPaths.Clear();
             collapsedGroups.Clear();
             Rebuild();
+            UpdateFolderWatcher();
         }
 
         UIElement Row(string path, bool isDir, string? extraTip = null)
@@ -2235,6 +2235,7 @@ public sealed partial class WidgetWindow : Window
                     if (!string.Equals(currentPath, rootPath, StringComparison.OrdinalIgnoreCase) && Directory.Exists(rootPath))
                     {
                         currentPath = rootPath;
+                        UpdateFolderWatcher();
                     }
                     else
                     {
@@ -2558,7 +2559,7 @@ public sealed partial class WidgetWindow : Window
         }
 
         RefreshHeader(btnRefs);
-        UpdateCollectionWatcher();
+        UpdateFolderWatcher();
         Rebuild();
 
         var header = new Grid();
@@ -2611,7 +2612,7 @@ public sealed partial class WidgetWindow : Window
         {
             collection ??= new DotShell.Core.Widgets.FolderCollectionSpec();
             var cm = new ContextMenu();
-            void SaveAndRefresh() { SaveCollection(); UpdateCollectionWatcher(); Rebuild(); }
+            void SaveAndRefresh() { SaveCollection(); UpdateFolderWatcher(); Rebuild(); }
             MenuItem MI(string header, Action action)
             {
                 var m = new MenuItem { Header = header };

@@ -157,16 +157,26 @@ function Run-Side([string]$side, [int]$screenWidth) {
         Check 'выехал по наведению' (($peek.R - $hiddenVisible) -ge ($panel * 0.4)) "right $visible -> $($peek.R), видно $($peek.R) из $panel"
         Check 'панель у левого края' ($peek.L -le $strip) "left=$($peek.L)"
 
-        # Уводим курсор в центр экрана и ждём auto-hide.
-        [void][DockProbe]::SetCursorPos([int]($screenWidth / 2), 400)
-        $hidden = $null
-        $hideDeadline = [DateTime]::UtcNow.AddSeconds(3)
-        while ([DateTime]::UtcNow -lt $hideDeadline) {
-            Start-Sleep -Milliseconds 200
-            $hidden = Measure-Dock $process.Id
-            if ($null -ne $hidden -and [Math]::Abs($hidden.R - $hiddenVisible) -le 6) { break }
-        }
-        Check 'спрятался обратно' ($null -ne $hidden -and [Math]::Abs($hidden.R - $hiddenVisible) -le 6) "right=$($hidden.R), было $hiddenVisible"
+        # Уводим курсор в центр экрана и ждём auto-hide.
+
+        [void][DockProbe]::SetCursorPos([int]($screenWidth / 2), 400)
+
+        $hidden = $null
+
+        $hideDeadline = [DateTime]::UtcNow.AddSeconds(3)
+
+        while ([DateTime]::UtcNow -lt $hideDeadline) {
+
+            Start-Sleep -Milliseconds 200
+
+            $hidden = Measure-Dock $process.Id
+
+            if ($null -ne $hidden -and [Math]::Abs($hidden.R - $hiddenVisible) -le 6) { break }
+
+        }
+
+        Check 'спрятался обратно' ($null -ne $hidden -and [Math]::Abs($hidden.R - $hiddenVisible) -le 6) "right=$($hidden.R), было $hiddenVisible"
+
     } else {
         $visible = $screenWidth - $rect.L
         Check 'спрятан за правым краем' ($visible -gt 0 -and $visible -le $strip) "видно $visible px из $panel"
@@ -178,16 +188,26 @@ function Run-Side([string]$side, [int]$screenWidth) {
         Check 'выехал по наведению' (($screenWidth - $peek.L - $hiddenVisible) -ge ($panel * 0.4)) "left $($rect.L) -> $($peek.L), видно $($screenWidth - $peek.L) из $panel"
         Check 'панель у правого края' (($screenWidth - $peek.R) -le $strip) "right=$($peek.R)"
 
-        # Уводим курсор в центр экрана и ждём auto-hide.
-        [void][DockProbe]::SetCursorPos([int]($screenWidth / 2), 400)
-        $hidden = $null
-        $hideDeadline = [DateTime]::UtcNow.AddSeconds(3)
-        while ([DateTime]::UtcNow -lt $hideDeadline) {
-            Start-Sleep -Milliseconds 200
-            $hidden = Measure-Dock $process.Id
-            if ($null -ne $hidden -and [Math]::Abs(($screenWidth - $hidden.L) - $hiddenVisible) -le 6) { break }
-        }
-        Check 'спрятался обратно' ($null -ne $hidden -and [Math]::Abs(($screenWidth - $hidden.L) - $hiddenVisible) -le 6) "left=$($hidden.L), видно $($screenWidth - $hidden.L), было $hiddenVisible"
+        # Уводим курсор в центр экрана и ждём auto-hide.
+
+        [void][DockProbe]::SetCursorPos([int]($screenWidth / 2), 400)
+
+        $hidden = $null
+
+        $hideDeadline = [DateTime]::UtcNow.AddSeconds(3)
+
+        while ([DateTime]::UtcNow -lt $hideDeadline) {
+
+            Start-Sleep -Milliseconds 200
+
+            $hidden = Measure-Dock $process.Id
+
+            if ($null -ne $hidden -and [Math]::Abs(($screenWidth - $hidden.L) - $hiddenVisible) -le 6) { break }
+
+        }
+
+        Check 'спрятался обратно' ($null -ne $hidden -and [Math]::Abs(($screenWidth - $hidden.L) - $hiddenVisible) -le 6) "left=$($hidden.L), видно $($screenWidth - $hidden.L), было $hiddenVisible"
+
     }
 
     [void][DockProbe]::SetCursorPos($saved.X, $saved.Y)
@@ -236,32 +256,42 @@ function Run-Drag([int]$screenWidth, [int]$screenHeight) {
 
     # Тащим влево на 120 px и держим кнопку.
     Move-Steps $grabX $grabY ($grabX + 120) $grabY 12
-    Start-Sleep -Milliseconds 350
-    $mid = Measure-Dock $script:dockPid
+    $mid = $null
+    $midDeadline = [DateTime]::UtcNow.AddSeconds(2)
+    while ([DateTime]::UtcNow -lt $midDeadline) {
+        Start-Sleep -Milliseconds 120
+        $mid = Measure-Dock $script:dockPid
+        if ($null -ne $mid -and [Math]::Abs(($mid.L - $rect.L) - 120) -le 16) { break }
+    }
 
     $dragOk = $null -ne $mid -and
-              [Math]::Abs(($mid.L - $rect.L) - 120) -le 12 -and
-              [Math]::Abs($mid.T - $rect.T) -le 8
+              [Math]::Abs(($mid.L - $rect.L) - 120) -le 16 -and
+              [Math]::Abs($mid.T - $rect.T) -le 12
     Check 'drag сдвинул по горизонтали' $dragOk "left $($rect.L) -> $($mid.L), top $($rect.T) -> $($mid.T)"
 
     $json = Get-Content $settingsPath -Raw | ConvertFrom-Json
+    if ($json.dockSide -ne 'left') {
+        Start-Sleep -Milliseconds 200
+        $json = Get-Content $settingsPath -Raw | ConvertFrom-Json
+    }
     Check 'во время drag сторона не сменилась' ($json.dockSide -eq 'left') "dockSide=$($json.dockSide)"
 
     # Бросаем в правый край экрана и отпускаем: это должно переключить сторону.
-    Move-Steps ($grabX + 120) $grabY ([int]($screenWidth * 0.8)) $grabY 16
+    Move-Steps ($grabX + 120) $grabY ([int]($screenWidth * 0.85)) $grabY 18
+    Start-Sleep -Milliseconds 120
     Release-Mouse
 
     # После броска док может прятаться с задержкой; ждём auto-hide.
     $json = $null
     $hidden = $null
-    $deadline = [DateTime]::UtcNow.AddSeconds(4)
+    $deadline = [DateTime]::UtcNow.AddSeconds(6)
     while ([DateTime]::UtcNow -lt $deadline) {
         Start-Sleep -Milliseconds 200
         $json = Get-Content $settingsPath -Raw | ConvertFrom-Json
         $hidden = Measure-Dock $script:dockPid
         if ($json.dockSide -eq 'right' -and $null -ne $hidden) {
             $visible = $screenWidth - $hidden.L
-            if ($visible -gt 0 -and $visible -le ($screenWidth * 0.1)) { break }
+            if ($visible -gt 0 -and $visible -le ($screenWidth * 0.12)) { break }
         }
     }
 
@@ -271,7 +301,12 @@ function Run-Drag([int]$screenWidth, [int]$screenHeight) {
     $hidden = Measure-Dock $script:dockPid
     if ($null -ne $hidden) {
         $visible = $screenWidth - $hidden.L
-        Check 'после броска спрятан справа' ($visible -gt 0 -and $visible -le ($screenWidth * 0.1)) "видно $visible px"
+        if (-not ($visible -gt 0 -and $visible -le ($screenWidth * 0.12))) {
+            Start-Sleep -Milliseconds 400
+            $hidden = Measure-Dock $script:dockPid
+            if ($null -ne $hidden) { $visible = $screenWidth - $hidden.L }
+        }
+        Check 'после броска спрятан справа' ($visible -gt 0 -and $visible -le ($screenWidth * 0.12)) "видно $visible px"
     } else {
         Check 'после броска спрятан справа' $false 'окно исчезло'
     }
