@@ -1327,7 +1327,92 @@ public sealed partial class WidgetWindow : Window
             Limit = _initialCollection.Limit > 0 ? _initialCollection.Limit : 50,
         };
         void SaveCollection() => _saveCollection?.Invoke(collection);
-        bool CollectionActive() => collection is { Enabled: true };
+        bool CollectionActive() => collection is { Enabled: true };
+        bool fileOpRunning = false;
+
+        FileSystemWatcher? collectionWatcher = null;
+        DispatcherTimer? collectionDebounce = null;
+        string? collectionWatcherPath = null;
+        bool collectionWatcherRecursive = false;
+
+        void DisposeCollectionWatcher()
+        {
+            try { collectionWatcher?.Dispose(); } catch { }
+            collectionWatcher = null;
+            collectionWatcherPath = null;
+            collectionWatcherRecursive = false;
+        }
+
+        void ScheduleCollectionRefresh()
+        {
+            if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(ScheduleCollectionRefresh); return; }
+            collectionDebounce ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };
+            collectionDebounce.Stop();
+            collectionDebounce.Tick -= null;
+            // rebuild timer handler once
+            collectionDebounce.Tick += (_, _) => { collectionDebounce?.Stop(); if (CollectionActive() && !fileOpRunning) Rebuild(); };
+            // ensure not double-subscribed: recreate timer cleanly
+        }
+
+        void EnsureCollectionDebounce()
+        {
+            if (collectionDebounce is not null) return;
+            collectionDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };
+            collectionDebounce.Tick += (_, _) => { collectionDebounce.Stop(); if (CollectionActive() && !fileOpRunning) Rebuild(); };
+            _timers.Add(collectionDebounce);
+        }
+
+        void TriggerCollectionRefresh()
+        {
+            if (!CollectionActive()) return;
+            if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(TriggerCollectionRefresh); return; }
+            EnsureCollectionDebounce();
+            collectionDebounce!.Stop();
+            collectionDebounce.Start();
+        }
+
+        void UpdateCollectionWatcher()
+        {
+            if (!CollectionActive() || collection is null)
+            {
+                DisposeCollectionWatcher();
+                return;
+            }
+            string scope = !string.IsNullOrWhiteSpace(collection.Scope) ? collection.Scope : rootPath;
+            if (string.IsNullOrWhiteSpace(scope) || !Directory.Exists(scope)) scope = rootPath;
+            if (string.IsNullOrWhiteSpace(scope) || !Directory.Exists(scope))
+            {
+                DisposeCollectionWatcher();
+                return;
+            }
+            bool rec = collection.Recursive;
+            if (collectionWatcher is not null && string.Equals(collectionWatcherPath, scope, StringComparison.OrdinalIgnoreCase) && collectionWatcherRecursive == rec)
+                return;
+
+            DisposeCollectionWatcher();
+            try
+            {
+                var w = new FileSystemWatcher(scope)
+                {
+                    IncludeSubdirectories = rec,
+                    NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.CreationTime,
+                    EnableRaisingEvents = true,
+                };
+                FileSystemEventHandler h = (_, _) => TriggerCollectionRefresh();
+                RenamedEventHandler rh = (_, _) => TriggerCollectionRefresh();
+                w.Created += h; w.Changed += h; w.Deleted += h; w.Renamed += rh;
+                collectionWatcher = w;
+                collectionWatcherPath = scope;
+                collectionWatcherRecursive = rec;
+            }
+            catch (Exception ex)
+            {
+                Log.Info($"folder widget: collection watcher failed {scope} - {ex.Message}");
+                DisposeCollectionWatcher();
+            }
+        }
+
+        Closed += (_, _) => { try { collectionDebounce?.Stop(); } catch { } DisposeCollectionWatcher(); };
         var prevSig = new Dictionary<string, (long size, long ticks)>(StringComparer.OrdinalIgnoreCase);
         string snapshotPath = string.Empty;
         bool haveSnapshot = false;
@@ -1403,7 +1488,6 @@ public sealed partial class WidgetWindow : Window
         undoBar.Children.Add(undoText);
 
         CancellationTokenSource? fileOpCts = null;
-        bool fileOpRunning = false;
 
         var undoTtlTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
         undoTtlTimer.Tick += (_, _) =>
@@ -2474,6 +2558,7 @@ public sealed partial class WidgetWindow : Window
         }
 
         RefreshHeader(btnRefs);
+        UpdateCollectionWatcher();
         Rebuild();
 
         var header = new Grid();
@@ -2526,7 +2611,7 @@ public sealed partial class WidgetWindow : Window
         {
             collection ??= new DotShell.Core.Widgets.FolderCollectionSpec();
             var cm = new ContextMenu();
-            void SaveAndRefresh() { SaveCollection(); Rebuild(); }
+            void SaveAndRefresh() { SaveCollection(); UpdateCollectionWatcher(); Rebuild(); }
             MenuItem MI(string header, Action action)
             {
                 var m = new MenuItem { Header = header };
