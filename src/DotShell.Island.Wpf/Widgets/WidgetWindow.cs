@@ -2746,15 +2746,27 @@ public sealed partial class WidgetWindow : Window
                 await Task.Run(() =>
                 {
                     totalBytes = doMove ? 0 : ComputeTotalBytes(fileList);
+                    var startedUtc = DateTime.UtcNow;
+
 
                     for (int i = 0; i < fileList.Count; i++)
                     {
                         if (ct.IsCancellationRequested) { cancelled = true; break; }
                         string p = fileList[i];
                         string label = System.IO.Path.GetFileName(p);
-                        ReportProgress(FormatProgressText(opName, i + 1, fileList.Count, label, System.Threading.Interlocked.Read(ref doneBytes), totalBytes));
+                        ReportProgress(FormatProgressText(opName, i + 1, fileList.Count, label, System.Threading.Interlocked.Read(ref doneBytes), totalBytes, startedUtc));
 
-                        void AddBytes(long b) { System.Threading.Interlocked.Add(ref doneBytes, b); }
+                        long lastReportTicks = 0;
+                        void AddBytes(long b)
+                        {
+                            long nowDone = System.Threading.Interlocked.Add(ref doneBytes, b);
+                            long now = DateTime.UtcNow.Ticks;
+                            long prev = System.Threading.Interlocked.Read(ref lastReportTicks);
+                            if (now - prev >= TimeSpan.TicksPerMillisecond * 400 && System.Threading.Interlocked.CompareExchange(ref lastReportTicks, now, prev) == prev)
+                            {
+                                ReportProgress(FormatProgressText(opName, i + 1, fileList.Count, label, nowDone, totalBytes, startedUtc));
+                            }
+                        }
 
                         try
                         {
@@ -3065,29 +3077,64 @@ public sealed partial class WidgetWindow : Window
             if (fileOpRunning || missing || !Directory.Exists(currentPath)) return;
             if (e.Data.GetData(DataFormats.FileDrop) is not string[] paths || paths.Length == 0) return;
 
-            fileOpCts?.Dispose();
-            fileOpCts = new CancellationTokenSource();
-            var ct = fileOpCts.Token;
-            int errors = 0;
-            bool cancelled = false;
-            long doneBytes = 0;
-            long totalBytes = 0;
-            string opName = "Перетаскивание";
-
-            SetFileOpUi(true, "Перетаскивание");
-            try
-            {
-                await Task.Run(() =>
-                {
-                    totalBytes = ComputeTotalBytes(paths);
-                    for (int i = 0; i < paths.Length; i++)
-                    {
-                        if (ct.IsCancellationRequested) { cancelled = true; break; }
-                        string sourcePath = paths[i];
-                        if (string.IsNullOrWhiteSpace(sourcePath)) continue;
-                        string label = System.IO.Path.GetFileName(sourcePath);
-                        ReportProgress(FormatProgressText(opName, i + 1, paths.Length, label, System.Threading.Interlocked.Read(ref doneBytes), totalBytes));
-                        void AddBytes(long b) { System.Threading.Interlocked.Add(ref doneBytes, b); }
+            fileOpCts?.Dispose();
+
+            fileOpCts = new CancellationTokenSource();
+
+            var ct = fileOpCts.Token;
+
+            int errors = 0;
+
+            bool cancelled = false;
+
+            long doneBytes = 0;
+
+            long totalBytes = 0;
+
+            string opName = "Перетаскивание";
+
+
+
+            SetFileOpUi(true, "Перетаскивание");
+
+            try
+
+            {
+
+                await Task.Run(() =>
+
+                {
+
+                    totalBytes = ComputeTotalBytes(paths);
+                    var startedUtc = DateTime.UtcNow;
+
+
+                    for (int i = 0; i < paths.Length; i++)
+
+                    {
+
+                        if (ct.IsCancellationRequested) { cancelled = true; break; }
+
+                        string sourcePath = paths[i];
+
+                        if (string.IsNullOrWhiteSpace(sourcePath)) continue;
+
+                        string label = System.IO.Path.GetFileName(sourcePath);
+
+                        ReportProgress(FormatProgressText(opName, i + 1, paths.Length, label, System.Threading.Interlocked.Read(ref doneBytes), totalBytes, startedUtc));
+
+                        long lastReportTicks = 0;
+                        void AddBytes(long b)
+                        {
+                            long nowDone = System.Threading.Interlocked.Add(ref doneBytes, b);
+                            long now = DateTime.UtcNow.Ticks;
+                            long prev = System.Threading.Interlocked.Read(ref lastReportTicks);
+                            if (now - prev >= TimeSpan.TicksPerMillisecond * 400 && System.Threading.Interlocked.CompareExchange(ref lastReportTicks, now, prev) == prev)
+                            {
+                                ReportProgress(FormatProgressText(opName, i + 1, paths.Length, label, nowDone, totalBytes, startedUtc));
+                            }
+                        }
+
                         try
                         {
                             string name = System.IO.Path.GetFileName(sourcePath);
@@ -3427,13 +3474,30 @@ public sealed partial class WidgetWindow : Window
         return total;
     }
 
-    private static string FormatProgressText(string op, int i, int n, string label, long doneBytes, long totalBytes)
+    private static string FormatProgressText(string op, int i, int n, string label, long doneBytes, long totalBytes, DateTime? startedUtc = null)
     {
         string baseText = $"{op} {i}/{n}: {label}";
         if (totalBytes <= 0) return baseText;
         double doneMb = doneBytes / 1024.0 / 1024.0;
         double totalMb = totalBytes / 1024.0 / 1024.0;
-        return $"{baseText} · {doneMb:0.#}/{totalMb:0.#} МБ";
+        string eta = string.Empty;
+        if (startedUtc is { } s && doneBytes > 0 && doneBytes < totalBytes)
+        {
+            double elapsed = (DateTime.UtcNow - s).TotalSeconds;
+            if (elapsed >= 1.0)
+            {
+                double rate = doneBytes / elapsed;
+                if (rate > 0)
+                {
+                    double rem = (totalBytes - doneBytes) / rate;
+                    if (rem < 1) eta = ", <1с";
+                    else if (rem < 90) eta = $", ~{Math.Ceiling(rem):0}с";
+                    else if (rem < 3600) eta = $", ~{Math.Ceiling(rem / 60):0}мин";
+                    else eta = $", ~{rem / 3600:0.#}ч";
+                }
+            }
+        }
+        return $"{baseText} · {doneMb:0.#}/{totalMb:0.#} МБ{eta}";
     }
 
     private static void CopyDirectory(string sourceDir, string destDir)
