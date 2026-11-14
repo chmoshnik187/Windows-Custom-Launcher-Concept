@@ -1836,7 +1836,7 @@ public sealed partial class WidgetWindow : Window
             Rebuild();
         }
 
-        UIElement Row(string path, bool isDir)
+        UIElement Row(string path, bool isDir, string? extraTip = null)
         {
             var icon = new Image
             {
@@ -1882,7 +1882,7 @@ public sealed partial class WidgetWindow : Window
                 CornerRadius = new CornerRadius(6),
                 Background = Brushes.Transparent,
                 Cursor = Cursors.Hand,
-                ToolTip = path,
+                ToolTip = string.IsNullOrWhiteSpace(extraTip) ? path : (path + "\n" + extraTip),
                 Tag = path,
             };
 
@@ -2219,7 +2219,17 @@ public sealed partial class WidgetWindow : Window
                     subtitle.ToolTip = scope;
 
                     foreach (var fi in matched)
-                        list.Children.Add(Row(fi.FullName, false));
+                    {
+                        var reasons = new List<string>();
+                        reasons.Add($"Изменён: {fi.LastWriteTime:g}");
+                        reasons.Add($"Размер: {fi.Length / 1024.0 / 1024.0:0.#} МБ");
+                        if (!string.IsNullOrWhiteSpace(collection.NameContains) && fi.Name.IndexOf(collection.NameContains, StringComparison.CurrentCultureIgnoreCase) >= 0)
+                            reasons.Add($"Имя содержит: «{collection.NameContains}»");
+                        if (collection.WithinDays > 0) reasons.Add($"За {collection.WithinDays} дн.");
+                        if (collection.MinSizeMb > 0) reasons.Add($">{collection.MinSizeMb} МБ");
+                        if (collection.Kinds.Count > 0) reasons.Add($"Тип: {string.Join(",", collection.Kinds)}");
+                        list.Children.Add(Row(fi.FullName, false, "Совпало: " + string.Join(" · ", reasons)));
+                    }
 
                     if (matched.Count == 0)
                     {
@@ -3158,9 +3168,33 @@ public sealed partial class WidgetWindow : Window
             }
             else if (marqueeMods.HasFlag(ModifierKeys.Shift))
             {
+                // Расширение диапазона от якоря до области резинки (по видимому порядку).
                 selected.Clear();
                 foreach (var p in marqueeSnapshot) selected.Add(p);
-                foreach (var p in hit) selected.Add(p);
+                if (hit.Count > 0)
+                {
+                    int anchor = !string.IsNullOrWhiteSpace(lastClickedPath) ? visiblePaths.IndexOf(lastClickedPath) : -1;
+                    if (anchor < 0 && marqueeSnapshot.Count > 0)
+                    {
+                        foreach (var s in marqueeSnapshot) { int si = visiblePaths.IndexOf(s); if (si >= 0) { anchor = si; break; } }
+                    }
+                    if (anchor >= 0)
+                    {
+                        int lo = anchor, hi = anchor;
+                        foreach (var p in hit)
+                        {
+                            int idx = visiblePaths.IndexOf(p);
+                            if (idx < 0) continue;
+                            if (idx < lo) lo = idx;
+                            if (idx > hi) hi = idx;
+                        }
+                        for (int i = lo; i <= hi && i < visiblePaths.Count; i++) selected.Add(visiblePaths[i]);
+                    }
+                    else
+                    {
+                        foreach (var p in hit) selected.Add(p);
+                    }
+                }
             }
             else
             {
