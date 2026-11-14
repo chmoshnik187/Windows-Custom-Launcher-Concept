@@ -1281,8 +1281,12 @@ public sealed partial class WidgetWindow : Window
         bool missing = string.IsNullOrWhiteSpace(currentPath) || !Directory.Exists(currentPath);
         string filter = string.Empty;
         int sortMode = 0; // 0 имя, 1 дата, 2 размер, 3 тип
-        string? selectedPath = null;
-        Border? selectedRow = null;
+        var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var rowByPath = new Dictionary<string, Border>(StringComparer.OrdinalIgnoreCase);
+        var visiblePaths = new List<string>();
+        string? lastClickedPath = null;
+        var cutPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        bool cutPending = false;
 
         var title = new TextBlock
         {
@@ -1309,6 +1313,7 @@ public sealed partial class WidgetWindow : Window
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Margin = new Thickness(0, 6, 0, 0),
+            Focusable = true,
         };
 
         // Панель быстрого предпросмотра (Quick Look-идея, адаптированная под компактный виджет).
@@ -1345,7 +1350,7 @@ public sealed partial class WidgetWindow : Window
         {
             try
             {
-                selectedPath = path;
+                lastClickedPath = path;
                 previewPanel.Visibility = Visibility.Visible;
                 scroll.MaxHeight = Math.Max(80, ActualHeight - 230);
                 previewImage.Source = null;
@@ -1600,21 +1605,25 @@ public sealed partial class WidgetWindow : Window
                 Tag = path,
             };
 
-            void ApplySelectionVisual(Border b, bool on)
-            {
-                b.BorderBrush = on ? ResBrush("DsAccent") : Brushes.Transparent;
-                b.BorderThickness = on ? new Thickness(1) : new Thickness(0);
-                b.Background = on ? new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF)) : Brushes.Transparent;
-            }
+            visiblePaths.Add(path);
+            rowByPath[path] = border;
+            ApplyRowVisual(border, path);
 
-            border.BorderBrush = Brushes.Transparent;
-            border.BorderThickness = new Thickness(0);
-            border.MouseEnter += (_, _) => { if (!ReferenceEquals(selectedRow, border)) border.Background = new SolidColorBrush(Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF)); };
-            border.MouseLeave += (_, _) => { if (!ReferenceEquals(selectedRow, border)) border.Background = Brushes.Transparent; };
+            border.MouseEnter += (_, _) =>
+            {
+                if (!selected.Contains(path)) border.Background = new SolidColorBrush(Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF));
+            };
+            border.MouseLeave += (_, _) =>
+            {
+                if (!selected.Contains(path)) border.Background = Brushes.Transparent;
+            };
             border.MouseLeftButtonUp += (_, e) =>
             {
-                // Один клик — выбор и предпросмотр; двойной — открыть/перейти.
-                if (e.ClickCount >= 2)
+                bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+                bool shift = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
+
+                // Один клик — выбор/предпросмотр; двойной — открыть/перейти (без модификаторов).
+                if (e.ClickCount >= 2 && !ctrl && !shift)
                 {
                     if (isDir) NavigateTo(path);
                     else
@@ -1626,17 +1635,41 @@ public sealed partial class WidgetWindow : Window
                     return;
                 }
 
-                if (selectedRow is not null && !ReferenceEquals(selectedRow, border))
+                if (shift && lastClickedPath is not null)
                 {
-                    selectedRow.BorderBrush = Brushes.Transparent;
-                    selectedRow.BorderThickness = new Thickness(0);
-                    selectedRow.Background = Brushes.Transparent;
+                    int a = visiblePaths.IndexOf(lastClickedPath);
+                    int b = visiblePaths.IndexOf(path);
+                    if (a >= 0 && b >= 0)
+                    {
+                        int from = Math.Min(a, b);
+                        int to = Math.Max(a, b);
+                        if (!ctrl) selected.Clear();
+                        for (int i = from; i <= to; i++) selected.Add(visiblePaths[i]);
+                    }
+                    else
+                    {
+                        if (!ctrl) selected.Clear();
+                        selected.Add(path);
+                    }
                 }
-                selectedRow = border;
-                ApplySelectionVisual(border, true);
+                else if (ctrl)
+                {
+                    if (!selected.Add(path)) selected.Remove(path);
+                }
+                else
+                {
+                    selected.Clear();
+                    selected.Add(path);
+                }
+
+                lastClickedPath = path;
+                RefreshSelectionVisuals();
                 ShowPreview(path, isDir);
+                scroll.Focus();
                 e.Handled = true;
             };
+
+            List<string> TargetPaths() => selected.Contains(path) && selected.Count > 1 ? selected.ToList() : new List<string> { path };
 
             var menu = new ContextMenu();
             var open = new MenuItem { Header = isDir ? "Открыть внутри виджета" : "Открыть" };
@@ -1675,25 +1708,50 @@ public sealed partial class WidgetWindow : Window
             menu.Items.Add(reveal);
 
             var copy = new MenuItem { Header = "Копировать путь" };
-            copy.Click += (_, _) => CopyToClipboardText(path);
+            copy.Click += (_, _) => CopyToClipboardText(string.Join(Environment.NewLine, TargetPaths()));
             menu.Items.Add(copy);
 
-            var copyFile = new MenuItem { Header = "Копировать файл" };
+            var copyFile = new MenuItem { Header = selected.Count > 1 && selected.Contains(path) ? "Копировать файлы" : "Копировать файл" };
             copyFile.Click += (_, _) =>
             {
                 try
                 {
+                    var targets = TargetPaths();
                     var files = new StringCollection();
-                    files.Add(path);
+                    foreach (var p in targets) files.Add(p);
                     Clipboard.SetFileDropList(files);
+                    cutPaths.Clear();
+                    cutPending = false;
+                    RefreshSelectionVisuals();
                 }
-                catch (Exception ex) { Log.Info($"folder widget: copy file failed {path} — {ex.Message}"); }
+                catch (Exception ex) { Log.Info($"folder widget: copy file failed — {ex.Message}"); }
             };
             menu.Items.Add(copyFile);
 
+            var cutFile = new MenuItem { Header = selected.Count > 1 && selected.Contains(path) ? "Вырезать файлы" : "Вырезать" };
+            cutFile.Click += (_, _) =>
+            {
+                try
+                {
+                    var targets = TargetPaths();
+                    var files = new StringCollection();
+                    cutPaths.Clear();
+                    foreach (var p in targets)
+                    {
+                        files.Add(p);
+                        cutPaths.Add(p);
+                    }
+                    Clipboard.SetFileDropList(files);
+                    cutPending = true;
+                    RefreshSelectionVisuals();
+                }
+                catch (Exception ex) { Log.Info($"folder widget: cut failed — {ex.Message}"); }
+            };
+            menu.Items.Add(cutFile);
+
             menu.Items.Add(new Separator());
 
-            var rename = new MenuItem { Header = "Переименовать" };
+            var rename = new MenuItem { Header = "Переименовать", IsEnabled = !(selected.Count > 1 && selected.Contains(path)) };
             rename.Click += (_, _) =>
             {
                 string oldName = System.IO.Path.GetFileName(path);
@@ -1712,11 +1770,14 @@ public sealed partial class WidgetWindow : Window
             };
             menu.Items.Add(rename);
 
-            var delete = new MenuItem { Header = "Удалить в корзину" };
+            var delete = new MenuItem { Header = selected.Count > 1 && selected.Contains(path) ? "Удалить выбранные в корзину" : "Удалить в корзину" };
             delete.Click += (_, _) =>
             {
-                try { RecyclePath(path); }
-                catch (Exception ex) { Log.Info($"folder widget: delete failed {path} — {ex.Message}"); }
+                try
+                {
+                    foreach (var p in TargetPaths().ToList()) RecyclePath(p);
+                }
+                catch (Exception ex) { Log.Info($"folder widget: delete failed — {ex.Message}"); }
                 finally { Rebuild(); }
             };
             menu.Items.Add(delete);
@@ -1728,11 +1789,28 @@ public sealed partial class WidgetWindow : Window
             return border;
         }
 
+        void ApplyRowVisual(Border b, string path)
+        {
+            bool isSelected = selected.Contains(path);
+            bool isCut = cutPaths.Contains(path);
+            b.Opacity = isCut ? 0.5 : 1.0;
+            b.BorderBrush = isSelected ? ResBrush("DsAccent") : Brushes.Transparent;
+            b.BorderThickness = isSelected ? new Thickness(1) : new Thickness(0);
+            b.Background = isSelected ? new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF)) : Brushes.Transparent;
+        }
+
+        void RefreshSelectionVisuals()
+        {
+            foreach (var kv in rowByPath)
+                ApplyRowVisual(kv.Value, kv.Key);
+        }
+
         void Rebuild()
         {
             try
             {
-                selectedRow = null;
+                rowByPath.Clear();
+                visiblePaths.Clear();
                 list.Children.Clear();
                 if (string.IsNullOrWhiteSpace(currentPath) || !Directory.Exists(currentPath))
                 {
@@ -1790,11 +1868,13 @@ public sealed partial class WidgetWindow : Window
                 foreach (var d in dirs.Take(160)) list.Children.Add(Row(d, true));
                 foreach (var f in files.Take(240)) list.Children.Add(Row(f, false));
 
-                // Если выбранный элемент исчез — сбросить предпросмотр.
-                if (!string.IsNullOrWhiteSpace(selectedPath) &&
-                    !Directory.Exists(selectedPath) && !File.Exists(selectedPath))
+                // Чистим исчезнувшие из выделения и предпросмотр.
+                selected.RemoveWhere(p => !Directory.Exists(p) && !File.Exists(p));
+                RefreshSelectionVisuals();
+                if (!string.IsNullOrWhiteSpace(lastClickedPath) &&
+                    !Directory.Exists(lastClickedPath) && !File.Exists(lastClickedPath))
                 {
-                    selectedPath = null;
+                    lastClickedPath = null;
                     ClearPreview();
                 }
 
@@ -1969,6 +2049,25 @@ public sealed partial class WidgetWindow : Window
             catch { return 1; }
         }
 
+        void CopySelectionToClipboard(bool cut)
+        {
+            if (selected.Count == 0) return;
+            try
+            {
+                var files = new StringCollection();
+                cutPaths.Clear();
+                foreach (var p in selected)
+                {
+                    files.Add(p);
+                    if (cut) cutPaths.Add(p);
+                }
+                Clipboard.SetFileDropList(files);
+                cutPending = cut;
+                RefreshSelectionVisuals();
+            }
+            catch (Exception ex) { Log.Info($"folder widget: {(cut ? "cut" : "copy")} failed — {ex.Message}"); }
+        }
+
         void PasteIntoCurrent()
         {
             if (missing || !Directory.Exists(currentPath)) return;
@@ -1977,6 +2076,17 @@ public sealed partial class WidgetWindow : Window
             try
             {
                 var files = Clipboard.GetFileDropList();
+                // Считаем операцию вырезания, если виджет сам ставил cut и список совпадает с помеченными.
+                bool doMove = cutPending && files.Count > 0;
+                if (doMove)
+                {
+                    foreach (var p in files)
+                    {
+                        if (string.IsNullOrWhiteSpace(p) || !cutPaths.Contains(p)) { doMove = false; break; }
+                    }
+                }
+
+                var moved = new List<string>();
                 foreach (var p in files)
                 {
                     if (string.IsNullOrWhiteSpace(p)) continue;
@@ -1986,6 +2096,9 @@ public sealed partial class WidgetWindow : Window
                         bool isDirSrc = Directory.Exists(p);
                         string name = System.IO.Path.GetFileName(p);
                         string dest = System.IO.Path.Combine(currentPath, name);
+
+                        if (string.Equals(System.IO.Path.GetFullPath(p), System.IO.Path.GetFullPath(dest), StringComparison.OrdinalIgnoreCase))
+                            continue;
 
                         bool exists = isDirSrc ? Directory.Exists(dest) : File.Exists(dest);
                         if (exists || (isDirSrc ? File.Exists(dest) : Directory.Exists(dest)))
@@ -2004,10 +2117,47 @@ public sealed partial class WidgetWindow : Window
                             }
                         }
 
-                        if (isDirSrc) CopyDirectory(p, dest);
-                        else File.Copy(p, dest, overwrite: true);
+                        if (doMove)
+                        {
+                            try
+                            {
+                                if (isDirSrc) Directory.Move(p, dest);
+                                else File.Move(p, dest);
+                                moved.Add(p);
+                                continue;
+                            }
+                            catch (IOException)
+                            {
+                                // Межтомное перемещение: копия, исходник удалим после успеха.
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.Info($"folder widget: move paste failed {p} — {ex.Message}");
+                                continue;
+                            }
+
+                            try
+                            {
+                                if (isDirSrc) { CopyDirectory(p, dest); Directory.Delete(p, true); }
+                                else { File.Copy(p, dest, overwrite: false); File.Delete(p); }
+                                moved.Add(p);
+                            }
+                            catch (Exception ex) { Log.Info($"folder widget: move paste fallback failed {p} — {ex.Message}"); }
+                        }
+                        else
+                        {
+                            if (isDirSrc) CopyDirectory(p, dest);
+                            else File.Copy(p, dest, overwrite: true);
+                        }
                     }
                     catch (Exception ex) { Log.Info($"folder widget: paste failed {p} — {ex.Message}"); }
+                }
+
+                if (doMove && moved.Count > 0)
+                {
+                    foreach (var p in moved) cutPaths.Remove(p);
+                    cutPending = cutPaths.Count > 0;
+                    try { Clipboard.Clear(); } catch { }
                 }
             }
             catch (Exception ex) { Log.Info($"folder widget: paste failed — {ex.Message}"); }
@@ -2046,6 +2196,20 @@ public sealed partial class WidgetWindow : Window
         paste.Click += (_, _) => PasteIntoCurrent();
         menu.Items.Add(paste);
 
+        var selectAllItem = new MenuItem { Header = "Выделить всё" };
+        selectAllItem.Click += (_, _) =>
+        {
+            selected.Clear();
+            foreach (var p in visiblePaths) selected.Add(p);
+            if (visiblePaths.Count > 0)
+            {
+                lastClickedPath = visiblePaths[^1];
+                ShowPreview(lastClickedPath, Directory.Exists(lastClickedPath));
+            }
+            RefreshSelectionVisuals();
+        };
+        menu.Items.Add(selectAllItem);
+
         menu.Items.Add(new Separator());
         var refreshItem = new MenuItem { Header = "Обновить" };
         refreshItem.Click += (_, _) => Rebuild();
@@ -2054,6 +2218,56 @@ public sealed partial class WidgetWindow : Window
         menu.Items.Add(RemoveWidgetItem());
         container.ContextMenu = menu;
         _root.ContextMenu = null;
+
+        container.Focusable = true;
+        void HandleKeys(object? _, KeyEventArgs e)
+        {
+            bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+            if (filterBox.IsKeyboardFocusWithin) return;
+
+            if (ctrl && e.Key == Key.A)
+            {
+                selected.Clear();
+                foreach (var p in visiblePaths) selected.Add(p);
+                if (visiblePaths.Count > 0)
+                {
+                    lastClickedPath = visiblePaths[^1];
+                    ShowPreview(lastClickedPath, Directory.Exists(lastClickedPath));
+                }
+                RefreshSelectionVisuals();
+                e.Handled = true;
+            }
+            else if (ctrl && e.Key == Key.C)
+            {
+                CopySelectionToClipboard(cut: false);
+                e.Handled = true;
+            }
+            else if (ctrl && e.Key == Key.X)
+            {
+                CopySelectionToClipboard(cut: true);
+                e.Handled = true;
+            }
+            else if (ctrl && e.Key == Key.V)
+            {
+                PasteIntoCurrent();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                selected.Clear();
+                RefreshSelectionVisuals();
+                ClearPreview();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Delete && selected.Count > 0)
+            {
+                foreach (var p in selected.ToList()) RecyclePath(p);
+                Rebuild();
+                e.Handled = true;
+            }
+        }
+        container.PreviewKeyDown += HandleKeys;
+        scroll.PreviewKeyDown += HandleKeys;
 
         AllowDrop = true;
         container.AllowDrop = true;
