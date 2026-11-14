@@ -1287,6 +1287,11 @@ public sealed partial class WidgetWindow : Window
         string? lastClickedPath = null;
         var cutPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         bool cutPending = false;
+        var changedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var dotByPath = new Dictionary<string, UIElement>(StringComparer.OrdinalIgnoreCase);
+        var prevSig = new Dictionary<string, (long size, long ticks)>(StringComparer.OrdinalIgnoreCase);
+        string snapshotPath = string.Empty;
+        bool haveSnapshot = false;
 
         var title = new TextBlock
         {
@@ -1565,6 +1570,10 @@ public sealed partial class WidgetWindow : Window
             var full = System.IO.Path.GetFullPath(path).TrimEnd('\\', '/');
             if (!full.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase)) return;
             currentPath = full;
+            // При смене папки сбрасываем снимок, чтобы не помечать всё как «изменилось».
+            snapshotPath = string.Empty;
+            haveSnapshot = false;
+            changedPaths.Clear();
             Rebuild();
         }
 
@@ -1589,9 +1598,22 @@ public sealed partial class WidgetWindow : Window
                 VerticalAlignment = VerticalAlignment.Center,
             };
 
+            var dot = new System.Windows.Shapes.Ellipse
+            {
+                Width = 6,
+                Height = 6,
+                Fill = ResBrush("DsAccent"),
+                Margin = new Thickness(6, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Visibility = changedPaths.Contains(path) ? Visibility.Visible : Visibility.Collapsed,
+                ToolTip = "Новое или изменённое",
+            };
+
             var row = new DockPanel { LastChildFill = true };
             DockPanel.SetDock(icon, Dock.Left);
+            DockPanel.SetDock(dot, Dock.Right);
             row.Children.Add(icon);
+            row.Children.Add(dot);
             row.Children.Add(name);
 
             var border = new Border
@@ -1607,6 +1629,7 @@ public sealed partial class WidgetWindow : Window
 
             visiblePaths.Add(path);
             rowByPath[path] = border;
+            dotByPath[path] = dot;
             ApplyRowVisual(border, path);
 
             border.MouseEnter += (_, _) =>
@@ -1662,6 +1685,7 @@ public sealed partial class WidgetWindow : Window
                     selected.Add(path);
                 }
 
+                MarkSeen(path);
                 lastClickedPath = path;
                 RefreshSelectionVisuals();
                 ShowPreview(path, isDir);
@@ -1810,6 +1834,7 @@ public sealed partial class WidgetWindow : Window
             try
             {
                 rowByPath.Clear();
+                dotByPath.Clear();
                 visiblePaths.Clear();
                 list.Children.Clear();
                 if (string.IsNullOrWhiteSpace(currentPath) || !Directory.Exists(currentPath))
@@ -1839,6 +1864,33 @@ public sealed partial class WidgetWindow : Window
                 missing = false;
                 var dirInfos = new DirectoryInfo(currentPath).EnumerateDirectories().ToList();
                 var fileInfos = new DirectoryInfo(currentPath).EnumerateFiles().ToList();
+
+                // Индикатор «новое/изменилось»: сравниваем снимок содержимого текущей папки с предыдущим (в сессии).
+                var currentSig = new Dictionary<string, (long size, long ticks)>(StringComparer.OrdinalIgnoreCase);
+                foreach (var d in dirInfos)
+                    currentSig[d.FullName] = (-1, d.LastWriteTimeUtc.Ticks);
+                foreach (var f in fileInfos)
+                    currentSig[f.FullName] = (f.Length, f.LastWriteTimeUtc.Ticks);
+
+                bool sameFolder = string.Equals(snapshotPath, currentPath, StringComparison.OrdinalIgnoreCase);
+                if (sameFolder && haveSnapshot)
+                {
+                    foreach (var kv in currentSig)
+                    {
+                        if (!prevSig.TryGetValue(kv.Key, out var old) || old != kv.Value)
+                            changedPaths.Add(kv.Key);
+                    }
+                    // Удалённые больше не помечаем.
+                    changedPaths.RemoveWhere(p => !currentSig.ContainsKey(p));
+                }
+                else
+                {
+                    // Смена папки/первый снимок — не помечаем всё как изменённое.
+                    changedPaths.Clear();
+                }
+                prevSig = currentSig;
+                snapshotPath = currentPath;
+                haveSnapshot = true;
 
                 bool Match(string name) => string.IsNullOrWhiteSpace(filter) || name.Contains(filter, StringComparison.CurrentCultureIgnoreCase);
 
@@ -2220,9 +2272,16 @@ public sealed partial class WidgetWindow : Window
         _root.ContextMenu = null;
 
         container.Focusable = true;
+        void MarkSeen(string path)
+        {
+            if (changedPaths.Remove(path) && dotByPath.TryGetValue(path, out var dot))
+                dot.Visibility = Visibility.Collapsed;
+        }
+
         void SelectSingle(string path)
         {
             if (string.IsNullOrWhiteSpace(path)) return;
+            MarkSeen(path);
             selected.Clear();
             selected.Add(path);
             lastClickedPath = path;
