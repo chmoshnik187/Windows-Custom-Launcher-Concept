@@ -102,6 +102,8 @@ public partial class DashboardWindow : Window
         Deactivated += (_, _) =>
         {
             if (!activated) return;
+            // Явный запуск флагом (аудит/диагностика): окно должно оставаться открытым.
+            if (Program.OpenDashboard) return;
 
             // Фокус ушёл к нашему же окну (док, виджет, остров) — не закрываемся.
             // Без этого обзор захлопывался сразу после открытия, стоило доку

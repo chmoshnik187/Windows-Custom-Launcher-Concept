@@ -313,6 +313,8 @@ public sealed class ControlCenterWindow : Window
         Deactivated += (_, _) =>
         {
             if (!activated) return;
+            // Явный запуск флагом (аудит/диагностика): окно должно оставаться открытым.
+            if (Program.OpenControlCenter) return;
 
             // Не закрываемся, если фокус ушёл к нашему же окну (док, виджет, остров):
             // иначе панель захлопывалась сразу после открытия, стоило доку получить
