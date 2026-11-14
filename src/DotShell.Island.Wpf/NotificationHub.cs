@@ -54,7 +54,7 @@ public static class NotificationHub
         if (mode != "card" && island is not null)
         {
             try { if (island.ShowNotification(title, message)) { PlaySound(); return true; } }
-            catch { }
+            catch (Exception ex) { Log.Info($"notify hub: капсула не показала уведомление — {ex.Message}"); }
         }
 
         try
@@ -82,7 +82,11 @@ public static class NotificationHub
             PlaySound();
             return true;
         }
-        catch { return false; }
+        catch (Exception ex)
+        {
+            Log.Info($"notify hub: карточка не показана — {ex.Message}");
+            return false;
+        }
     }
 
     private static Window Build(string title, string message, Action? onClick)

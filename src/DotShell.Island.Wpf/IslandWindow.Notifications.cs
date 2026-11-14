@@ -113,7 +113,7 @@ public partial class IslandWindow
         catch (Exception ex)
         {
             // Что-то не сложилось: возвращаем капсулу как была и отдаём показ карточке.
-            try { HideNotification(); } catch { }
+            try { HideNotification(); } catch (Exception hideEx) { Log.Info($"island notification rollback failed: {hideEx.Message}"); }
             Log.Info($"island notification failed: {ex.Message}");
             return false;
         }
@@ -175,7 +175,7 @@ public partial class IslandWindow
         // все уходили в карточку до перезапуска программы.
         if (_isExpanded)
         {
-            try { _notice.Hide(); } catch { }
+            try { _notice.Hide(); } catch (Exception ex) { Log.Info($"notice hide (expanded) failed: {ex.Message}"); }
             return;
         }
 
@@ -210,7 +210,10 @@ public partial class IslandWindow
                 CollapsedRow.Visibility = Visibility.Visible;
                 ResizeWindowTo(CollapsedWidth, CollapsedHeight);
             }
-            catch { }
+            catch (Exception restoreEx)
+            {
+                Log.Info($"notice hide recovery failed: {restoreEx.Message}");
+            }
         }
     }
     private void UpdateQuietMode()
