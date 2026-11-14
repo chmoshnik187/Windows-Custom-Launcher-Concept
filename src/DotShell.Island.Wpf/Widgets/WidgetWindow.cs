@@ -11,6 +11,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using System.Runtime.InteropServices;
+using System.Collections.Specialized;
 using DotShell.Core;
 using DotShell.Core.Native;
 using DotShell.Island.Wpf.Controls;
@@ -1280,6 +1281,8 @@ public sealed partial class WidgetWindow : Window
         bool missing = string.IsNullOrWhiteSpace(currentPath) || !Directory.Exists(currentPath);
         string filter = string.Empty;
         int sortMode = 0; // 0 имя, 1 дата, 2 размер, 3 тип
+        string? selectedPath = null;
+        Border? selectedRow = null;
 
         var title = new TextBlock
         {
@@ -1307,6 +1310,104 @@ public sealed partial class WidgetWindow : Window
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Margin = new Thickness(0, 6, 0, 0),
         };
+
+        // Панель быстрого предпросмотра (Quick Look-идея, адаптированная под компактный виджет).
+        var previewImage = new Image { Stretch = Stretch.Uniform, MaxHeight = 120, Margin = new Thickness(0, 0, 0, 4), Visibility = Visibility.Collapsed };
+        var previewName = new TextBlock { FontFamily = new FontFamily("Segoe UI"), FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = ResBrush("DsText"), TextTrimming = TextTrimming.CharacterEllipsis };
+        var previewMeta = new TextBlock { FontFamily = new FontFamily("Segoe UI"), FontSize = 9, Foreground = ResBrush("DsTextMuted"), TextWrapping = TextWrapping.Wrap };
+        var previewText = new TextBlock { FontFamily = new FontFamily("Consolas"), FontSize = 9, Foreground = ResBrush("DsTextMuted"), TextWrapping = TextWrapping.Wrap, MaxHeight = 70, TextTrimming = TextTrimming.CharacterEllipsis, Visibility = Visibility.Collapsed };
+        var previewPanel = new StackPanel { Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed };
+        previewPanel.Children.Add(previewImage);
+        previewPanel.Children.Add(previewName);
+        previewPanel.Children.Add(previewMeta);
+        previewPanel.Children.Add(previewText);
+
+        void ClearPreview()
+        {
+            previewPanel.Visibility = Visibility.Collapsed;
+            previewImage.Source = null;
+            previewImage.Visibility = Visibility.Collapsed;
+            previewText.Visibility = Visibility.Collapsed;
+            previewName.Text = string.Empty;
+            previewMeta.Text = string.Empty;
+            scroll.MaxHeight = Math.Max(80, ActualHeight - 140);
+        }
+
+        string FmtSize(long bytes)
+        {
+            if (bytes < 1024) return $"{bytes} Б";
+            if (bytes < 1024 * 1024) return $"{bytes / 1024.0:0.#} КБ";
+            if (bytes < 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024):0.#} МБ";
+            return $"{bytes / (1024.0 * 1024 * 1024):0.##} ГБ";
+        }
+
+        void ShowPreview(string path, bool isDir)
+        {
+            try
+            {
+                selectedPath = path;
+                previewPanel.Visibility = Visibility.Visible;
+                scroll.MaxHeight = Math.Max(80, ActualHeight - 230);
+                previewImage.Source = null;
+                previewImage.Visibility = Visibility.Collapsed;
+                previewText.Text = string.Empty;
+                previewText.Visibility = Visibility.Collapsed;
+
+                previewName.Text = System.IO.Path.GetFileName(path);
+                if (isDir)
+                {
+                    var di = new DirectoryInfo(path);
+                    int subDirs = 0, subFiles = 0;
+                    try { subDirs = di.EnumerateDirectories().Take(500).Count(); subFiles = di.EnumerateFiles().Take(1000).Count(); } catch { }
+                    previewMeta.Text = $"Папка · {subDirs} папок, {subFiles} файлов · изменено {di.LastWriteTime:g}";
+                    return;
+                }
+
+                var fi = new FileInfo(path);
+                previewMeta.Text = $"{fi.Extension.ToLowerInvariant()} · {FmtSize(fi.Exists ? fi.Length : 0)} · изменено {fi.LastWriteTime:g}";
+
+                string ext = fi.Extension.ToLowerInvariant();
+                if (ext is ".png" or ".jpg" or ".jpeg" or ".bmp" or ".gif" or ".webp")
+                {
+                    try
+                    {
+                        var bmp = new BitmapImage();
+                        bmp.BeginInit();
+                        bmp.CacheOption = BitmapCacheOption.OnLoad;
+                        bmp.UriSource = new Uri(path);
+                        bmp.DecodePixelWidth = 320;
+                        bmp.EndInit();
+                        bmp.Freeze();
+                        previewImage.Source = bmp;
+                        previewImage.Visibility = Visibility.Visible;
+                    }
+                    catch { }
+                }
+                else if (ext is ".txt" or ".md" or ".log" or ".json" or ".xml" or ".csv" or ".ini" or ".cfg" or ".cs" or ".js" or ".ts" or ".py" or ".ps1" or ".yaml" or ".yml")
+                {
+                    try
+                    {
+                        if (fi.Length <= 256 * 1024)
+                        {
+                            using var sr = new StreamReader(path);
+                            char[] buf = new char[600];
+                            int n = sr.Read(buf, 0, buf.Length);
+                            if (n > 0)
+                            {
+                                previewText.Text = new string(buf, 0, n).Replace("\r", "");
+                                previewText.Visibility = Visibility.Visible;
+                            }
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Info($"folder widget: preview failed {path} — {ex.Message}");
+                previewPanel.Visibility = Visibility.Collapsed;
+            }
+        }
 
         bool AtRoot() => string.Equals(System.IO.Path.GetFullPath(currentPath).TrimEnd('\\', '/'),
             System.IO.Path.GetFullPath(rootPath).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
@@ -1485,20 +1586,41 @@ public sealed partial class WidgetWindow : Window
                 Tag = path,
             };
 
-            border.MouseEnter += (_, _) => border.Background = new SolidColorBrush(Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF));
-            border.MouseLeave += (_, _) => border.Background = Brushes.Transparent;
+            void ApplySelectionVisual(Border b, bool on)
+            {
+                b.BorderBrush = on ? ResBrush("DsAccent") : Brushes.Transparent;
+                b.BorderThickness = on ? new Thickness(1) : new Thickness(0);
+                b.Background = on ? new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF)) : Brushes.Transparent;
+            }
+
+            border.BorderBrush = Brushes.Transparent;
+            border.BorderThickness = new Thickness(0);
+            border.MouseEnter += (_, _) => { if (!ReferenceEquals(selectedRow, border)) border.Background = new SolidColorBrush(Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF)); };
+            border.MouseLeave += (_, _) => { if (!ReferenceEquals(selectedRow, border)) border.Background = Brushes.Transparent; };
             border.MouseLeftButtonUp += (_, e) =>
             {
-                if (isDir)
+                // Один клик — выбор и предпросмотр; двойной — открыть/перейти.
+                if (e.ClickCount >= 2)
                 {
-                    // Внутри виджета папки удобнее открывать навигацией; во внешний проводник — ПКМ.
-                    NavigateTo(path);
+                    if (isDir) NavigateTo(path);
+                    else
+                    {
+                        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); }
+                        catch (Exception ex) { Log.Info($"folder widget: open failed {path} — {ex.Message}"); }
+                    }
+                    e.Handled = true;
+                    return;
                 }
-                else
+
+                if (selectedRow is not null && !ReferenceEquals(selectedRow, border))
                 {
-                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); }
-                    catch (Exception ex) { Log.Info($"folder widget: open failed {path} — {ex.Message}"); }
+                    selectedRow.BorderBrush = Brushes.Transparent;
+                    selectedRow.BorderThickness = new Thickness(0);
+                    selectedRow.Background = Brushes.Transparent;
                 }
+                selectedRow = border;
+                ApplySelectionVisual(border, true);
+                ShowPreview(path, isDir);
                 e.Handled = true;
             };
 
@@ -1542,6 +1664,19 @@ public sealed partial class WidgetWindow : Window
             copy.Click += (_, _) => CopyToClipboardText(path);
             menu.Items.Add(copy);
 
+            var copyFile = new MenuItem { Header = "Копировать файл" };
+            copyFile.Click += (_, _) =>
+            {
+                try
+                {
+                    var files = new StringCollection();
+                    files.Add(path);
+                    Clipboard.SetFileDropList(files);
+                }
+                catch (Exception ex) { Log.Info($"folder widget: copy file failed {path} — {ex.Message}"); }
+            };
+            menu.Items.Add(copyFile);
+
             menu.Items.Add(new Separator());
 
             var rename = new MenuItem { Header = "Переименовать" };
@@ -1583,6 +1718,7 @@ public sealed partial class WidgetWindow : Window
         {
             try
             {
+                selectedRow = null;
                 list.Children.Clear();
                 if (string.IsNullOrWhiteSpace(currentPath) || !Directory.Exists(currentPath))
                 {
@@ -1639,6 +1775,14 @@ public sealed partial class WidgetWindow : Window
 
                 foreach (var d in dirs.Take(160)) list.Children.Add(Row(d, true));
                 foreach (var f in files.Take(240)) list.Children.Add(Row(f, false));
+
+                // Если выбранный элемент исчез — сбросить предпросмотр.
+                if (!string.IsNullOrWhiteSpace(selectedPath) &&
+                    !Directory.Exists(selectedPath) && !File.Exists(selectedPath))
+                {
+                    selectedPath = null;
+                    ClearPreview();
+                }
 
                 if (shown == 0)
                 {
@@ -1745,7 +1889,9 @@ public sealed partial class WidgetWindow : Window
 
         var container = new DockPanel();
         DockPanel.SetDock(top, Dock.Top);
+        DockPanel.SetDock(previewPanel, Dock.Bottom);
         container.Children.Add(top);
+        container.Children.Add(previewPanel);
         container.Children.Add(scroll);
 
         var menu = new ContextMenu();
@@ -1775,6 +1921,31 @@ public sealed partial class WidgetWindow : Window
             finally { Rebuild(); }
         };
         menu.Items.Add(newFolder);
+
+        var paste = new MenuItem { Header = "Вставить" };
+        paste.Click += (_, _) =>
+        {
+            try
+            {
+                if (missing || !Directory.Exists(currentPath)) return;
+                if (!Clipboard.ContainsFileDropList()) return;
+                var files = Clipboard.GetFileDropList();
+                foreach (var p in files)
+                {
+                    if (string.IsNullOrWhiteSpace(p)) continue;
+                    try
+                    {
+                        string dest = System.IO.Path.Combine(currentPath, System.IO.Path.GetFileName(p));
+                        if (Directory.Exists(p)) CopyDirectory(p, dest);
+                        else if (File.Exists(p)) File.Copy(p, dest, overwrite: false);
+                    }
+                    catch (Exception ex) { Log.Info($"folder widget: paste failed {p} — {ex.Message}"); }
+                }
+            }
+            catch (Exception ex) { Log.Info($"folder widget: paste failed — {ex.Message}"); }
+            finally { Rebuild(); }
+        };
+        menu.Items.Add(paste);
 
         menu.Items.Add(new Separator());
         var refreshItem = new MenuItem { Header = "Обновить" };
@@ -1817,7 +1988,7 @@ public sealed partial class WidgetWindow : Window
 
         Timer(5000, Rebuild);
 
-        _relayout = (_, h) => scroll.MaxHeight = Math.Max(80, h - 92);
+        _relayout = (_, h) => scroll.MaxHeight = Math.Max(80, h - 110 - (previewPanel.Visibility == Visibility.Visible ? 90 : 0));
         return container;
     }
 
