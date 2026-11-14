@@ -35,14 +35,20 @@ public sealed partial class WidgetWindow : Window
     private readonly string _path;
     private readonly Border _root;
     private readonly List<DispatcherTimer> _timers = new();
+    private readonly Action<IReadOnlyList<string>>? _savePinned;
+    private readonly IReadOnlyList<string> _initialPinned;
 
     public string WidgetType => _type;
     public string WidgetPath => _path;
 
-    public WidgetWindow(string type, int x, int y, int width = 0, int height = 0, string path = "")
+    public WidgetWindow(string type, int x, int y, int width = 0, int height = 0, string path = "",
+        IEnumerable<string>? initialPinned = null, Action<IReadOnlyList<string>>? savePinned = null)
     {
         _type = type;
         _path = path ?? string.Empty;
+        _savePinned = savePinned;
+        _initialPinned = initialPinned?.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
+            ?? (IReadOnlyList<string>)Array.Empty<string>();
         Title = "DotShell widget";
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
@@ -1283,7 +1289,8 @@ public sealed partial class WidgetWindow : Window
         int sortMode = 0; // 0 имя, 1 дата, 2 размер, 3 тип
         int groupMode = 0; // 0 нет, 1 тип, 2 дата
         var collapsedGroups = new HashSet<string>(StringComparer.Ordinal);
-        var pinned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var pinned = new HashSet<string>(_initialPinned, StringComparer.OrdinalIgnoreCase);
+        void SavePins() => _savePinned?.Invoke(pinned.ToList());
         var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var rowByPath = new Dictionary<string, Border>(StringComparer.OrdinalIgnoreCase);
         var visiblePaths = new List<string>();
@@ -1806,11 +1813,13 @@ public sealed partial class WidgetWindow : Window
             {
                 try
                 {
+                    bool pinsChanged = false;
                     foreach (var p in TargetPaths().ToList())
                     {
                         RecyclePath(p);
-                        pinned.Remove(p);
+                        if (pinned.Remove(p)) pinsChanged = true;
                     }
+                    if (pinsChanged) SavePins();
                 }
                 catch (Exception ex) { Log.Info($"folder widget: delete failed — {ex.Message}"); }
                 finally { Rebuild(); }
@@ -1821,6 +1830,7 @@ public sealed partial class WidgetWindow : Window
             pin.Click += (_, _) =>
             {
                 if (!pinned.Add(path)) pinned.Remove(path);
+                SavePins();
                 Rebuild();
             };
             menu.Items.Add(pin);
@@ -1934,9 +1944,10 @@ public sealed partial class WidgetWindow : Window
                 int total = dirInfos.Count + fileInfos.Count;
                 int shown = dirsShown.Count + filesShown.Count;
 
-                // Чистим закрепления, которых больше нет в текущей папке.
-                var present = new HashSet<string>(dirsShown.Select(d => d.FullName).Concat(filesShown.Select(f => f.FullName)), StringComparer.OrdinalIgnoreCase);
-                pinned.RemoveWhere(p => !present.Contains(p));
+                // Чистим только реально удалённые закрепления (не скрытые навигацией/фильтром).
+                int pinnedBefore = pinned.Count;
+                pinned.RemoveWhere(p => !File.Exists(p) && !Directory.Exists(p));
+                if (pinned.Count != pinnedBefore) SavePins();
 
                 var pinnedDirs = dirsShown.Where(d => pinned.Contains(d.FullName)).ToList();
                 var pinnedFiles = filesShown.Where(f => pinned.Contains(f.FullName)).ToList();

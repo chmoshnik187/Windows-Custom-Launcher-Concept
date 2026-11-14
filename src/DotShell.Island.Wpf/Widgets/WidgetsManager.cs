@@ -141,8 +141,10 @@ public static class WidgetsManager
         x = (int)Math.Clamp(x, work.Left, Math.Max(work.Left, work.Right - Math.Max(width, 160)));
         y = (int)Math.Clamp(y, work.Top, Math.Max(work.Top, work.Bottom - Math.Max(height, 90)));
 
-        Store.Add(type, x, y, path);
-        var window = new WidgetWindow(type, x, y, width, height, path);
+        var saved = Store.Add(type, x, y, path);
+        var window = new WidgetWindow(type, x, y, width, height, path,
+            saved.PinnedPaths,
+            pins => Store.UpdatePinnedPaths(type, path, pins));
         var key = Key(type, path);
         Open[key] = window;
         window.Closed += (_, _) => Open.Remove(key);

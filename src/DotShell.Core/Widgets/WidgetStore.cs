@@ -16,6 +16,9 @@ public sealed class WidgetSpec
 
     /// <summary>Дополнительные данные виджета. Для типа "folder" — путь к папке.</summary>
     public string Path { get; set; } = string.Empty;
+
+    /// <summary>Закреплённые элементы (полные пути) внутри виджета-папки.</summary>
+    public List<string> PinnedPaths { get; set; } = new();
 }
 
 /// <summary>
@@ -118,6 +121,21 @@ public sealed class WidgetStore
             if (spec is null) return;
             spec.W = width;
             spec.H = height;
+        }
+        Save();
+    }
+
+    /// <summary>Сохраняет закреплённые элементы виджета-папки.</summary>
+    public void UpdatePinnedPaths(string type, string path, IReadOnlyCollection<string> pinnedPaths)
+    {
+        lock (_lock)
+        {
+            var spec = FindSpec(type, path);
+            if (spec is null) return;
+            spec.PinnedPaths = pinnedPaths?
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList() ?? new List<string>();
         }
         Save();
     }
