@@ -1283,6 +1283,7 @@ public sealed partial class WidgetWindow : Window
         int sortMode = 0; // 0 имя, 1 дата, 2 размер, 3 тип
         int groupMode = 0; // 0 нет, 1 тип, 2 дата
         var collapsedGroups = new HashSet<string>(StringComparer.Ordinal);
+        var pinned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var rowByPath = new Dictionary<string, Border>(StringComparer.OrdinalIgnoreCase);
         var visiblePaths = new List<string>();
@@ -1805,12 +1806,24 @@ public sealed partial class WidgetWindow : Window
             {
                 try
                 {
-                    foreach (var p in TargetPaths().ToList()) RecyclePath(p);
+                    foreach (var p in TargetPaths().ToList())
+                    {
+                        RecyclePath(p);
+                        pinned.Remove(p);
+                    }
                 }
                 catch (Exception ex) { Log.Info($"folder widget: delete failed — {ex.Message}"); }
                 finally { Rebuild(); }
             };
             menu.Items.Add(delete);
+
+            var pin = new MenuItem { Header = pinned.Contains(path) ? "Открепить" : "Закрепить" };
+            pin.Click += (_, _) =>
+            {
+                if (!pinned.Add(path)) pinned.Remove(path);
+                Rebuild();
+            };
+            menu.Items.Add(pin);
 
             menu.Items.Add(new Separator());
             menu.Items.Add(RemoveWidgetItem());
@@ -1921,6 +1934,15 @@ public sealed partial class WidgetWindow : Window
                 int total = dirInfos.Count + fileInfos.Count;
                 int shown = dirsShown.Count + filesShown.Count;
 
+                // Чистим закрепления, которых больше нет в текущей папке.
+                var present = new HashSet<string>(dirsShown.Select(d => d.FullName).Concat(filesShown.Select(f => f.FullName)), StringComparer.OrdinalIgnoreCase);
+                pinned.RemoveWhere(p => !present.Contains(p));
+
+                var pinnedDirs = dirsShown.Where(d => pinned.Contains(d.FullName)).ToList();
+                var pinnedFiles = filesShown.Where(f => pinned.Contains(f.FullName)).ToList();
+                var restDirs = dirsShown.Where(d => !pinned.Contains(d.FullName)).ToList();
+                var restFiles = filesShown.Where(f => !pinned.Contains(f.FullName)).ToList();
+
                 RefreshHeader(shown, total);
 
                 string TypeGroup(FileInfo f)
@@ -1979,10 +2001,23 @@ public sealed partial class WidgetWindow : Window
                     foreach (var p in listPaths) list.Children.Add(Row(p, isDir));
                 }
 
+                bool hasPinned = pinnedDirs.Count + pinnedFiles.Count > 0;
+                if (hasPinned)
+                {
+                    string pinKey = "p:Закреплённые";
+                    list.Children.Add(GroupHeader("★ Закреплённые", pinnedDirs.Count + pinnedFiles.Count, pinKey));
+                    if (!collapsedGroups.Contains(pinKey))
+                    {
+                        foreach (var d in pinnedDirs) list.Children.Add(Row(d.FullName, true));
+                        foreach (var f in pinnedFiles) list.Children.Add(Row(f.FullName, false));
+                    }
+                }
+
                 if (groupMode == 1)
                 {
-                    RenderGroup("Папки", "1:Папки", dirsShown.Select(d => d.FullName), true);
-                    foreach (var g in filesShown.GroupBy(TypeGroup).OrderBy(g => g.Key, StringComparer.CurrentCulture))
+                    if (restDirs.Count > 0)
+                        RenderGroup("Папки", "1:Папки", restDirs.Select(d => d.FullName), true);
+                    foreach (var g in restFiles.GroupBy(TypeGroup).OrderBy(g => g.Key, StringComparer.CurrentCulture))
                     {
                         var items = g.ToList();
                         RenderGroup(g.Key, $"1:{g.Key}", items.Select(f => f.FullName), false);
@@ -1990,9 +2025,9 @@ public sealed partial class WidgetWindow : Window
                 }
                 else if (groupMode == 2)
                 {
-                    if (dirsShown.Count > 0)
-                        RenderGroup("Папки", "2:Папки", dirsShown.Select(d => d.FullName), true);
-                    var dateGroups = filesShown
+                    if (restDirs.Count > 0)
+                        RenderGroup("Папки", "2:Папки", restDirs.Select(d => d.FullName), true);
+                    var dateGroups = restFiles
                         .GroupBy(f => DateGroup(f.LastWriteTime))
                         .OrderBy(g => g.Key switch { "Сегодня" => 0, "Вчера" => 1, "За неделю" => 2, _ => 3 });
                     foreach (var g in dateGroups)
@@ -2003,8 +2038,8 @@ public sealed partial class WidgetWindow : Window
                 }
                 else
                 {
-                    foreach (var d in dirsShown) list.Children.Add(Row(d.FullName, true));
-                    foreach (var f in filesShown) list.Children.Add(Row(f.FullName, false));
+                    foreach (var d in restDirs) list.Children.Add(Row(d.FullName, true));
+                    foreach (var f in restFiles) list.Children.Add(Row(f.FullName, false));
                 }
 
                 // Чистим исчезнувшие из выделения и предпросмотр.
