@@ -15,7 +15,7 @@ using NightLight = DotShell.Core.Native.NightLight;
 public static class Program
 {
     /// <summary>
-    /// Вкладка, которую открыть сразу при старте (`--tab=chat`).
+    /// Вкладка, которую открыть сразу при старте (`--tab=notes`).
     /// </summary>
     public static string? StartupTab { get; private set; }
 

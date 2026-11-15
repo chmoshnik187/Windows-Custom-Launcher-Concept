@@ -1068,8 +1068,6 @@
                                     </ListBox>
                                 </Grid>
 
-                                <!-- ЧАТ: локальная модель, переписка как текст, а не пузыри -->
-                                
                                 <!-- ПОЛКА ФАЙЛОВ -->
                                 <Grid x:Name="TabShelf" Visibility="Collapsed">
                                     <Grid.RowDefinitions>

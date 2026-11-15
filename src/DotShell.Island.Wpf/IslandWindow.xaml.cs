@@ -117,7 +117,6 @@ public partial class IslandWindow : Window
         ["cmd"] = (720, 432),
         ["system"] = (660, 512),
         ["theme"] = (640, 472),
-        ["chat"] = (700, 480),
     };
 
     private const int WM_MOUSEACTIVATE = 0x0021;
@@ -154,9 +153,9 @@ public partial class IslandWindow : Window
     private double _normalLeft;
     private double _normalTop;
 
-    // ---- раскрытие переменной высоты (чат растёт вместе с перепиской) ----
+    // ---- раскрытие переменной высоты (заметки растут под содержимое) ----
     private double _expandedH = ExpandedHeight;
-private readonly DispatcherTimer _volChipTimer;
+    private readonly DispatcherTimer _volChipTimer;
     private bool _volSync;
     private WidgetGalleryWindow? _widgetGallery;
 
@@ -285,9 +284,7 @@ private readonly DispatcherTimer _volChipTimer;
         Current = this;
         Loaded += (_, _) => { if (LauncherHost.OpenOnce) Dispatcher.BeginInvoke(LauncherHost.Toggle); };
 
-        // Первая отрисовка переписки: прокрутка в конец, иначе чат открывается
-        // на самых старых репликах, а свежие висят ниже без движения.
-SourceInitialized += OnSourceInitialized;
+        SourceInitialized += OnSourceInitialized;
 
         // Смена разрешения или мониторов: позиция считалась один раз при старте,
         // и остров оставался в координатах старого экрана.
@@ -603,7 +600,7 @@ SourceInitialized += OnSourceInitialized;
         // таблетка и так в свёрнутом состоянии. Просто логируем старт.
         Log.Info($"island started (minimized={StartupManager.StartedMinimized})");
 
-        // --tab=chat: открыть сразу на нужной вкладке, не трогая мышью.
+        // --tab=notes: открыть сразу на нужной вкладке, не трогая мышью.
         if (!string.IsNullOrWhiteSpace(Program.StartupTab))
             Log.Info($"startup tab requested: {Program.StartupTab}");
     }

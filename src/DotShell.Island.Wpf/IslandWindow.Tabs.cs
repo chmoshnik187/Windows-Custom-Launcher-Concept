@@ -238,9 +238,6 @@ public partial class IslandWindow
         {
             PickerPanel.Visibility = Visibility.Collapsed;
         }
-if (tag == "chat")
-        {
-        }
 
         if (tag == "system")
             StatsLine.Text =
