@@ -243,7 +243,13 @@ if (-not $release) {
     Write-Ok "создан релиз $tag"
 }
 
+# Перечитываем релиз по тегу: в ответе на создание `upload_url` бывает пустым,
+# и тогда загрузка падает с «Invalid URI». Свежий GET всегда даёт id и шаблон URL.
+$release = Invoke-GitHub -Method Get -Path "/repos/$Repository/releases/tags/$tag"
 $uploadUrl = ($release.upload_url -replace '\{.*$', '')
+if (-not $uploadUrl) { throw "GitHub не вернул upload_url для релиза $tag" }
+Write-Ok "upload_url: $uploadUrl"
+
 $existing = @{}
 foreach ($asset in @($release.assets)) {
     if ($asset) { $existing[$asset.name] = $asset }
@@ -264,7 +270,10 @@ foreach ($item in $assetFiles) {
         Invoke-GitHub -Method Delete -Path "/repos/$Repository/releases/assets/$($old.id)" | Out-Null
     }
 
-    $uri = "$uploadUrl?name=$([uri]::EscapeDataString($name))"
+    # `"$uploadUrl?name=..."` нельзя: PowerShell съедает `?name` как часть имени
+    # переменной, и на выходе получается строка `=DotShell.exe` — отсюда
+    # «Invalid URI: The hostname could not be parsed». Склеиваем через -f.
+    $uri = '{0}?name={1}' -f $uploadUrl, [uri]::EscapeDataString($name)
     Invoke-RestMethod -Uri $uri -Method Post -Headers $headers -ContentType $item.ContentType `
         -InFile $item.Path -TimeoutSec 900 | Out-Null
     Write-Ok "$name загружен ($size байт)"
