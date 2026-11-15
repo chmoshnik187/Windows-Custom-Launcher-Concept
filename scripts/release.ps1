@@ -71,7 +71,9 @@ Write-Ok "репозиторий: $Repository"
 if (-not $DryRun) {
     $rawProps = "https://raw.githubusercontent.com/$Repository/main/Directory.Build.props"
     try {
-        $remoteText = Invoke-RestMethod -Uri $rawProps -Headers @{ 'User-Agent' = 'DotShell-Release' } -TimeoutSec 60
+        $remote = Invoke-WebRequest -Uri $rawProps -Headers @{ 'User-Agent' = 'DotShell-Release' } `
+            -UseBasicParsing -TimeoutSec 60
+        $remoteText = $remote.Content
         if ($remoteText -notmatch "<Version>\s*$([regex]::Escape($Version))\s*</Version>") {
             throw " В main версия не $Version. Сначала синхронизируй dotshell/ с main."
         }
