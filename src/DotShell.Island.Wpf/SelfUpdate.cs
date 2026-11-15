@@ -111,15 +111,60 @@ public static class SelfUpdate
             File.Copy(staged, current, true);
             File.Delete(PendingPath);
 
-            Process.Start(new ProcessStartInfo(current) { UseShellExecute = true });
-            Log.Info("self-update: заменил exe, запускаю новую копию");
-            return true;
+            // exe уже заменён: даже если автозапуск не удался, следующий старт
+            // поднимет новую версию. Старый процесс продолжает работать, чтобы
+            // не оставить человека с пустым экраном.
+            return StartReplacement(current);
         }
         catch (Exception ex)
         {
-            Log.Info($"self-update apply failed: {ex.Message}");
+            Log.Info($"self-update apply failed: {ex.GetType().Name} 0x{ex.HResult:X8} «{ex.Message}»");
             return false;
         }
+    }
+
+    /// <summary>
+    /// Запустить только что записанную копию отдельным процессом.
+    ///
+    /// Почему не одним `Process.Start`: сразу после копирования 73-МБ файла
+    /// антивирус ещё сканирует его, и ShellExecute может до десяти секунд ждать,
+    /// а потом упасть с пустым сообщением. Поэтому несколько попыток и два
+    /// способа: через оболочку и напрямую (CreateProcess).
+    /// </summary>
+    private static bool StartReplacement(string exe)
+    {
+        var dir = Path.GetDirectoryName(exe) ?? AppContext.BaseDirectory;
+        var attempts = new (bool Shell, int WaitMs)[]
+        {
+            (true, 700),
+            (false, 900),
+            (true, 1500),
+        };
+
+        for (var i = 0; i < attempts.Length; i++)
+        {
+            var (shell, wait) = attempts[i];
+            if (wait > 0) Thread.Sleep(wait);
+
+            try
+            {
+                Process.Start(new ProcessStartInfo(exe)
+                {
+                    UseShellExecute = shell,
+                    WorkingDirectory = dir,
+                });
+                Log.Info($"self-update: новая копия запущена (попытка {i + 1}, {(shell ? "оболочка" : "напрямую")})");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Info($"self-update: запуск не удался (попытка {i + 1}, {(shell ? "оболочка" : "напрямую")}): "
+                    + $"{ex.GetType().Name} 0x{ex.HResult:X8} «{ex.Message}»");
+            }
+        }
+
+        Log.Info("self-update: новая копия не запустилась, но exe уже заменён — подхватится при следующем старте");
+        return false;
     }
 
     /// <summary>Применить сейчас и выйти: используется кнопкой «Обновить сейчас».</summary>
