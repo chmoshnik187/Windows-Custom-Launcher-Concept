@@ -167,7 +167,7 @@ Windows API            — окна, реестр, акцент, звук (WASAP
 | A.15 | `ui-audit`: `--control-center` — ложный провал детекции | `[x]` | Тот же корень, что у A.14: окно успевало закрыться до опроса/UIA. После правки фокуса центр управления стабильно находится вместе с содержимым (WI-FI/CPU); **PASS 8/8** |
 | A.16 | `notify-audit`: режим `capsule` не расширяется (ширина 480) | `[x]` | Причина: минимальная ширина уведомления совпадала со свёрнутым островом. Теперь капсула гарантированно расширяется; `notify-audit` — **PASS 4/4** (capsule 580 px) |
 | A.17 | `player-audit --player-fixture`: «остров не появился» | `[x]` | Аудит теперь ждёт виджет циклом и проверяет рост прогресса через UIA `RangeValuePattern` вместо скриншотов (2-пиксельная полоса давала ложный провал). **PLAYER AUDIT PASS** |
-| A.18 | Код в `main` не доходит до пользователей через обновление | `[x]` | Причина: `UpdateChecker` читает только GitHub Releases (`/releases/latest`), а релиза после 1.11.0 не было. Добавлен `scripts/release.ps1`: версия из `Directory.Build.props` → publish → `--version-probe` → zip → GitHub Release; выпущен `v1.12.0` |
+| A.18 | Код в `main` не доходит до пользователей через обновление | `[x]` | Причина: `UpdateChecker` читает только GitHub Releases (`/releases/latest`), а релиза после 1.11.0 не было. Добавлен `scripts/release.ps1`: версия из `Directory.Build.props` → publish → `--version-probe` → zip → GitHub Release. Опубликован `v1.12.0` с `DotShell.exe` и двумя архивами; скачивание и `--version-probe` проверены |
 
 ---
 
