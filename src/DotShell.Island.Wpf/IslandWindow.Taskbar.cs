@@ -226,9 +226,18 @@ public partial class IslandWindow
 
         double screenLeft = SystemParameters.VirtualScreenLeft;
         double screenWidth = SystemParameters.VirtualScreenWidth;
+        double screenTop = SystemParameters.VirtualScreenTop;
+        double screenHeight = SystemParameters.VirtualScreenHeight;
         if (left < screenLeft + 4) left = screenLeft + 4;
         if (left + winW > screenLeft + screenWidth - 4)
             left = screenLeft + screenWidth - winW - 4;
+
+        // Нижняя кромка окна не должна уходить под экран: при раскрытии/
+        // анимации высота меняется, и если Top пересчитать раньше времени,
+        // нижняя половина панели (громкость/футер) срезается.
+        double screenBottom = screenTop + screenHeight;
+        if (top + winH > screenBottom - 2) top = screenBottom - 2 - winH;
+        if (top < screenTop + 2) top = screenTop + 2;
 
         if (Math.Abs(Left - left) > 0.5 || Math.Abs(Top - top) > 0.5)
         {
@@ -284,6 +293,23 @@ public partial class IslandWindow
         }
         catch { }
         _taskbarChrome = false;
+    }
+
+    /// <summary>После анимации высоты пересчитать привязку к панели.</summary>
+    internal void ScheduleTaskbarReapply()
+    {
+        if (!IsTaskbarEdge(_services.Settings.Current)) return;
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(340) };
+        timer.Tick += (_, _) =>
+        {
+            try
+            {
+                timer.Stop();
+                if (IsTaskbarEdge(_services.Settings.Current)) ApplyTaskbarPlacement(Width, Height);
+            }
+            catch { }
+        };
+        timer.Start();
     }
 
     private void ShowFallbackIsland()

@@ -104,6 +104,7 @@ public partial class IslandWindow
                 AnimateTo(this, TopProperty, anchor.Value.AnchorBottom - winH, ms, ease);
                 AnimateTo(this, LeftProperty, anchor.Value.CenterX - winW / 2, ms, ease);
             }
+            ScheduleTaskbarReapply();
         }
         AnimateTo(Pill, WidthProperty, width, ms, ease);
         AnimateTo(Pill, HeightProperty, height, ms, ease);
@@ -225,6 +226,19 @@ public partial class IslandWindow
     /// </summary>
     private double MaxExpandedHeight()
     {
+        // В режиме панели остров раскрывается от её верхней кромки вверх:
+        // доступна почти вся высота экрана. Раньше здесь считался запас от
+        // рабочей области (которая заканчивается на панели) и остров ужимался
+        // до 306 — нижняя половина панели срезалась. Ровно на это и жаловался
+        // владелец.
+        if (IsTaskbarEdge(ShellServices.Instance.Settings.Current))
+        {
+            var anchor = TaskbarAnchor();
+            double anchorBottom = anchor?.AnchorBottom ?? SystemParameters.WorkArea.Bottom;
+            double available = anchorBottom - SystemParameters.VirtualScreenTop - 16;
+            return Math.Clamp(available, ExpandedHeight, 1400);
+        }
+
         var wa = SystemParameters.WorkArea;
 
         // Нижняя кромка: остров растёт вверх, поэтому запас — это место над ним
