@@ -68,6 +68,7 @@ public partial class IslandWindow
     /// </summary>
     public bool ShowNotification(string title, string text)
     {
+        PrepareTaskbarNotification();
         if (_isExpanded || _hiddenByFullscreen || _docked || _quiet) return false;
         if (_notice is null) return false;
 
@@ -219,6 +220,8 @@ public partial class IslandWindow
                 Log.Info($"notice hide recovery failed: {restoreEx.Message}");
             }
         }
+
+        FinishTaskbarNotification();
     }
     private void UpdateQuietMode()
     {

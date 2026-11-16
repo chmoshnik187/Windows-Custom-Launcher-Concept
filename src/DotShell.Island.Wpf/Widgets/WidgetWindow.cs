@@ -470,12 +470,13 @@ public sealed partial class WidgetWindow : Window
             Margin = margin,
         };
 
-        static ProgressBar Bar(double height) => new()
+        // Точечный прогресс вместо системной полосы высотой 2 px: у владельца
+        // тонкая линия вызывала отторжение — «ни капли оригинальности».
+        static DotProgressBar Bar(double height) => new()
         {
             Height = height,
-            Minimum = 0,
-            Maximum = 100,
-            BorderThickness = new Thickness(0),
+            DotCount = 40,
+            Margin = new Thickness(0),
         };
 
         Border ArtBox(Image image, double radius)
@@ -533,13 +534,13 @@ public sealed partial class WidgetWindow : Window
         pillButtons.Children.Add(pillPlay);
         pillButtons.Children.Add(pillNext);
 
-        var pillBar = Bar(2);
-        pillBar.SetResourceReference(ProgressBar.ForegroundProperty, "DsAccent");
-        pillBar.SetResourceReference(ProgressBar.BackgroundProperty, "DsBorder");
+        var pillBar = Bar(10);
+        pillBar.SetResourceReference(DotProgressBar.AccentProperty, "DsAccent");
+        pillBar.SetResourceReference(DotProgressBar.TrackProperty, "DsBorder");
         pillBar.VerticalAlignment = VerticalAlignment.Bottom;
         // Полоса прогресса идёт через все колонки: раньше она жила в нулевой,
         // и её отступы раздували колонку с обложкой — текст уезжал от картинки.
-        pillBar.Margin = new Thickness(70, 0, 16, 0);
+        pillBar.Margin = new Thickness(70, 0, 16, 2);
 
         var pill = new Grid();
         pill.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -563,9 +564,9 @@ public sealed partial class WidgetWindow : Window
         var cardTitle = Line(20, ink, new Thickness(0, 12, 0, 0));
         var cardArtist = Line(12, muted, new Thickness(0, 2, 0, 0), bold: false);
 
-        var cardBar = Bar(3);
-        cardBar.SetResourceReference(ProgressBar.ForegroundProperty, "DsAccent");
-        cardBar.SetResourceReference(ProgressBar.BackgroundProperty, "DsBorder");
+        var cardBar = Bar(12);
+        cardBar.SetResourceReference(DotProgressBar.AccentProperty, "DsAccent");
+        cardBar.SetResourceReference(DotProgressBar.TrackProperty, "DsBorder");
         cardBar.Margin = new Thickness(0, 12, 0, 0);
 
         var cardTimes = Line(10, muted, new Thickness(0, 4, 0, 0), bold: false);
@@ -633,9 +634,9 @@ public sealed partial class WidgetWindow : Window
             Margin = new Thickness(0, 3, 0, 0),
         };
 
-        var coverBar = Bar(2);
-        coverBar.Foreground = Brushes.White;
-        coverBar.Background = new SolidColorBrush(Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
+        var coverBar = Bar(10);
+        coverBar.Accent = Brushes.White;
+        coverBar.Track = new SolidColorBrush(Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
         coverBar.Margin = new Thickness(0, 12, 0, 0);
 
         var coverTimes = new TextBlock

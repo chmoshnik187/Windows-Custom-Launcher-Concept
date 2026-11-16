@@ -1,4 +1,4 @@
-﻿namespace DotShell.Island.Wpf;
+namespace DotShell.Island.Wpf;
 using MouseEventArgs = System.Windows.Input.MouseEventArgs;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using DragEventArgs = System.Windows.DragEventArgs;
@@ -96,6 +96,15 @@ public partial class IslandWindow
             double offset = Math.Clamp(ShellServices.Instance.Settings.Current.IslandTopOffset, 0, 24);
             AnimateTo(this, TopProperty, work.Bottom - winH - offset, ms, ease);
         }
+        else if (IsTaskbarEdge(ShellServices.Instance.Settings.Current))
+        {
+            var anchor = TaskbarAnchor();
+            if (anchor is not null)
+            {
+                AnimateTo(this, TopProperty, anchor.Value.AnchorBottom - winH, ms, ease);
+                AnimateTo(this, LeftProperty, anchor.Value.CenterX - winW / 2, ms, ease);
+            }
+        }
         AnimateTo(Pill, WidthProperty, width, ms, ease);
         AnimateTo(Pill, HeightProperty, height, ms, ease);
     }
@@ -133,6 +142,16 @@ public partial class IslandWindow
         AnimateTo(this, WidthProperty, winW, ms, ease);
         AnimateTo(this, HeightProperty, winH, ms, ease);
         AnimateTo(this, LeftProperty, centerX - winW / 2, ms, ease);
+
+        if (IsTaskbarEdge(ShellServices.Instance.Settings.Current))
+        {
+            var anchor = TaskbarAnchor();
+            if (anchor is not null)
+            {
+                AnimateTo(this, TopProperty, anchor.Value.AnchorBottom - winH, ms, ease);
+                AnimateTo(this, LeftProperty, anchor.Value.CenterX - winW / 2, ms, ease);
+            }
+        }
 
         AnimateTo(Pill, WidthProperty, width, ms, ease);
         AnimateTo(Pill, HeightProperty, height, ms, ease);
@@ -260,6 +279,15 @@ public partial class IslandWindow
         _isExpanded = true;
         _vm.IsExpanded = true;
 
+        // В режиме панели раскрытие начинается с «двери»: три металлические
+        // плиты уходят вверх и открывают интерфейс полосами.
+        if (IsTaskbarEdge(ShellServices.Instance.Settings.Current))
+        {
+            if (!IsVisible) Show();
+            if (Backdrop is not null) Backdrop.Visibility = Visibility.Visible;
+            _blinds?.Open();
+        }
+
         if (_docked && !_peeked) PeekIn(); // раскрытие из дока сначала вытаскивает остров
 
         var (targetW, targetH) = TargetTabSize(_vm.ActiveTab);
@@ -304,6 +332,14 @@ _vm.Tick();
         Units.SetPaused(false);
         UpdateMiniEq();
         if (_docked && _peeked) PeekOut();
+
+        // В режиме панели сворачивание закрывает «дверь» и возвращает капсулу
+        // в свободный пробег панели.
+        if (IsTaskbarEdge(ShellServices.Instance.Settings.Current))
+        {
+            _blinds?.Close();
+            TaskbarTick(force: true);
+        }
     }
 
     private void ExpandAndGoToTab(string tag)

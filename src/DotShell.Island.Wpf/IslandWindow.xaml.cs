@@ -220,6 +220,7 @@ public partial class IslandWindow : Window
                 RefreshGroupDots();
                 UpdateQuietMode();
                 UpdateMiniEq();
+                UpdateTaskbarStrip();
             }
             catch (Exception ex)
             {
@@ -528,6 +529,8 @@ public partial class IslandWindow : Window
         // пилюли, поэтому подгоняем сразу.
         ResizeWindowTo(CollapsedWidth, CollapsedHeight);
 
+        InitTaskbarAndWorkspaces();
+
         RegisterHotkeys();
 
         // Трей-иконка: точка входа, когда остров не видно (спрятан, утоплен за
@@ -651,11 +654,12 @@ public partial class IslandWindow : Window
         double radius = Math.Clamp(settings.IslandRadius, 0, 24);
         double offset = Math.Clamp(settings.IslandTopOffset, 0, 24);
 
+        bool bottom = string.Equals(settings.IslandEdge, "bottom", StringComparison.OrdinalIgnoreCase);
+        bool taskbar = IsTaskbarEdge(settings);
+
         double liveHeight = _isExpanded ? Math.Max(height, _expandedH) : height;
 
         Pill.CornerRadius = new CornerRadius(Math.Min(radius, liveHeight / 2));
-
-        bool bottom = string.Equals(settings.IslandEdge, "bottom", StringComparison.OrdinalIgnoreCase);
 
         // Кто живёт в капсуле: глазки или персонаж (готка/скелетик).
         string unitStyle = settings.UnitStyle ?? "goth";
@@ -679,10 +683,13 @@ public partial class IslandWindow : Window
         }
 
         // Капсула прижимается к своей кромке: сверху — верхний отступ, снизу — нижний.
-        Pill.VerticalAlignment = bottom ? VerticalAlignment.Bottom : VerticalAlignment.Top;
-        Pill.Margin = bottom
-            ? new Thickness(0, 0, 0, offset)
-            : new Thickness(0, offset, 0, 0);
+        // В режиме панели задач она сидит внизу окна, а окно уже прижато к панели.
+        Pill.VerticalAlignment = bottom || taskbar ? VerticalAlignment.Bottom : VerticalAlignment.Top;
+        Pill.Margin = taskbar
+            ? new Thickness(0)
+            : bottom
+                ? new Thickness(0, 0, 0, offset)
+                : new Thickness(0, offset, 0, 0);
 
         if (!_isExpanded && Math.Abs(Pill.Height - height) > 0.5)
         {
@@ -690,16 +697,27 @@ public partial class IslandWindow : Window
             ResizeWindowTo(CollapsedWidth, height);
         }
 
-        // Ставим окно к выбранной кромке (сверху или снизу).
-        var work = SystemParameters.WorkArea;
-
-        if (bottom)
+        if (taskbar)
         {
-            Top = work.Bottom - Math.Max(Height, height + 56) - offset;
+            SyncTaskbarMode();
+            TaskbarTick(force: true);
+            ApplyTaskbarPlacement(Width, Height);
         }
-        else if (Top < work.Top || Top > work.Bottom - 40)
+        else
         {
-            Top = work.Top + offset - 10;
+            SyncTaskbarMode();
+
+            // Ставим окно к выбранной кромке (сверху или снизу).
+            var work = SystemParameters.WorkArea;
+
+            if (bottom)
+            {
+                Top = work.Bottom - Math.Max(Height, height + 56) - offset;
+            }
+            else if (Top < work.Top || Top > work.Bottom - 40)
+            {
+                Top = work.Top + offset - 10;
+            }
         }
     }
 

@@ -1,4 +1,4 @@
-﻿namespace DotShell.Island.Wpf;
+namespace DotShell.Island.Wpf;
 
 using System.Diagnostics;
 using System.Windows;
@@ -99,6 +99,7 @@ public partial class SettingsWindow : Window
         {
             ("top", "Верхняя"),
             ("bottom", "Нижняя"),
+            ("taskbar", "В панели задач"),
         }, vm.IslandEdge);
 
         IslandEdgeBox.SelectionChanged += (_, _) =>

@@ -55,6 +55,14 @@ public partial class IslandWindow
     /// <summary>Центрируем таблетку по верхнему краю рабочей области текущего/сохранённого монитора.</summary>
     private void PositionAtTopCenter()
     {
+        // Режим «в панели задач»: позицию считает проба панели, а не сохранённые
+        // координаты верхней кромки.
+        if (IsTaskbarEdge(ShellServices.Instance.Settings.Current))
+        {
+            ApplyTaskbarPlacement(Width, Height);
+            return;
+        }
+
         var s = _services.Settings.Current;
         var restored = TryRestoreIslandPosition(s);
 
@@ -133,6 +141,15 @@ public partial class IslandWindow
     /// </summary>
     private void EvaluateDock(bool instant = false)
     {
+        // В режиме панели задач «док за кромку» не нужен: панель и есть кромка.
+        if (IsTaskbarEdge(ShellServices.Instance.Settings.Current))
+        {
+            _docked = false;
+            _peeked = false;
+            DockHit.Visibility = Visibility.Collapsed;
+            return;
+        }
+
         var wa = GetCurrentWorkArea();
         _dockTop = wa.Top - 54; // таблетка (10+46) вся за кромкой, сталактиты (54..98) наружу
 
@@ -283,6 +300,10 @@ public partial class IslandWindow
     /// <summary>Запоминаем последнее положение: пишем в settings.json.</summary>
     private void SavePosition()
     {
+        // В режиме панели задач координаты окна не принадлежат человеку:
+        // их пересчитывает проба, а сохранение затёрло бы позицию для верхней кромки.
+        if (IsTaskbarEdge(ShellServices.Instance.Settings.Current)) return;
+
         // Сохраняем положение в "свёрнутой" системе координат.
         var l = (int)(Left + (Width - CollapsedWidth) / 2);
         var t = (int)Top;
@@ -338,6 +359,10 @@ public partial class IslandWindow
         {
             var wa = GetCurrentWorkArea();
             Top = wa.Bottom - height - Math.Clamp(ShellServices.Instance.Settings.Current.IslandTopOffset, 0, 24);
+        }
+        else if (IsTaskbarEdge(ShellServices.Instance.Settings.Current))
+        {
+            ApplyTaskbarPlacement(width, height);
         }
     }
 

@@ -1,4 +1,4 @@
-﻿namespace DotShell.Island.Wpf;
+namespace DotShell.Island.Wpf;
 using MouseEventArgs = System.Windows.Input.MouseEventArgs;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using DragEventArgs = System.Windows.DragEventArgs;
@@ -118,6 +118,10 @@ public partial class IslandWindow
 
     private void OnDragCandidateDown(object sender, MouseButtonEventArgs e)
     {
+        // В режиме «в панели задач» положение острова считает TaskbarProbe,
+        // а не человек: драг здесь только сбил бы привязку к панели.
+        if (IsTaskbarEdge(_services.Settings.Current)) { _dragArmed = false; _dragMoved = false; return; }
+
         _pressWasInteractive = IsInteractive(e.OriginalSource as DependencyObject);
         if (_pressWasInteractive) { _dragArmed = false; return; }
 

@@ -1376,7 +1376,7 @@
                                    MaxWidth="150" />
                     </StackPanel>
 
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <StackPanel x:Name="RightChips" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                         <!-- Громкость колесом мыши: чип вспыхивает и гаснет -->
                         <Border x:Name="VolChip" Style="{StaticResource DsChip}" Margin="0,0,5,0"
                                 Visibility="Collapsed">
