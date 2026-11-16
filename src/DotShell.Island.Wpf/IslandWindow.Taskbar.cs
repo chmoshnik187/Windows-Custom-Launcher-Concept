@@ -497,6 +497,29 @@ public partial class IslandWindow
     //  Уведомления: остров всегда на месте, попап над панелью не нужен
     // ================================================================
 
+    /// <summary>
+    /// Показать уведомление, когда остров раскрыт (капсула занята): отдельная
+    /// тост-капсула над сегментом панели, а не карточка в углу экрана.
+    /// </summary>
+    internal bool ShowTaskbarNoticeFromPanel(string title, string message)
+    {
+        try
+        {
+            if (!IsTaskbarEdge(_services.Settings.Current)) return false;
+
+            var anchor = TaskbarAnchor();
+            if (anchor is null) return false;
+
+            double taskbarTop = _taskbar?.Taskbar.Top ?? (anchor.Value.AnchorBottom - 48);
+            return TaskbarNoticeWindow.Show(anchor.Value.CenterX, taskbarTop, title, message);
+        }
+        catch (Exception ex)
+        {
+            Log.Info($"taskbar notice failed: {ex.Message}");
+            return false;
+        }
+    }
+
     private void PrepareTaskbarNotification()
     {
         if (!IsTaskbarEdge(_services.Settings.Current)) return;

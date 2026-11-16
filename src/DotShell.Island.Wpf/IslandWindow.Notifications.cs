@@ -69,6 +69,12 @@ public partial class IslandWindow
     public bool ShowNotification(string title, string text)
     {
         PrepareTaskbarNotification();
+
+        // В режиме панели уведомление не улетает в карточку, даже если панель
+        // острова раскрыта: показываем тост-капсулу над сегментом панели.
+        if (IsTaskbarEdge(ShellServices.Instance.Settings.Current) && _isExpanded && !_hiddenByFullscreen)
+            return ShowTaskbarNoticeFromPanel(title, text);
+
         if (_isExpanded || _hiddenByFullscreen || _docked || _quiet) return false;
         if (_notice is null) return false;
 
@@ -225,6 +231,16 @@ public partial class IslandWindow
     }
     private void UpdateQuietMode()
     {
+        // В режиме панели задач «тихий режим» не нужен и вреден: остров не
+        // мешает окнам (он в панели), а сжатие в полоску делало его невидимым
+        // при развёрнутом браузере — владелец видел «остров пропал», а
+        // уведомления уходили в отдельную карточку вместо капсулы.
+        if (IsTaskbarEdge(_services.Settings.Current))
+        {
+            if (_quiet) ExitQuiet();
+            return;
+        }
+
         // Порог: только развёрнутые окна, любые крупные, или совсем выкл.
         string threshold = _services.Settings.Current.QuietThreshold;
 
