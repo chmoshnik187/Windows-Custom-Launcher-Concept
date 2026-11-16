@@ -366,5 +366,10 @@ public sealed class ThemePickerWindow : Window
         catch { }
     }
 
-    private sealed record ThemeItem(string Id, string Name, string Author, int Version, string? Path, Skin? Skin);
+    private sealed record ThemeItem(string Id, string Name, string Author, int Version, string? Path, Skin? Skin)
+    {
+        // UIA-имя пункта списка берётся из ToString: без этого экранный диктор
+        // читал бы весь дамп записи вместо названия темы.
+        public override string ToString() => Name;
+    }
 }
