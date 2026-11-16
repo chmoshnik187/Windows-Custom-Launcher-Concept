@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using DotShell.Core.Native;
 using DotShell.Island.Wpf.Controls;
@@ -33,12 +34,13 @@ public partial class IslandWindow
     private DispatcherTimer? _workspaceTimer;
     private TaskbarProbe.Snapshot? _taskbar;
     private TaskbarProbe.GapCandidate? _taskbarGap;
-    private WorkspaceDots? _workspaceDots;
+    private WorkspaceChips? _workspaceChips;
     private TaskbarBlinds? _blinds;
     private Brush? _savedPillBackground;
     private bool _taskbarChrome;
     private bool _taskbarFallback;
     private int _lastDesktopIndex = -1;
+    private int _probeMisses;
     private int _lastDesktopCount = -1;
     private bool _workspacesReady;
 
@@ -109,14 +111,14 @@ public partial class IslandWindow
 
         try
         {
-            _workspaceDots = new WorkspaceDots
+            _workspaceChips = new WorkspaceChips
             {
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 8, 0),
                 Visibility = Visibility.Collapsed,
             };
-            _workspaceDots.Refresh(force: true);
-            if (RightChips is not null) RightChips.Children.Insert(0, _workspaceDots);
+            _workspaceChips.Refresh(force: true);
+            if (RightChips is not null) RightChips.Children.Insert(0, _workspaceChips);
 
             _blinds = new TaskbarBlinds { Visibility = Visibility.Collapsed };
             if (RootGrid is not null)
@@ -136,7 +138,7 @@ public partial class IslandWindow
         {
             try
             {
-                _workspaceDots?.Refresh();
+                _workspaceChips?.Refresh();
                 FollowWorkspaceIfChanged();
                 UpdateTaskbarStrip();
             }
@@ -144,7 +146,7 @@ public partial class IslandWindow
         };
         _workspaceTimer.Start();
 
-        _taskbarTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        _taskbarTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _taskbarTimer.Tick += (_, _) => TaskbarTick();
         SyncTaskbarMode();
 
@@ -184,14 +186,19 @@ public partial class IslandWindow
         var snap = ProbeTaskbar();
         if (snap is null || snap.Gaps.Count == 0)
         {
-            if (!_taskbarFallback)
+            // Одиночный сбой пробы (поиск развернулся, панель мигнула) не повод
+            // уводить остров наверх — он должен оставаться в панели. Откат только
+            // после трёх промахов подряд.
+            _probeMisses++;
+            if (_probeMisses >= 3 && !_taskbarFallback)
             {
                 _taskbarFallback = true;
                 ShowFallbackIsland();
-                Log.Info("taskbar mode: панель не распознана, остров откатился наверх");
+                Log.Info("taskbar mode: панель не распознана трижды, остров откатился наверх");
             }
             return;
         }
+        _probeMisses = 0;
 
         var chosen = ChooseGap(snap);
         if (chosen is null) return;
@@ -212,6 +219,9 @@ public partial class IslandWindow
         }
 
         if (!IsVisible) Show();
+        // Панель задач тоже topmost и при кликах поднимается над островом —
+        // без частого reassert остров иногда «исчезал» при переключении вкладок.
+        ReassertTopmost();
     }
 
     private void ApplyTaskbarPlacement(double winW, double winH)
@@ -326,10 +336,108 @@ public partial class IslandWindow
         catch (Exception ex) { Log.Info($"taskbar fallback failed: {ex.Message}"); }
     }
 
+    /// <summary>Проявить окно после того, как проба поставила его в панель.</summary>
+    internal void RevealAfterTaskbarPlacement()
+    {
+        if (!IsTaskbarEdge(_services.Settings.Current))
+        {
+            Opacity = 1;
+            return;
+        }
+
+        try
+        {
+            TaskbarTick(force: true);
+            var anim = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(120))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            };
+            BeginAnimation(OpacityProperty, anim);
+        }
+        catch (Exception ex)
+        {
+            Log.Info($"taskbar reveal failed: {ex.Message}");
+            Opacity = 1;
+        }
+    }
+
+    /// <summary>
+    /// Раскрытие в две фазы: сначала остров вытягивается по ширине под будущую
+    /// панель (оставаясь в панели задач), потом из него выпадает панель вверх.
+    /// Владелец жаловался, что ширина и высота едут одновременно и выходит рвано.
+    /// </summary>
+    internal void AnimateTaskbarOpen(double targetW, double targetH)
+    {
+        var anchor = TaskbarAnchor();
+        if (anchor is null)
+        {
+            AnimateShellTo(targetW, targetH);
+            return;
+        }
+
+        double winW = Math.Max(CollapsedWidth, targetW);
+        double winH = Math.Max(CollapsedHeight + 56, targetH + 12);
+        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+        int phase1 = 120, phase2 = 260;
+
+        // Фаза 1 — ширина.
+        AnimateTo(this, WidthProperty, winW, phase1, ease);
+        AnimateTo(this, LeftProperty, anchor.Value.CenterX - winW / 2, phase1, ease);
+        AnimateTo(Pill, WidthProperty, targetW, phase1, ease);
+
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(phase1) };
+        timer.Tick += (_, _) =>
+        {
+            try
+            {
+                timer.Stop();
+                // Фаза 2 — высота вверх, «дверь» открывается.
+                _blinds?.Open();
+                AnimateTo(this, HeightProperty, winH, phase2, ease);
+                AnimateTo(this, TopProperty, anchor.Value.AnchorBottom - winH, phase2, ease);
+                AnimateTo(Pill, HeightProperty, targetH, phase2, ease);
+                AnimateTo(ExpandedLayer, HeightProperty, targetH - 10, phase2, ease);
+                ScheduleTaskbarReapply();
+            }
+            catch (Exception ex) { Log.Info($"taskbar open phase2 failed: {ex.Message}"); }
+        };
+        timer.Start();
+    }
+
+    /// <summary>Сворачивание в обратном порядке: сначала высота, потом ширина.</summary>
+    internal void AnimateTaskbarClose()
+    {
+        double minH = CollapsedHeight + 56;
+        double centerX = Left + Width / 2;
+        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+        int phase1 = 240, phase2 = 150;
+
+        _blinds?.Close();
+        AnimateTo(this, HeightProperty, minH, phase1, ease);
+        AnimateTo(this, TopProperty, (TaskbarAnchor()?.AnchorBottom ?? Top + minH) - minH, phase1, ease);
+        AnimateTo(Pill, HeightProperty, CollapsedHeight, phase1, ease);
+        AnimateTo(ExpandedLayer, HeightProperty, CollapsedHeight - 10, phase1, ease);
+
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(phase1) };
+        timer.Tick += (_, _) =>
+        {
+            try
+            {
+                timer.Stop();
+                AnimateTo(this, WidthProperty, CollapsedWidth, phase2, ease);
+                AnimateTo(this, LeftProperty, centerX - CollapsedWidth / 2, phase2, ease);
+                AnimateTo(Pill, WidthProperty, CollapsedWidth, phase2, ease);
+                TaskbarTick(force: true);
+            }
+            catch (Exception ex) { Log.Info($"taskbar close phase2 failed: {ex.Message}"); }
+        };
+        timer.Start();
+    }
+
     /// <summary>Пересчитать состояние в свёрнутом виде (цвет, точки столов).</summary>
     private void UpdateTaskbarStrip()
     {
-        _workspaceDots?.Refresh();
+        _workspaceChips?.Refresh();
         if (!IsTaskbarEdge(_services.Settings.Current)) return;
         ApplyIslandChrome();
         if (!_isExpanded) ApplyTaskbarPlacement(Width, Height);

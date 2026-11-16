@@ -123,6 +123,61 @@ public static class VirtualDesktops
 
     public static bool SwitchPrev() => SwitchBy(-1);
 
+    /// <summary>Переключиться на конкретный стол по индексу (0-based).</summary>
+    public static bool SwitchTo(int index)
+    {
+        lock (Gate)
+        {
+            if (TrySwitchComTo(index)) return true;
+            // Фолбэк: шагаем клавишами от текущего.
+            var (count, current) = ReadState();
+            if (count <= 1 || index < 0 || index >= count) return false;
+            int delta = index - current;
+            if (delta == 0) return true;
+            int step = delta > 0 ? 1 : -1;
+            for (int i = 0; i < Math.Abs(delta); i++)
+                if (!TrySwitchKeys(step > 0)) return false;
+            return true;
+        }
+    }
+
+    private static bool TrySwitchComTo(int index)
+    {
+        lock (Gate)
+        {
+            if (!TryOpenManager(out var manager) || manager is null) return false;
+
+            IntPtr current = IntPtr.Zero, arrayPtr = IntPtr.Zero, target = IntPtr.Zero;
+            try
+            {
+                current = manager.GetCurrentDesktop();
+                arrayPtr = manager.GetDesktops();
+                if (arrayPtr == IntPtr.Zero) return false;
+
+                var array = (IObjectArray)Marshal.GetObjectForIUnknown(arrayPtr);
+                uint items = array.GetCount();
+                if (index < 0 || index >= items) return false;
+
+                var iid = IidVirtualDesktop;
+                target = array.GetAt((uint)index, ref iid);
+                if (target == IntPtr.Zero) return false;
+
+                manager.SwitchDesktop(target);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+            finally
+            {
+                if (target != IntPtr.Zero) Marshal.Release(target);
+                if (arrayPtr != IntPtr.Zero) Marshal.Release(arrayPtr);
+                if (current != IntPtr.Zero) Marshal.Release(current);
+            }
+        }
+    }
+
     private static bool SwitchBy(int direction)
     {
         lock (Gate)

@@ -299,7 +299,6 @@ public partial class IslandWindow
         {
             if (!IsVisible) Show();
             if (Backdrop is not null) Backdrop.Visibility = Visibility.Visible;
-            _blinds?.Open();
         }
 
         if (_docked && !_peeked) PeekIn(); // раскрытие из дока сначала вытаскивает остров
@@ -310,7 +309,10 @@ public partial class IslandWindow
         ExpandedLayer.Height = targetH - 10;
         ExpandedLayer.Visibility = Visibility.Visible;
 
-        AnimateShellTo(targetW, targetH);
+        if (IsTaskbarEdge(ShellServices.Instance.Settings.Current))
+            AnimateTaskbarOpen(targetW, targetH);
+        else
+            AnimateShellTo(targetW, targetH);
         Fade(CollapsedRow, to: 0, ms: 120, onComplete: () => CollapsedRow.Visibility = Visibility.Collapsed);
         Fade(ExpandedLayer, to: 1, ms: 220, delayMs: 90);
 
@@ -339,7 +341,10 @@ _vm.Tick();
 
         CollapsedRow.Visibility = Visibility.Visible;
 
-        AnimateShellTo(CollapsedWidth, CollapsedHeight);
+        if (IsTaskbarEdge(ShellServices.Instance.Settings.Current))
+            AnimateTaskbarClose();
+        else
+            AnimateShellTo(CollapsedWidth, CollapsedHeight);
         Fade(ExpandedLayer, to: 0, ms: 120, onComplete: () => ExpandedLayer.Visibility = Visibility.Collapsed);
         Fade(CollapsedRow, to: 1, ms: 220, delayMs: 90);
 
@@ -350,10 +355,7 @@ _vm.Tick();
         // В режиме панели сворачивание закрывает «дверь» и возвращает капсулу
         // в свободный пробег панели.
         if (IsTaskbarEdge(ShellServices.Instance.Settings.Current))
-        {
-            _blinds?.Close();
             TaskbarTick(force: true);
-        }
     }
 
     private void ExpandAndGoToTab(string tag)

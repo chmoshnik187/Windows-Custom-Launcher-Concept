@@ -75,7 +75,7 @@ public sealed class TaskbarBlinds : Grid
         {
             var move = _moves[i];
             move.Y = 0;
-            var anim = new DoubleAnimation(-h, TimeSpan.FromMilliseconds(260))
+            var anim = new DoubleAnimation(-h, TimeSpan.FromMilliseconds(200))
             {
                 BeginTime = TimeSpan.FromMilliseconds(i * 60),
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut },
@@ -101,7 +101,7 @@ public sealed class TaskbarBlinds : Grid
         {
             var move = _moves[i];
             move.Y = -h;
-            var anim = new DoubleAnimation(0, TimeSpan.FromMilliseconds(220))
+            var anim = new DoubleAnimation(0, TimeSpan.FromMilliseconds(170))
             {
                 BeginTime = TimeSpan.FromMilliseconds(i * 50),
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },

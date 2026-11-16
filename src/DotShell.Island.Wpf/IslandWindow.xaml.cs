@@ -176,6 +176,10 @@ public partial class IslandWindow : Window
         _services = ShellServices.Instance;
         _vm = new IslandViewModel(_services);
 
+        // В режиме панели первый кадр не должен мелькнуть наверху: окно невидимо,
+        // пока проба не поставит его в панель задач, и только потом проявляем.
+        if (IsTaskbarEdge(_services.Settings.Current)) Opacity = 0;
+
         // Город погоды: список частых городов, свой можно вписать руками.
         foreach (var city in new[] { "Москва", "Санкт-Петербург", "Иркутск", "Новосибирск", "Екатеринбург", "Казань", "Владивосток" })
             WeatherCityBox.Items.Add(city);
@@ -531,6 +535,11 @@ public partial class IslandWindow : Window
 
         InitTaskbarAndWorkspaces();
 
+        // Проявляем сразу после того, как сегмент поставлен: трей, виджеты и
+        // проверки обновлений догружаются уже после появления острова, иначе
+        // старт выглядит как «заминка перед появлением в панели».
+        RevealAfterTaskbarPlacement();
+
         RegisterHotkeys();
 
         // Трей-иконка: точка входа, когда остров не видно (спрятан, утоплен за
@@ -638,6 +647,7 @@ public partial class IslandWindow : Window
         // --tab=notes: открыть сразу на нужной вкладке, не трогая мышью.
         if (!string.IsNullOrWhiteSpace(Program.StartupTab))
             Log.Info($"startup tab requested: {Program.StartupTab}");
+
     }
 
     /// <summary>Раскрыть остров на конкретной вкладке (флаг --tab=…).
