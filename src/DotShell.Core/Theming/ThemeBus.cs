@@ -64,6 +64,52 @@ public sealed class ThemeBus
     }
 
     /// <summary>
+    /// Применить тему по спецификации: акцент + параметры точечной сетки (размер ячейки,
+    /// зазор). Сюда приходят и файлы из папки тем (<see cref="ThemeStore.ThemesDirectory"/>),
+    /// и мини-спеки (скины). Один путь применения — значит «как покрасить точки» больше
+    /// не дублируется в IslandViewModel.
+    /// </summary>
+    public void ApplyTheme(ThemeSpec spec, string source = "theme")
+    {
+        if (spec?.Colors?.Accent is { Length: > 0 })
+        {
+            var target = ToHex(ParseHex(spec.Colors.Accent));
+            if (!string.Equals(AccentHex, target, StringComparison.OrdinalIgnoreCase))
+                SetAccent(ParseHex(spec.Colors.Accent), source);
+        }
+
+        if (spec?.Dot is { } dot)
+        {
+            _settings.Update(s =>
+            {
+                if (s.CellSize != dot.Cell) s.CellSize = dot.Cell;
+                if (s.Gap != dot.Gap) s.Gap = dot.Gap;
+            });
+        }
+    }
+
+    /// <summary>
+    /// Применить скин через тот же движок: скин — это мини-тема (акцент, сетка, рисунок
+    /// подложки и плотность живут в <see cref="Skin"/>). Поведение прежнее, правда теперь
+    /// через ThemeBus, чтобы остров и виджеты получали изменения через одну шину.
+    /// </summary>
+    public void ApplySkin(Skin skin, string source = "skin")
+    {
+        _settings.Update(s =>
+        {
+            s.Skin = skin.Id;
+            s.AutoAccent = skin.AutoAccent;
+            s.CellSize = skin.CellSize;
+            s.Gap = skin.Gap;
+            s.BackdropStyle = skin.BackdropStyle;
+            s.BackdropOpacity = skin.BackdropOpacity;
+            s.IslandOpacity = skin.IslandOpacity;
+        });
+
+        SetAccent(ThemeBus.ParseHex(skin.AccentHex), source);
+    }
+
+    /// <summary>
     /// Плавно подвинуть акцент к целевому цвету. Вызывается подборщиком цвета из обоев.
     /// Возвращает true, если цвет реально изменился (тогда надо перерисовать UI).
     /// </summary>

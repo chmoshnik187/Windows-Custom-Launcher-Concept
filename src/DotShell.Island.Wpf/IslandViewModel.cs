@@ -730,24 +730,14 @@ public sealed class IslandViewModel : INotifyPropertyChanged
 
     /// <summary>
     /// Применить скин: акцент + размеры точек + рисунок подложки и её плотность.
-    /// Всё пишется в настройки, а ThemeBus рассылает изменения подписчикам,
+    /// Всё пишется в настройки, а <see cref="ThemeBus"/> рассылает изменения подписчикам,
     /// поэтому перекрашивается и остров, и виджеты, и часы — без перезапуска.
+    /// Визуал применяется через движок темы: скин — это мини-тема, и путь один
+    /// (ThemeBus.ApplySkin → ApplyTheme), без дублирования логики в ViewModel.
     /// </summary>
     public void ApplySkin(Skin skin)
     {
-        _services.Settings.Update(s =>
-        {
-            s.Skin = skin.Id;
-            s.AutoAccent = skin.AutoAccent;
-            s.AccentHex = skin.AccentHex;
-            s.CellSize = skin.CellSize;
-            s.Gap = skin.Gap;
-            s.BackdropStyle = skin.BackdropStyle;
-            s.BackdropOpacity = skin.BackdropOpacity;
-            s.IslandOpacity = skin.IslandOpacity;
-        });
-
-        _services.Theme.SetAccent(ThemeBus.ParseHex(skin.AccentHex), "skin");
+        _services.Theme.ApplySkin(skin, "skin");
 
         _autoAccent = skin.AutoAccent;
         _cellSize = skin.CellSize;

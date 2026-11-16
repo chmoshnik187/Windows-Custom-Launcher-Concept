@@ -5,7 +5,7 @@
         Title="DotShell — настройки"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ResizeMode="NoResize" ShowInTaskbar="False"
-        WindowStartupLocation="CenterScreen"
+        WindowStartupLocation="Manual"
         Width="820" Height="600"
         FontFamily="Segoe UI" FontSize="12"
         TextOptions.TextFormattingMode="Display">
@@ -202,6 +202,14 @@
                             <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="10"
                                        Foreground="{DynamicResource DsTextMuted}"
                                        Text="Выбираются во вкладке ТЕМА на самом острове — там их сразу видно." />
+
+                            <TextBlock Style="{StaticResource Section}" Text="ОБОИ ПО ВРЕМЕНИ СУТОК" />
+                            <Button Style="{StaticResource DsButton}" Content="РАСПИСАНИЕ ОБОЕВ"
+                                    HorizontalAlignment="Left" Click="OnOpenWallpaperSchedule"
+                                    ToolTip="Четыре слота: утро, день, вечер, ночь. Обои меняются сами, акцент подстраивается под картинку" />
+                            <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="10"
+                                       Foreground="{DynamicResource DsTextMuted}" Margin="0,4,0,0"
+                                       Text="Смена обоев по часам и кнопка возврата исходной картинки." />
 
                             <TextBlock Style="{StaticResource Section}" Text="ПЛОТНОСТЬ РИСУНКА" />
                             <Slider Style="{StaticResource DsSlider}" Minimum="0" Maximum="100"

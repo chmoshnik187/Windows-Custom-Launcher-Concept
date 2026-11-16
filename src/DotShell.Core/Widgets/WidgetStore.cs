@@ -94,6 +94,15 @@ public sealed class WidgetSpec
 
     /// <summary>Живая подборка/правила (опционально, для folder).</summary>
     public FolderCollectionSpec? Collection { get; set; }
+
+    /// <summary>D1: идентификатор монитора раскладки (device/name), пусто — legacy/не задан.</summary>
+    public string LayoutMonitor { get; set; } = string.Empty;
+
+    /// <summary>D1: координата X относительно рабочей области монитора LayoutMonitor. int.MinValue — не задано.</summary>
+    public int LayoutX { get; set; } = int.MinValue;
+
+    /// <summary>D1: координата Y относительно рабочей области монитора LayoutMonitor. int.MinValue — не задано.</summary>
+    public int LayoutY { get; set; } = int.MinValue;
 }
 
 /// <summary>
@@ -103,8 +112,15 @@ public sealed class WidgetSpec
 /// </summary>
 public sealed class WidgetStore
 {
+    private sealed class WidgetStoreFile
+    {
+        public int Version { get; set; } = CurrentVersion;
+        public List<WidgetSpec> Items { get; set; } = new();
+    }
+
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
     private readonly object _lock = new();
+    public const int CurrentVersion = 2;
 
     public List<WidgetSpec> Items { get; } = new();
 
@@ -187,6 +203,25 @@ public sealed class WidgetStore
         Save();
     }
 
+    /// <summary>
+    /// D1: обновить layout с учётом монитора (координаты в DIP экрана; monitor-relative вычисляется снаружи при необходимости).
+    /// Если per-monitor данные не заданы, сохраняет только абсолютные X/Y.
+    /// </summary>
+    public void UpdateLayout(string type, int x, int y, string layoutMonitor = "", int layoutX = int.MinValue, int layoutY = int.MinValue, string path = "")
+    {
+        lock (_lock)
+        {
+            var spec = FindSpec(type, path);
+            if (spec is null) return;
+            spec.X = x;
+            spec.Y = y;
+            spec.LayoutMonitor = layoutMonitor ?? string.Empty;
+            spec.LayoutX = layoutX;
+            spec.LayoutY = layoutY;
+        }
+        Save();
+    }
+
     /// <summary>Виджет потянули за угол: запоминаем размер.</summary>
     public void UpdateSize(string type, int width, int height, string path = "")
     {
@@ -241,11 +276,35 @@ public sealed class WidgetStore
         try
         {
             if (!File.Exists(StorePath)) return;
-            var list = JsonSerializer.Deserialize<List<WidgetSpec>>(File.ReadAllText(StorePath));
+            var json = File.ReadAllText(StorePath).TrimStart();
+            List<WidgetSpec>? list = null;
+
+            if (json.StartsWith("[", StringComparison.Ordinal))
+            {
+                // Legacy format (v1): plain array
+                list = JsonSerializer.Deserialize<List<WidgetSpec>>(json);
+            }
+            else
+            {
+                // v2+: wrapper object
+                var file = JsonSerializer.Deserialize<WidgetStoreFile>(json, JsonOpts);
+                if (file?.Items is not null)
+                {
+                    list = file.Items;
+                    // Future migrations: if (file.Version < CurrentVersion) { ... }
+                }
+            }
+
             if (list is null) return;
             lock (_lock)
             {
-                foreach (var i in list.Where(i => !string.IsNullOrWhiteSpace(i.Type))) Items.Add(i);
+                foreach (var i in list.Where(i => !string.IsNullOrWhiteSpace(i.Type)))
+                {
+                    i.Path ??= string.Empty;
+                    i.PinnedPaths ??= new List<string>();
+                    i.LayoutMonitor ??= string.Empty;
+                    Items.Add(i);
+                }
             }
         }
         catch (Exception ex)
@@ -259,13 +318,54 @@ public sealed class WidgetStore
         try
         {
             List<WidgetSpec> snapshot;
-            lock (_lock) snapshot = Items.ToList();
+            lock (_lock) snapshot = Items.Select(CloneSpec).ToList();
             Directory.CreateDirectory(AppSettings.SettingsDirectory);
-            File.WriteAllText(StorePath, JsonSerializer.Serialize(snapshot, JsonOpts));
+            var file = new WidgetStoreFile { Version = CurrentVersion, Items = snapshot };
+            File.WriteAllText(StorePath, JsonSerializer.Serialize(file, JsonOpts));
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"WidgetStore.Save failed: {ex.Message}");
         }
+    }
+
+    internal static WidgetSpec CloneSpec(WidgetSpec s) => new()
+    {
+        Type = s.Type ?? string.Empty,
+        X = s.X,
+        Y = s.Y,
+        W = s.W,
+        H = s.H,
+        Path = s.Path ?? string.Empty,
+        PinnedPaths = s.PinnedPaths?.ToList() ?? new List<string>(),
+        Collection = s.Collection?.Clone(),
+        LayoutMonitor = s.LayoutMonitor ?? string.Empty,
+        LayoutX = s.LayoutX,
+        LayoutY = s.LayoutY,
+    };
+
+    /// <summary>D1.1: снимок текущей раскладки для профилей.</summary>
+    public List<WidgetSpec> Snapshot()
+    {
+        lock (_lock) return Items.Select(CloneSpec).ToList();
+    }
+
+    /// <summary>D1.1: заменить текущий набор виджетов (применение профиля). Событие Changed не вызывается — вызывающий управляет UI.</summary>
+    public void ReplaceAll(IEnumerable<WidgetSpec> specs)
+    {
+        lock (_lock)
+        {
+            Items.Clear();
+            foreach (var s in specs ?? Array.Empty<WidgetSpec>())
+            {
+                if (s is null || string.IsNullOrWhiteSpace(s.Type)) continue;
+                var c = CloneSpec(s);
+                c.Path ??= string.Empty;
+                c.PinnedPaths ??= new List<string>();
+                c.LayoutMonitor ??= string.Empty;
+                Items.Add(c);
+            }
+        }
+        Save();
     }
 }

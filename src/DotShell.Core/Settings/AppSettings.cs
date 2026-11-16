@@ -192,6 +192,12 @@ public sealed class AppSettings
     /// <summary>Вертикальная позиция дока (Top) в пикселях экрана. -32000 = центрировать.</summary>
     public int DockTop { get; set; } = -32000;
 
+    /// <summary>D0: монитор дока для per-monitor раскладки (device name). Пусто — legacy.</summary>
+    public string DockLayoutMonitor { get; set; } = string.Empty;
+
+    /// <summary>D0: относительный Top дока в пределах рабочей области монитора. int.MinValue — не задано.</summary>
+    public int DockLayoutY { get; set; } = int.MinValue;
+
     /// <summary>
     /// Виджеты на обоях: окно уходит под все окна и не забирает фокус.
     /// Так они читаются как часть рабочего стола, а не как «ещё одно окно».
@@ -296,6 +302,15 @@ public sealed class AppSettings
     /// <summary>Последнее положение окна острова (-32000 = "не задано, центрировать").</summary>
     public int IslandTop { get; set; } = -32000;
 
+    /// <summary>D0: монитор острова для per-monitor раскладки (device name). Пусто — legacy.</summary>
+    public string IslandLayoutMonitor { get; set; } = string.Empty;
+
+    /// <summary>D0: относительная позиция острова на мониторе. int.MinValue — не задано.</summary>
+    public int IslandLayoutX { get; set; } = int.MinValue;
+
+    /// <summary>D0: относительная позиция острова на мониторе. int.MinValue — не задано.</summary>
+    public int IslandLayoutY { get; set; } = int.MinValue;
+
     // ---- Поведение ----
     /// <summary>Скрывать остров, когда какое-то окно развернуто на весь экран (игры, видео).</summary>
     public bool HideInFullscreen { get; set; } = true;
@@ -329,6 +344,31 @@ public sealed class AppSettings
     // 97 вместо 92: при 92 % строки текста из окна позади просвечивали сквозь
     // капсулу и читались как «горизонтальные выцветшие полосы».
     public int IslandOpacity { get; set; } = 97;
+
+    // ---- Shell / режимы рабочего стола (D0, подготовка перехода) ----
+    /// <summary>Версия схемы настроек для миграций. Увеличивается при несовместимых изменениях.</summary>
+    public int ConfigVersion { get; set; } = 2;
+
+    /// <summary>Режим оболочки: island (текущий), coexist (остров+desktop-слой), shell (opt-in, будущее).</summary>
+    public string ShellMode { get; set; } = "island";
+
+    /// <summary>Включить управляемый desktop host (виджеты/слой рабочего стола, D1). По умолчанию выключено.</summary>
+    public bool DesktopHostEnabled { get; set; }
+
+    /// <summary>Режим панели: dock (текущий док) или taskbar (эволюция в Shell Bar, D3).</summary>
+    public string ShellBarMode { get; set; } = "dock";
+
+    /// <summary>Включить полноформатный Start/Launcher (D2). По умолчанию выключено до готовности.</summary>
+    public bool StartLauncherEnabled { get; set; }
+
+    /// <summary>Включить менеджер окон/снаппинг (D5, рискованный). По умолчанию выключено.</summary>
+    public bool WindowManagerEnabled { get; set; }
+
+    /// <summary>Единый центр уведомлений (D4). По умолчанию выключено до готовности.</summary>
+    public bool NotificationCenterUnified { get; set; }
+
+    /// <summary>Хранить и применять раскладки поверхностей отдельно для каждого монитора (D0/D1).</summary>
+    public bool PerMonitorLayouts { get; set; }
 
 
     [JsonIgnore]

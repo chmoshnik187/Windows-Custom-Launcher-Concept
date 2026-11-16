@@ -35,7 +35,7 @@ public sealed class HotkeyCaptureWindow : Window
         SizeToContent = SizeToContent.WidthAndHeight;
         Topmost = true;
         ShowInTaskbar = false;
-        WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        WindowStartupLocation = WindowStartupLocation.Manual;
 
         var root = new Border
         {
@@ -97,7 +97,23 @@ public sealed class HotkeyCaptureWindow : Window
 
         PreviewKeyDown += OnKey;
         Deactivated += (_, _) => { };   // не закрываем случайно
-        Loaded += (_, _) => Focus();
+        Loaded += (_, _) => { PositionOnAnchorMonitor(); Focus(); };
+    }
+
+    private void PositionOnAnchorMonitor()
+    {
+        try
+        {
+            var area = MonitorHelper.GetAnchorWorkAreaDip(this);
+            double w = ActualWidth > 0 ? ActualWidth : Width;
+            double h = ActualHeight > 0 ? ActualHeight : Height;
+            if (double.IsNaN(w) || w <= 0) w = 460;
+            if (double.IsNaN(h) || h <= 0) h = 220;
+            Left = area.Left + (area.Width - w) / 2;
+            Top = area.Top + (area.Height - h) / 2;
+            MonitorHelper.ClampToWorkArea(this, area);
+        }
+        catch { }
     }
 
     private void OnKey(object sender, KeyEventArgs e)

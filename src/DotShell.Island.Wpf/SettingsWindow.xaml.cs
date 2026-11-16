@@ -293,6 +293,8 @@ public partial class SettingsWindow : Window
 
         FillAudioDevices();
 
+        Loaded += (_, _) => PositionOnAnchorMonitor();
+
         KeyDown += (_, e) =>
         {
             if (e.Key != Key.Escape) return;
@@ -410,6 +412,11 @@ public partial class SettingsWindow : Window
         DotShell.Core.Weather.WeatherService.ClearCache();
         DotShell.Island.Wpf.Widgets.WidgetsManager.RefreshAll();
         StatusText.Text = $"погода: {city}";
+    }
+
+    private void OnOpenWallpaperSchedule(object sender, RoutedEventArgs e)
+    {
+        WallpaperScheduleWindow.Toggle();
     }
 
     private void OnResetPosition(object sender, RoutedEventArgs e)
@@ -961,6 +968,22 @@ public partial class SettingsWindow : Window
         {
             Log.Info($"visual dump не удался: {ex.Message}");
         }
+    }
+
+    private void PositionOnAnchorMonitor()
+    {
+        try
+        {
+            var area = MonitorHelper.GetAnchorWorkAreaDip(this);
+            double w = ActualWidth > 0 ? ActualWidth : Width;
+            double h = ActualHeight > 0 ? ActualHeight : Height;
+            if (double.IsNaN(w) || w <= 0) w = 820;
+            if (double.IsNaN(h) || h <= 0) h = 600;
+            Left = area.Left + (area.Width - w) / 2;
+            Top = area.Top + (area.Height - h) / 2;
+            MonitorHelper.ClampToWorkArea(this, area);
+        }
+        catch { }
     }
 
     private static bool InsideCategoryPanel(DependencyObject node)

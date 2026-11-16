@@ -615,34 +615,10 @@ public sealed class DockWindow : Window
     // --- Edge-dock / auto-hide / peek ---
 
     /// <summary>
-    /// Рабочая область монитора, на котором стоит док, в логических единицах WPF.
-    ///
-    /// `SystemParameters.WorkArea` всегда описывает основной монитор. Чтобы док
-    /// на втором экране не прыгал на первый, берём физический прямоугольник
-    /// у Win32 и переводим его через `PointFromScreen` — этот способ учитывает
-    /// и масштаб текущего монитора, и смещение виртуального рабочего стола.
+    /// Рабочая область монитора, на котором стоит док, в DIP.
+    /// Единый helper (Win32 physical → DIP), чтобы поведение совпадало с островом/виджетами.
     /// </summary>
-    private Rect WorkArea()
-    {
-        try
-        {
-            var hwnd = new WindowInteropHelper(this).Handle;
-            if (hwnd != IntPtr.Zero && Monitors.ForWindow(hwnd) is { } physical)
-            {
-                var topLeft = PointFromScreen(new Point(physical.Left, physical.Top));
-                var bottomRight = PointFromScreen(new Point(physical.Right, physical.Bottom));
-
-                double left = Left + topLeft.X;
-                double top = Top + topLeft.Y;
-                double width = Math.Max(120, bottomRight.X - topLeft.X);
-                double height = Math.Max(120, bottomRight.Y - topLeft.Y);
-                return new Rect(left, top, width, height);
-            }
-        }
-        catch { }
-
-        return SystemParameters.WorkArea;
-    }
+    private Rect WorkArea() => MonitorHelper.GetWorkAreaDip(this);
 
     private void ApplyDockState(bool instant)
     {
@@ -801,19 +777,62 @@ public sealed class DockWindow : Window
     private void RestoreVerticalPosition()
     {
         var area = WorkArea();
-        int saved = ShellServices.Instance.Settings.Current.DockTop;
-        if (saved == -32000)
-            Top = area.Top + Math.Max(8, (area.Height - ActualHeight) / 2);
-        else
-            Top = saved;
+        var s = ShellServices.Instance.Settings.Current;
+        bool restored = false;
 
-        ClampTop(area);
+        if (s.PerMonitorLayouts && !string.IsNullOrWhiteSpace(s.DockLayoutMonitor) && s.DockLayoutY != int.MinValue)
+        {
+            var physical = DotShell.Core.Windowing.Monitors.WorkAreaForDevice(s.DockLayoutMonitor);
+            if (physical is { } wa)
+            {
+                Top = wa.Top + s.DockLayoutY;
+                restored = true;
+            }
+        }
+
+        if (!restored)
+        {
+            int saved = s.DockTop;
+            if (saved == -32000)
+                Top = area.Top + Math.Max(8, (area.Height - ActualHeight) / 2);
+            else
+                Top = saved;
+        }
+
+        ClampTop(WorkArea());
     }
 
     private void SaveVerticalPosition()
     {
         int top = (int)Math.Round(Top);
-        ShellServices.Instance.Settings.Update(s => s.DockTop = top);
+        ShellServices.Instance.Settings.Update(s =>
+        {
+            s.DockTop = top;
+
+            if (!s.PerMonitorLayouts)
+            {
+                s.DockLayoutMonitor = string.Empty;
+                s.DockLayoutY = int.MinValue;
+                return;
+            }
+
+            try
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                string monitor = DotShell.Core.Windowing.Monitors.DeviceNameForWindow(hwnd) ?? string.Empty;
+                var physical = hwnd != IntPtr.Zero ? DotShell.Core.Windowing.Monitors.ForWindow(hwnd) : null;
+                if (!string.IsNullOrEmpty(monitor) && physical is { } wa)
+                {
+                    s.DockLayoutMonitor = monitor;
+                    s.DockLayoutY = top - wa.Top;
+                    return;
+                }
+            }
+            catch { }
+
+            s.DockLayoutMonitor = string.Empty;
+            s.DockLayoutY = int.MinValue;
+        });
     }
 
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)

@@ -1,4 +1,4 @@
-﻿namespace DotShell.Island.Wpf;
+namespace DotShell.Island.Wpf;
 
 // WinForms подключён в проекте ради Screen, и его глобальные using приносят
 // System.Windows.Forms.* — из-за этого MouseEventArgs/KeyEventArgs/DragEventArgs
@@ -550,6 +550,8 @@ public partial class IslandWindow : Window
                     ShellServices.Instance.Settings.Update(s => s.DesktopWidgets = !now);
                 }));
                 menu.Add("Обзор", () => Dispatcher.BeginInvoke(() => DashboardWindow.Toggle()));
+                menu.Add("Обои по времени", () => Dispatcher.BeginInvoke(() => WallpaperScheduleWindow.Toggle()));
+                menu.Add("Темы", () => Dispatcher.BeginInvoke(() => ThemePickerWindow.Toggle()));
                 menu.Add("Витрина виджетов", () => Dispatcher.BeginInvoke(OpenWidgetGallery));
                 menu.Add("Убрать все виджеты", () => Dispatcher.BeginInvoke(Widgets.WidgetsManager.CloseAll));
                 menu.Add("Клавиши и сочетания", () => Dispatcher.BeginInvoke(OpenKeysWindow));
@@ -584,7 +586,37 @@ public partial class IslandWindow : Window
         RefreshWidgetsLabel();
         RefreshPinHotkeys();
 
-        WidgetsManager.Restore(); // виджеты прошлого запуска возвращаются на стол
+        WidgetsManager.Restore(); // виджеты рабочего стола поднимаются на стол
+        DesktopHostWindow.Sync();
+        ShellServices.Instance.Settings.Changed += _ => Dispatcher.BeginInvoke(() =>
+        {
+            DesktopHostWindow.Sync();
+            DotShell.Island.Wpf.Widgets.WidgetsManager.ApplyDesktopModeAll();
+        });
+
+        // D1.1: профили раскладок виджетов (CLI/automation)
+        if (Program.ListWidgetLayouts)
+        {
+            var names = WidgetsManager.ListLayoutProfiles();
+            Log.Info("widget layout profiles: " + (names.Count == 0 ? "(none)" : string.Join(", ", names)));
+        }
+        if (!string.IsNullOrWhiteSpace(Program.SaveWidgetLayoutProfile))
+        {
+            WidgetsManager.SaveLayoutProfile(Program.SaveWidgetLayoutProfile!);
+            Log.Info("widget layout profile saved: " + Program.SaveWidgetLayoutProfile);
+        }
+        if (!string.IsNullOrWhiteSpace(Program.LoadWidgetLayoutProfile))
+        {
+            bool ok = WidgetsManager.ApplyLayoutProfile(Program.LoadWidgetLayoutProfile!);
+            Log.Info("widget layout profile load '" + Program.LoadWidgetLayoutProfile + "': " + (ok ? "ok" : "not found"));
+        }
+        if (!string.IsNullOrWhiteSpace(Program.DeleteWidgetLayoutProfile))
+        {
+            bool ok = WidgetsManager.DeleteLayoutProfile(Program.DeleteWidgetLayoutProfile!);
+            Log.Info("widget layout profile delete '" + Program.DeleteWidgetLayoutProfile + "': " + (ok ? "ok" : "not found"));
+        }
+        if (Program.ListWidgetLayouts && Program.SaveWidgetLayoutProfile is null && Program.LoadWidgetLayoutProfile is null && Program.DeleteWidgetLayoutProfile is null)
+            Application.Current?.Shutdown(0);
         if (_vm.HotkeyHudEnabled) HotkeyHud.SetEnabled(true);
 
         // Нормализуем стартовое состояние: Checked для первой вкладки прилетает
@@ -694,6 +726,16 @@ public partial class IslandWindow : Window
         if (Program.OpenDashboard)
         {
             Dispatcher.BeginInvoke(() => DashboardWindow.Toggle());
+        }
+
+        if (Program.OpenWallpaper)
+        {
+            Dispatcher.BeginInvoke(() => WallpaperScheduleWindow.Toggle());
+        }
+
+        if (Program.OpenTheme)
+        {
+            Dispatcher.BeginInvoke(() => ThemePickerWindow.Toggle());
         }
 
         if (Program.OpenControlCenter)

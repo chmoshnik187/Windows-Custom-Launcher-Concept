@@ -122,7 +122,7 @@ public sealed class UpdateWindow : Window
         SizeToContent = SizeToContent.WidthAndHeight;
         Topmost = true;
         ShowInTaskbar = false;
-        WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        WindowStartupLocation = WindowStartupLocation.Manual;
 
         var root = new Border
         {
@@ -306,5 +306,22 @@ public sealed class UpdateWindow : Window
 
         KeyDown += (_, e) => { if (e.Key == Key.Escape) { done(false); Close(); } };
         Deactivated += (_, _) => { };
+        Loaded += (_, _) => PositionOnAnchorMonitor();
+    }
+
+    private void PositionOnAnchorMonitor()
+    {
+        try
+        {
+            var area = MonitorHelper.GetAnchorWorkAreaDip(this);
+            double w = ActualWidth > 0 ? ActualWidth : Width;
+            double h = ActualHeight > 0 ? ActualHeight : Height;
+            if (double.IsNaN(w) || w <= 0) w = 520;
+            if (double.IsNaN(h) || h <= 0) h = 360;
+            Left = area.Left + (area.Width - w) / 2;
+            Top = area.Top + (area.Height - h) / 2;
+            MonitorHelper.ClampToWorkArea(this, area);
+        }
+        catch { }
     }
 }

@@ -19,7 +19,7 @@
 param(
     [switch]$Quick,
     [string]$Exe = '',
-    [ValidateRange(1, 120)][int]$WindowTimeoutSec = 15
+    [ValidateRange(1, 120)][int]$WindowTimeoutSec = 18
 )
 
 $ErrorActionPreference = 'Continue'
@@ -41,12 +41,16 @@ $cases = if ($Quick) {
     @(
         @{ Flag = '--settings';      Expect = 'DotShell — настройки' },
         @{ Flag = '--dashboard';     Expect = 'DotShell — обзор' },
+        @{ Flag = '--wallpaper';     Expect = 'DotShell — обои по времени' },
+        @{ Flag = '--theme';         Expect = 'DotShell — темы' },
         @{ Flag = '--control-center'; Expect = 'DotShell — центр управления' }
     )
 } else {
     @(
         @{ Flag = '--settings';       Expect = 'DotShell — настройки' },
         @{ Flag = '--dashboard';      Expect = 'DotShell — обзор' },
+        @{ Flag = '--wallpaper';      Expect = 'DotShell — обои по времени' },
+        @{ Flag = '--theme';          Expect = 'DotShell — темы' },
         @{ Flag = '--control-center'; Expect = 'DotShell — центр управления' },
         @{ Flag = '--dock';           Expect = 'DotShell — док' },
         @{ Flag = '--slider-demo';    Expect = 'DotShell — стили ползунков' },

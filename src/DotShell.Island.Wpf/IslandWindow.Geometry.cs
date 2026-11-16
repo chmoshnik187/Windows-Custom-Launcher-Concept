@@ -1,4 +1,4 @@
-﻿namespace DotShell.Island.Wpf;
+namespace DotShell.Island.Wpf;
 using MouseEventArgs = System.Windows.Input.MouseEventArgs;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using DragEventArgs = System.Windows.DragEventArgs;
@@ -29,8 +29,7 @@ public partial class IslandWindow
 {
     /// <summary>
     /// Где должно быть окно по вертикали для текущей кромки. Для верхней — сохранённая
-    /// «нормаль», для нижней — отсчёт от низа рабочей области. Раньше всё считалось от
-    /// _normalTop, и на нижней кромке остров при каждом сворачивании прыгал наверх.
+    /// «нормаль», для нижней — отсчёт от низа рабочей области монитора, на котором остров.
     /// </summary>
     private double EdgeTop(double windowHeight)
     {
@@ -39,43 +38,88 @@ public partial class IslandWindow
 
         if (string.Equals(s.IslandEdge, "bottom", StringComparison.OrdinalIgnoreCase))
         {
-            var work = SystemParameters.WorkArea;
+            var work = GetCurrentWorkArea();
             return work.Bottom - windowHeight - offset;
         }
 
         return _normalTop;
     }
 
-    /// <summary>Центрируем таблетку по верхнему краю рабочей области основного монитора.</summary>
+    /// <summary>Рабочая область монитора, на котором сейчас остров (DIP).</summary>
+    private Rect GetCurrentWorkArea()
+    {
+        try { return MonitorHelper.GetWorkAreaDip(this); }
+        catch { return SystemParameters.WorkArea; }
+    }
+
+    /// <summary>Центрируем таблетку по верхнему краю рабочей области текущего/сохранённого монитора.</summary>
     private void PositionAtTopCenter()
     {
-        var wa = SystemParameters.WorkArea; // экран минус таскбар, в WPF-единицах
         var s = _services.Settings.Current;
+        var restored = TryRestoreIslandPosition(s);
 
-        // Восстанавливаем последнее положение: обычное или "утоплен за кромку".
-        if (s.IslandLeft > -30000 && s.IslandTop > -30000)
+        if (restored is { } pos)
+        {
+            Left = pos.X;
+            Top = pos.Y;
+            var wa = GetCurrentWorkArea();
+            if (Top <= wa.Top - 34)
+            {
+                _normalLeft = Left;
+                _normalTop = wa.Top - 4;
+            }
+            else
+            {
+                _normalLeft = Left;
+                _normalTop = Top;
+            }
+        }
+        else if (s.IslandLeft > -30000 && s.IslandTop > -30000)
         {
             Left = s.IslandLeft;
             Top = s.IslandTop;
+            var wa = GetCurrentWorkArea();
+            if (Top <= wa.Top - 34)
+            {
+                _normalLeft = Left;
+                _normalTop = wa.Top - 4;
+            }
+            else
+            {
+                _normalLeft = Left;
+                _normalTop = Top;
+            }
         }
         else
         {
+            var wa = GetCurrentWorkArea();
             Left = wa.Left + (wa.Width - Width) / 2;
             Top = wa.Top - 4; // чуть наезжаем на самую кромку, как настоящий Dynamic Island
-        }
-
-        if (Top <= wa.Top - 34)
-        {
-            // Стартовали сразу в доке: "нормаль" для выглядывания — центр кромки.
             _normalLeft = Left;
             _normalTop = wa.Top - 4;
         }
-        else
-        {
-            _normalLeft = Left;
-            _normalTop = Top;
-        }
+
+        ClampToScreen();
         EvaluateDock(instant: true);
+    }
+
+    private (double X, double Y)? TryRestoreIslandPosition(DotShell.Core.Settings.AppSettings s)
+    {
+        try
+        {
+            if (!s.PerMonitorLayouts) return null;
+            if (string.IsNullOrWhiteSpace(s.IslandLayoutMonitor)) return null;
+            if (s.IslandLayoutX == int.MinValue || s.IslandLayoutY == int.MinValue) return null;
+
+            var physical = DotShell.Core.Windowing.Monitors.WorkAreaForDevice(s.IslandLayoutMonitor);
+            if (physical is null) return null;
+
+            // Абсолютные DIP-координаты (приближение: физические px как DIPs; кламп ниже компенсирует).
+            double x = physical.Value.Left + s.IslandLayoutX;
+            double y = physical.Value.Top + s.IslandLayoutY;
+            return (x, y);
+        }
+        catch { return null; }
     }
 
     // ================================================================
@@ -89,8 +133,8 @@ public partial class IslandWindow
     /// </summary>
     private void EvaluateDock(bool instant = false)
     {
-        var wa = SystemParameters.WorkArea;
-        _dockTop = wa.Top - 54; // таблетка (10+46) вся за кромкой, сталктиты (54..98) наружу
+        var wa = GetCurrentWorkArea();
+        _dockTop = wa.Top - 54; // таблетка (10+46) вся за кромкой, сталактиты (54..98) наружу
 
         if (Top <= wa.Top - 34)
         {
@@ -179,7 +223,7 @@ public partial class IslandWindow
     {
         try
         {
-            var wa = SystemParameters.WorkArea;
+            var wa = GetCurrentWorkArea();
             _dockTop = wa.Top - 54;
 
             if (_docked)
@@ -211,7 +255,7 @@ public partial class IslandWindow
         _peeked = false;
         DockHit.Visibility = Visibility.Collapsed;
 
-        var wa = SystemParameters.WorkArea;
+        var wa = GetCurrentWorkArea();
         Left = wa.Left + (wa.Width - Width) / 2;
         Top = wa.Top - 4;
         _normalLeft = Left;
@@ -226,43 +270,56 @@ public partial class IslandWindow
     /// </summary>
     private void ClampToScreen()
     {
-        // Клампим по ВИРТУАЛЬНОМУ экрану, а не по основному монитору: иначе остров,
-        // перенесённый на второй монитор, после отпускания мыши утаскивало назад.
-        double vLeft = SystemParameters.VirtualScreenLeft;
-        double vTop = SystemParameters.VirtualScreenTop;
-        double vRight = vLeft + SystemParameters.VirtualScreenWidth;
-        double vBottom = vTop + SystemParameters.VirtualScreenHeight;
+        // Клампим по виртуальному экрану: остров на другом мониторе не должен уезжать на primary.
+        var vs = MonitorHelper.GetVirtualScreenDip();
+        Left = Math.Clamp(Left, vs.Left - Width + 80, vs.Right - 80);
 
-        Left = Math.Clamp(Left, vLeft - Width + 80, vRight - 80);
-
-        // Нижняя граница с запасом на док: верхнюю оставляем с минусом, там живёт
-        // «утоплен за кромку» режим.
-        double waTop = SystemParameters.WorkArea.Top;
-        Top = Math.Clamp(Top, Math.Min(waTop, vTop) - 54, vBottom - 60);
+        // Верхняя граница с запасом на док относительно текущего монитора.
+        double waTop = GetCurrentWorkArea().Top;
+        Top = Math.Clamp(Top, Math.Min(waTop, vs.Top) - 54, vs.Bottom - 60);
     }
 
     /// <summary>Положение переживает перезапуск: пишем в settings.json.</summary>
+    /// <summary>Запоминаем последнее положение: пишем в settings.json.</summary>
     private void SavePosition()
     {
-        // Сохраняем положение в «свёрткой» системе координат: окно растёт под
-        // вкладку, и без нормализации остров уезжал бы влево на каждом старте
-        // (в настройках лежала бы ширина вкладки, а старт — со свёрнутой).
+        // Сохраняем положение в "свёрнутой" системе координат.
         var l = (int)(Left + (Width - CollapsedWidth) / 2);
         var t = (int)Top;
         _services.Settings.Update(s =>
         {
             s.IslandLeft = l;
             s.IslandTop = t;
+
+            if (!s.PerMonitorLayouts)
+            {
+                s.IslandLayoutMonitor = string.Empty;
+                s.IslandLayoutX = int.MinValue;
+                s.IslandLayoutY = int.MinValue;
+                return;
+            }
+
+            try
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                string monitor = DotShell.Core.Windowing.Monitors.DeviceNameForWindow(hwnd) ?? string.Empty;
+                var physical = hwnd != IntPtr.Zero ? DotShell.Core.Windowing.Monitors.ForWindow(hwnd) : null;
+                if (!string.IsNullOrEmpty(monitor) && physical is { } wa)
+                {
+                    s.IslandLayoutMonitor = monitor;
+                    s.IslandLayoutX = l - wa.Left;
+                    s.IslandLayoutY = t - wa.Top;
+                    return;
+                }
+            }
+            catch { }
+
+            s.IslandLayoutMonitor = string.Empty;
+            s.IslandLayoutX = int.MinValue;
+            s.IslandLayoutY = int.MinValue;
         });
     }
 
-    /// <summary>
-    /// Подогнать окно под размер таблетки, сохранив её центр на экране.
-    ///
-    /// Окно острова — это буквально таблетка: прозрачных «полей» быть не должно,
-    /// иначе они начнут ловить клики мимо. Поэтому при смене вкладки окно
-    /// меняет размер, а не просто даёт контенту обрезаться.
-    /// </summary>
     private void ResizeWindowTo(double pillWidth, double pillHeight)
     {
         double width = Math.Max(CollapsedWidth, pillWidth);
@@ -276,10 +333,10 @@ public partial class IslandWindow
         Left = centerX - width / 2;
 
         // Нижняя кромка: остров растёт вверх, поэтому при изменении высоты
-        // пересчитываем Top от низа рабочей области.
+        // пересчитываем Top от низа рабочей области текущего монитора.
         if (ShellServices.Instance.Settings.Current.IslandEdge == "bottom")
         {
-            var wa = SystemParameters.WorkArea;
+            var wa = GetCurrentWorkArea();
             Top = wa.Bottom - height - Math.Clamp(ShellServices.Instance.Settings.Current.IslandTopOffset, 0, 24);
         }
     }

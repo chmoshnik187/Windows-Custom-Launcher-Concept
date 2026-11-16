@@ -49,12 +49,27 @@ public partial class LauncherWindow : Window
     /// <summary>Показать и сразу отдать клавиатуру: лаунчер без фокуса бесполезен.</summary>
     public void ShowAndFocus()
     {
+        PositionOnAnchorMonitor();
         Show();
         Activate();
         SearchBox.Focus();
         SearchBox.SelectAll();
         _index.EnsureReady();
         Refresh();
+    }
+
+    private void PositionOnAnchorMonitor()
+    {
+        try
+        {
+            var area = MonitorHelper.GetAnchorWorkAreaDip(this);
+            double w = Width > 0 ? Width : 660;
+            double h = ActualHeight > 0 ? ActualHeight : 420;
+            Left = area.Left + (area.Width - w) / 2;
+            Top = area.Top + Math.Max(48, area.Height * 0.18);
+            MonitorHelper.ClampToWorkArea(this, area);
+        }
+        catch { }
     }
 
     private void ApplyDotPalette()

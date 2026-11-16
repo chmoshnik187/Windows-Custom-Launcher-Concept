@@ -1,4 +1,4 @@
-﻿namespace DotShell.Island.Wpf;
+namespace DotShell.Island.Wpf;
 
 using DotShell.Island.Wpf.Desktop;
 
@@ -68,11 +68,23 @@ public static class Program
     /// <summary>--dashboard: открыть панель-обзор при старте (ярлык, проверка вёрстки).</summary>
     public static bool OpenDashboard { get; private set; }
 
+    /// <summary>--wallpaper: открыть расписание обоев при старте (ярлык, проверка вёрстки).</summary>
+    public static bool OpenWallpaper { get; private set; }
+
+    /// <summary>--theme: открыть окно тем при старте (проверка вёрстки, быстрый доступ).</summary>
+    public static bool OpenTheme { get; private set; }
+
     /// <summary>--widget=media: открыть виджет при старте (снимки, проверка раскладок).</summary>
     public static string? OpenWidgetType { get; private set; }
 
     /// <summary>--widget-size=520x112: задать размер открываемого виджета.</summary>
     public static (int W, int H)? WidgetSize { get; private set; }
+
+    /// <summary>D1.1: --save-widget-layout=name</summary>
+    public static string? SaveWidgetLayoutProfile { get; private set; }
+    public static string? LoadWidgetLayoutProfile { get; private set; }
+    public static string? DeleteWidgetLayoutProfile { get; private set; }
+    public static bool ListWidgetLayouts { get; private set; }
 /// <summary>--toast-test: отправить проверочный тост и завершиться.</summary>
     public static bool ToastTest { get; private set; }
 
@@ -281,6 +293,9 @@ public static class Program
 
             if (arg.Equals("--dashboard", StringComparison.OrdinalIgnoreCase)) { OpenDashboard = true; continue; }
 
+            if (arg.Equals("--wallpaper", StringComparison.OrdinalIgnoreCase)) { OpenWallpaper = true; continue; }
+            if (arg.Equals("--theme", StringComparison.OrdinalIgnoreCase)) { OpenTheme = true; continue; }
+
             if (arg.Equals("--control-center", StringComparison.OrdinalIgnoreCase)) { OpenControlCenter = true; continue; }
 
             if (arg.Equals("--dock", StringComparison.OrdinalIgnoreCase)) { OpenDock = true; continue; }
@@ -314,6 +329,27 @@ public static class Program
                 {
                     WidgetSize = (w, h);
                 }
+                continue;
+            }
+
+            if (arg.StartsWith("--save-widget-layout=", StringComparison.OrdinalIgnoreCase))
+            {
+                SaveWidgetLayoutProfile = arg["--save-widget-layout=".Length..].Trim();
+                continue;
+            }
+            if (arg.StartsWith("--load-widget-layout=", StringComparison.OrdinalIgnoreCase))
+            {
+                LoadWidgetLayoutProfile = arg["--load-widget-layout=".Length..].Trim();
+                continue;
+            }
+            if (arg.StartsWith("--delete-widget-layout=", StringComparison.OrdinalIgnoreCase))
+            {
+                DeleteWidgetLayoutProfile = arg["--delete-widget-layout=".Length..].Trim();
+                continue;
+            }
+            if (arg.Equals("--list-widget-layouts", StringComparison.OrdinalIgnoreCase))
+            {
+                ListWidgetLayouts = true;
                 continue;
             }
 // Проверка уведомлений: отправить тост сразу и выйти. Нужна, чтобы

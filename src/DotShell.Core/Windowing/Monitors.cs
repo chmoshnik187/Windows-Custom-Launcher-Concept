@@ -1,13 +1,13 @@
 namespace DotShell.Core.Windowing;
 
 using System.Runtime.InteropServices;
+using DotShell.Core.Native;
 
 /// <summary>
-/// Мониторы: сколько их и какая рабочая область у каждого.
+/// Мониторы: сколько их, рабочая область и идентификатор устройства.
 ///
-/// Раньше для этого тянулся System.Windows.Forms (ради Screen) — и вместе с ним в
-/// сборку попадали WinForms и его дизайнер, это около 21 МБ из 172. Здесь то же самое
-/// на трёх вызовах Win32: перечислить мониторы, узнать их прямоугольники.
+/// Используется для per-monitor позиционирования/раскладок (D0/D1) без зависимости от WinForms.
+/// Координаты рабочих областей — физические пиксели Win32.
 /// </summary>
 public static class Monitors
 {
@@ -76,6 +76,93 @@ public static class Monitors
             return new WorkArea(info.Work.Left, info.Work.Top, info.Work.Right, info.Work.Bottom);
         }
         catch { return null; }
+    }
+
+    /// <summary>
+    /// Имя устройства монитора (например, \\.\DISPLAY1) для окна — используется как
+    /// стабильный ключ раскладки в рамках текущей конфигурации дисплеев.
+    /// </summary>
+    public static string? DeviceNameForWindow(IntPtr window)
+    {
+        try
+        {
+            var monitor = Win32.MonitorFromWindow(window, Win32.MONITOR_DEFAULTTONEAREST);
+            return DeviceNameForMonitor(monitor);
+        }
+        catch { return null; }
+    }
+
+    /// <summary>Имя устройства монитора для точки в физических пикселях.</summary>
+    public static string? DeviceNameForPoint(int x, int y)
+    {
+        try
+        {
+            var monitor = Win32.MonitorFromPoint(new Win32.POINT { X = x, Y = y }, Win32.MONITOR_DEFAULTTONEAREST);
+            return DeviceNameForMonitor(monitor);
+        }
+        catch { return null; }
+    }
+
+    /// <summary>Рабочая область монитора по имени устройства (физические пиксели), или null.</summary>
+    public static WorkArea? WorkAreaForDevice(string? deviceName)
+    {
+        if (string.IsNullOrWhiteSpace(deviceName)) return null;
+        WorkArea? found = null;
+        try
+        {
+            EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (IntPtr monitor, IntPtr dc, ref Rect rect, IntPtr data) =>
+            {
+                try
+                {
+                    var mi = Win32.MONITORINFOEX.Create();
+                    if (Win32.GetMonitorInfo(monitor, ref mi) &&
+                        string.Equals(mi.szDevice, deviceName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        found = new WorkArea(mi.rcWork.Left, mi.rcWork.Top, mi.rcWork.Right, mi.rcWork.Bottom);
+                        return false;
+                    }
+                }
+                catch { }
+                return true;
+            }, IntPtr.Zero);
+        }
+        catch { }
+        return found;
+    }
+
+    /// <summary>Список подключённых мониторов (device name + work area).</summary>
+    public static IReadOnlyList<MonitorSnapshot> All()
+    {
+        var list = new List<MonitorSnapshot>();
+        try
+        {
+            EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (IntPtr monitor, IntPtr dc, ref Rect rect, IntPtr data) =>
+            {
+                try
+                {
+                    var mi = Win32.MONITORINFOEX.Create();
+                    if (Win32.GetMonitorInfo(monitor, ref mi))
+                    {
+                        var name = string.IsNullOrWhiteSpace(mi.szDevice) ? string.Empty : mi.szDevice;
+                        list.Add(new MonitorSnapshot(name, new WorkArea(mi.rcWork.Left, mi.rcWork.Top, mi.rcWork.Right, mi.rcWork.Bottom)));
+                    }
+                }
+                catch { }
+                return true;
+            }, IntPtr.Zero);
+        }
+        catch { }
+        return list;
+    }
+
+    public readonly record struct MonitorSnapshot(string DeviceName, WorkArea WorkArea);
+
+    private static string? DeviceNameForMonitor(IntPtr monitor)
+    {
+        if (monitor == IntPtr.Zero) return null;
+        var mi = Win32.MONITORINFOEX.Create();
+        if (!Win32.GetMonitorInfo(monitor, ref mi)) return null;
+        return string.IsNullOrWhiteSpace(mi.szDevice) ? null : mi.szDevice;
     }
 }
 

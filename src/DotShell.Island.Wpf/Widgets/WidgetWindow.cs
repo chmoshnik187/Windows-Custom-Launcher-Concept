@@ -145,15 +145,17 @@ public sealed partial class WidgetWindow : Window
             ex |= Win32.WS_EX_TOOLWINDOW;
             ex &= ~Win32.WS_EX_APPWINDOW;
 
-            // Режим «на обоях»: окно не активируется и уходит под остальные окна.
-            if (ShellServices.Instance.Settings.Current.DesktopWidgets)
+            // Режим «на обоях»/desktop host: окно не активируется и уходит под остальные окна.
+            var settings = ShellServices.Instance.Settings.Current;
+            bool desktopMode = settings.DesktopWidgets || settings.DesktopHostEnabled;
+            if (desktopMode)
             {
                 ex |= Win32.WS_EX_NOACTIVATE;
             }
 
             Win32.SetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE, new IntPtr(ex));
 
-            if (ShellServices.Instance.Settings.Current.DesktopWidgets)
+            if (desktopMode)
             {
                 SendToDesktopLayer();
             }
@@ -182,18 +184,21 @@ public sealed partial class WidgetWindow : Window
     }
 
     /// <summary>Не выпускаем виджет за пределы экрана после перетаскивания.</summary>
+    /// <summary>Не отпускает виджет за пределы экрана после перетаскивания.</summary>
     public void ClampToScreen()
     {
-        // Виртуальный экран, а не основной монитор: иначе виджет, унесённый на второй
-        // монитор, прилипал обратно к основному после отпускания мыши.
-        double vLeft = SystemParameters.VirtualScreenLeft;
-        double vTop = SystemParameters.VirtualScreenTop;
+        // Виртуальный экран: виджет может жить на другом дисплее.
+        var vs = MonitorHelper.GetVirtualScreenDip();
 
-        Left = Math.Clamp(Left, vLeft - ActualWidth + 80, vLeft + SystemParameters.VirtualScreenWidth - 80);
-        Top = Math.Clamp(Top, vTop, vTop + SystemParameters.VirtualScreenHeight - 40);
+        double width = ActualWidth > 0 ? ActualWidth : Width;
+        double height = ActualHeight > 0 ? ActualHeight : Height;
+        if (double.IsNaN(width) || width <= 0) width = 160;
+        if (double.IsNaN(height) || height <= 0) height = 90;
 
-        // Прилипание к сетке: 0 — выкл, 8 или 16 px. Виджеты выстраиваются в ряд
-        // без ручной подгонки по пикселям.
+        Left = Math.Clamp(Left, vs.Left - width + 80, vs.Right - 80);
+        Top = Math.Clamp(Top, vs.Top, vs.Bottom - 40);
+
+        // Прилипание к сетке: 0 — выкл, 8 или 16 px.
         int grid = Math.Clamp(ShellServices.Instance.Settings.Current.WidgetGrid, 0, 16);
         if (grid > 0)
         {
@@ -201,6 +206,7 @@ public sealed partial class WidgetWindow : Window
             Top = Math.Round(Top / grid) * grid;
         }
     }
+
 
     private DispatcherTimer Timer(int ms, Action tick)
     {
@@ -3828,19 +3834,53 @@ public sealed partial class WidgetWindow : Window
             var hwnd = new WindowInteropHelper(this).Handle;
             if (hwnd == IntPtr.Zero) return;
 
+            // D1.2: согласованный порядок — host ниже, виджет поверх host (но под обычными окнами).
+            if (ShellServices.Instance.Settings.Current.DesktopHostEnabled)
+            {
+                try { DesktopHostWindow.ReassertBottom(); } catch { }
+            }
+
             Win32.SetWindowPos(hwnd, new IntPtr(1) /* HWND_BOTTOM */, 0, 0, 0, 0,
                 Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
         }
         catch { }
     }
 
-    /// <summary>Каждые 2 секунды возвращаем окно на дно: иначе оно всплывает после кликов.</summary>
+    /// <summary>Применить desktop-layer режим (DesktopWidgets/DesktopHostEnabled) к уже открытому окну.</summary>
+    public void ApplyDesktopMode()
+    {
+        try
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero) return;
+
+            var settings = ShellServices.Instance.Settings.Current;
+            bool desktopMode = settings.DesktopWidgets || settings.DesktopHostEnabled;
+            var ex = Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE).ToInt64();
+
+            if (desktopMode) ex |= Win32.WS_EX_NOACTIVATE;
+            else ex &= ~Win32.WS_EX_NOACTIVATE;
+
+            Win32.SetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE, new IntPtr(ex));
+
+            if (desktopMode) SendToDesktopLayer();
+        }
+        catch { }
+    }
+
+    /// <summary>Периодически возвращаем окно на нижний слой (desktop widgets/host режим).</summary>
     private void KeepOnDesktopLayer()
     {
-        if (!ShellServices.Instance.Settings.Current.DesktopWidgets) return;
+        var s = ShellServices.Instance.Settings.Current;
+        if (!s.DesktopWidgets && !s.DesktopHostEnabled) return;
 
         var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
-        timer.Tick += (_, _) => SendToDesktopLayer();
+        timer.Tick += (_, _) =>
+        {
+            var cur = ShellServices.Instance.Settings.Current;
+            if (cur.DesktopWidgets || cur.DesktopHostEnabled)
+                SendToDesktopLayer();
+        };
         _timers.Add(timer);
         timer.Start();
     }

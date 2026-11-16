@@ -5,6 +5,81 @@
 
 ---
 
+## 1.14.0 — движок тем и фундамент перехода к десктопу (D0–D1)
+
+Крупное обновление: завершён пункт **4.1 (движок тем)** и реализован срез **D0–D1** плана перехода от «острова» к полноценному десктопу (coexistence по умолчанию, остров остаётся хабом, новые режимы под флагами).
+
+### Движок тем (4.1)
+
+- **Формат и хранилище:** `ThemeSpec` (JSON: имя, автор, версия, цвета, точечная сетка, движение, виджеты) и `ThemeStore` (папка `%LOCALAPPDATA%\DotShell\themes`, список/загрузка/сохранение).
+- **Единый путь применения:** `ThemeBus.ApplyTheme` / `ThemeBus.ApplySkin` — акцент, сетка, параметры темы применяются согласованно; скины работают через движок.
+- **UI:** `ThemePickerWindow` (список тем/скинов, применение, экспорт/импорт), доступ из трея «Темы» и флаг `--theme`; кейс добавлен в `ui-audit`.
+
+### D0 — фундамент (режимы, монитор/DPI, аудиты, desktop host)
+
+- **Миграции и флаги:** `ConfigVersion` v2, миграции/бэкап настроек, безопасные дефолты shell/desktop-режимов (`ShellMode=island`, `DesktopHostEnabled=false`, `PerMonitorLayouts=false` и др.), per-monitor поля раскладки island/dock.
+- **Per-monitor/DPI унификация:** единый контекст (`MonitorHelper`, расширенный `Monitors`: `DeviceNameForWindow/Point`, `WorkAreaForDevice`, `All()`), monitor-aware геометрия/кламп/fallback для island/dock/widgets и ключевых окон (`Settings`, `Launcher`, `ThemePicker`, `WallpaperSchedule`, `Dashboard`, `ControlCenter`, prompt/служебные окна).
+- **Сохранение раскладок:** monitor-relative save/restore при `PerMonitorLayouts` для острова, дока и виджетов с fallback на legacy/virtual screen; устойчивость к смене конфигурации дисплеев (в пределах доступной валидации).
+- **Надёжность проверок:** `scripts/audit-all.ps1` (build→smoke→ui-audit→widget-audit→dock-audit, артефакты/summary), усилены `ui-audit.ps1`/`widget-audit.ps1` (таймауты/polling).
+- **Desktop host foundation:** `DesktopHostWindow` под `DesktopHostEnabled` (default off) — без фокуса/ввода, `TOOLWINDOW|NOACTIVATE`, display/DPI реакции, periodic reassert, best-effort прикрепление к desktop-layer (Progman/WorkerW, `0x052C` + `SetParent`) с fallback на `HWND_BOTTOM`, per-monitor host-окна.
+
+### D1 — desktop canvas (базовое закрытие)
+
+- **Модель и схема виджетов:** `widgets.json` v2 (`{version,items}`) + чтение legacy v1, `LayoutMonitor/LayoutX/LayoutY`, `UpdateLayout`; per-monitor восстановление через layout-контур `WidgetsManager`.
+- **Профили/наборы раскладок виджетов:** `widget-layout-profiles.json`, save/apply/list/delete (`WidgetLayoutProfiles`, `WidgetsManager`), CLI: `--save-widget-layout=`, `--load-widget-layout=`, `--list-widget-layouts`, `--delete-widget-layout=`.
+- **Хостинг/контракт desktop-виджетов:** desktop-layer поведение при `DesktopWidgets || DesktopHostEnabled` (no-activate, нижний слой), динамический `ApplyDesktopMode()`, согласованный Z-order (host reassert), display-change clamp/save, drag/save/restore через единый layout-контур.
+- **Интеграция тем/обоев:** прозрачный host-слой совместим с глобальным применением `ThemeBus` и `WallpaperScheduleService`; виджеты используют общие ресурсы темы.
+
+### Проверено (2026-11-15, 3440x1440 @ ~125% DPI, 1 монитор)
+
+| Что | Результат |
+|---|---|
+| `dotnet build` (Debug, x64) | 0 ошибок, 0 предупреждений |
+| `scripts/audit-all.ps1` | **PASS** (build, smoke, ui-audit -Quick 5/5, widget-audit -Quick 5/5, dock-audit) |
+| Артефакты | `%LOCALAPPDATA%\DotShell\audit-artifacts\20261115-211433` (+ предыдущие успешные прогоны) |
+
+### Ограничения / примечания
+
+- Полная multi-monitor/mixed-DPI/hot-plug матрица не подтверждена из-за ограничений окружения (`blocked-by-env`, см. `docs/MULTIMONITOR-DPI-CHECKLIST.md`).
+- Новые desktop/shell режимы выключены по умолчанию; island-режим остаётся основным и сохраняет совместимость.
+- Дальнейшие этапы плана (D2+: shell bar/start, window manager, унификация уведомлений и т.д.) — вне этого релиза.
+
+---
+
+---
+
+## 1.13.0 — обои по времени суток
+
+Пункт 3.4 плана: четыре слота (утро/день/вечер/ночь), в каждом — своя картинка,
+смена по часам и возврат исходных обоев.
+
+### Что сделано
+
+- `WallpaperSchedule` (модель + JSON `wallpaper-schedule.json`), `WallpaperApi`
+  (снять/вернуть системные обои), `WallpaperScheduleService` (проверка раз в 20 с,
+  ключ «час|путь», акцент под картинку слота).
+- Окно «Обои по времени»: 4 слота с превью, выбор файла, статус («сейчас вечер,
+  дальше ночь через 1 ч 29 мин»), «Применить сейчас», «Вернуть исходные».
+- Точки входа: трей, настройки (ВНЕШНИЙ ВИД), флаг `--wallpaper`, кейс в `ui-audit`.
+- Локальные обои из палитры Dotify: 4 картинки 2752×1152 в
+  `%LOCALAPPDATA%\DotShell\wallpapers\`, `schedule.json`, `pinterest-guide.md`,
+  `reapply-wallpapers.ps1`.
+
+### Проверено
+
+- сборка 0/0; `smoke` PASS; `ui-audit -Quick` 4/4; `widget-audit -Quick` 5/5;
+- живой тест на ПК: применение слота (реестр `WallPaper` = `day.png`), «вернуть
+  исходные» (вернуло прежние обои, `Enabled=false`), повторное включение (снова
+  `day.png`).
+
+### Честно
+
+- автоматическая смена работает только в новой сборке: установленная 1.12.0 про
+  расписание не знает;
+- отдельным релизом `v1.13.0` не публиковался — функции вошли в 1.14.0.
+
+---
+
 ## 1.12.0 — умная папка и честные обновления
 
 Пункт **3.1** плана: папка на рабочем столе, которой можно пользоваться как лёгким

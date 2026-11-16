@@ -70,7 +70,9 @@ public sealed class ControlCenterWindow : Window
         SizeToContent = SizeToContent.Height;
         UiScale.ApplyToContent(this);
 
-        var area = SystemParameters.WorkArea;
+        Rect area;
+        try { area = MonitorHelper.GetAnchorWorkAreaDip(this); }
+        catch { area = SystemParameters.WorkArea; }
         Left = area.Right - Width - 12;
         Top = area.Top + 24;
 
@@ -649,10 +651,13 @@ public sealed class ControlCenterWindow : Window
 
     private void SlideIn()
     {
-        var from = SystemParameters.WorkArea.Right;
+        Rect area;
+        try { area = MonitorHelper.GetAnchorWorkAreaDip(this); }
+        catch { area = SystemParameters.WorkArea; }
+        var from = area.Right;
         Left = from;
 
-        var slide = new DoubleAnimation(from - Width - 12, TimeSpan.FromMilliseconds(Motion.Ms(Motion.Slow)))
+        var slide = new DoubleAnimation(area.Right - Width - 12, TimeSpan.FromMilliseconds(Motion.Ms(Motion.Slow)))
         {
             EasingFunction = Motion.Ease(),
         };

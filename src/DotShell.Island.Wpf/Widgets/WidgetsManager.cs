@@ -120,12 +120,17 @@ public static class WidgetsManager
             ? Store.Items.FirstOrDefault(i => i.Type == type && string.Equals(i.Path, path, StringComparison.OrdinalIgnoreCase))
             : Store.Find(type);
 
-        if (x < -20000 && spec is not null && spec.X > -20000) { x = spec.X; y = spec.Y; }
+        if (x < -20000 && spec is not null)
+        {
+            var restored = TryResolveRestorePosition(spec);
+            if (restored is { } pos) { x = pos.X; y = pos.Y; }
+            else if (spec.X > -20000) { x = spec.X; y = spec.Y; }
+        }
 
         if (x < -20000)
         {
             // Позиция по умолчанию: лесенка, чтобы виджеты не легли друг на друга.
-            var wa = SystemParameters.WorkArea;
+            var wa = GetDefaultWorkAreaDip();
             var n = Open.Count;
             x = (int)wa.Left + 48 + n * 42;
             y = (int)wa.Top + 72 + n * 42;
@@ -136,10 +141,10 @@ public static class WidgetsManager
         int width = spec is { W: > 0 } ? spec.W : defW;
         int height = spec is { H: > 0 } ? spec.H : defH;
 
-        // Держим виджет целиком на экране.
-        var work = SystemParameters.WorkArea;
-        x = (int)Math.Clamp(x, work.Left, Math.Max(work.Left, work.Right - Math.Max(width, 160)));
-        y = (int)Math.Clamp(y, work.Top, Math.Max(work.Top, work.Bottom - Math.Max(height, 90)));
+        // Держим виджет целиком на экране (virtual screen fallback).
+        var vs = MonitorHelper.GetVirtualScreenDip();
+        x = (int)Math.Clamp(x, vs.Left, Math.Max(vs.Left, vs.Right - Math.Max(width, 160)));
+        y = (int)Math.Clamp(y, vs.Top, Math.Max(vs.Top, vs.Bottom - Math.Max(height, 90)));
 
         var saved = Store.Add(type, x, y, path);
         var window = new WidgetWindow(type, x, y, width, height, path,
@@ -172,6 +177,23 @@ public static class WidgetsManager
         }
     }
 
+    private static bool _displayHooked;
+
+    private static void EnsureDisplayHook()
+    {
+        if (_displayHooked) return;
+        _displayHooked = true;
+        try
+        {
+            Microsoft.Win32.SystemEvents.DisplaySettingsChanged += (_, _) =>
+            {
+                try { Application.Current?.Dispatcher.BeginInvoke(OnDisplayChanged); }
+                catch { OnDisplayChanged(); }
+            };
+        }
+        catch { }
+    }
+
     /// <summary>
     /// Перерисовать открытые виджеты: события вроде смены города приходят снаружи,
     /// и ждать таймера виджета (15 минут) для них слишком долго.
@@ -182,6 +204,30 @@ public static class WidgetsManager
         {
             try { window.Reload(); }
             catch (Exception ex) { Log.Info($"widgets: reload failed ({window.WidgetType}) — {ex.Message}"); }
+        }
+    }
+
+    /// <summary>Применить текущий desktop-режим (DesktopWidgets/DesktopHostEnabled) ко всем открытым виджетам.</summary>
+    public static void ApplyDesktopModeAll()
+    {
+        foreach (var window in Open.Values.ToList())
+        {
+            try { window.ApplyDesktopMode(); }
+            catch { }
+        }
+    }
+
+    /// <summary>Реакция на смену конфигурации дисплеев: кламп/сохранение раскладки открытых виджетов.</summary>
+    public static void OnDisplayChanged()
+    {
+        foreach (var window in Open.Values.ToList())
+        {
+            try
+            {
+                window.ClampToScreen();
+                SaveLayout(window);
+            }
+            catch { }
         }
     }
     public static void Close(string type, string path = "")
@@ -201,13 +247,80 @@ public static class WidgetsManager
     public static void OnMoved(WidgetWindow window)
     {
         window.ClampToScreen();
-        Store.UpdatePosition(window.WidgetType, (int)window.Left, (int)window.Top, window.WidgetPath);
+        SaveLayout(window);
     }
 
     /// <summary>Виджет растянули за угол: запоминаем размер.</summary>
     public static void OnResized(WidgetWindow window)
     {
+        SaveLayout(window);
+    }
+
+    private static void SaveLayout(WidgetWindow window)
+    {
+        int x = (int)window.Left;
+        int y = (int)window.Top;
         Store.UpdateSize(window.WidgetType, (int)window.ActualWidth, (int)window.ActualHeight, window.WidgetPath);
+
+        var settings = ShellServices.Instance.Settings.Current;
+        if (!settings.PerMonitorLayouts)
+        {
+            Store.UpdateLayout(window.WidgetType, x, y, string.Empty, int.MinValue, int.MinValue, window.WidgetPath);
+            return;
+        }
+
+        try
+        {
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            string monitor = DotShell.Core.Windowing.Monitors.DeviceNameForWindow(hwnd) ?? string.Empty;
+            var physical = hwnd != IntPtr.Zero ? DotShell.Core.Windowing.Monitors.ForWindow(hwnd) : null;
+            if (!string.IsNullOrEmpty(monitor) && physical is { } wa)
+            {
+                var topLeft = window.PointFromScreen(new System.Windows.Point(wa.Left, wa.Top));
+                var originX = window.Left + topLeft.X;
+                var originY = window.Top + topLeft.Y;
+                int relX = (int)Math.Round(window.Left - originX);
+                int relY = (int)Math.Round(window.Top - originY);
+                Store.UpdateLayout(window.WidgetType, x, y, monitor, relX, relY, window.WidgetPath);
+                return;
+            }
+        }
+        catch { }
+
+        Store.UpdateLayout(window.WidgetType, x, y, string.Empty, int.MinValue, int.MinValue, window.WidgetPath);
+    }
+
+    private static (int X, int Y)? TryResolveRestorePosition(WidgetSpec spec)
+    {
+        try
+        {
+            var settings = ShellServices.Instance.Settings.Current;
+            if (!settings.PerMonitorLayouts) return null;
+            if (string.IsNullOrWhiteSpace(spec.LayoutMonitor)) return null;
+            if (spec.LayoutX == int.MinValue || spec.LayoutY == int.MinValue) return null;
+
+            var physical = DotShell.Core.Windowing.Monitors.WorkAreaForDevice(spec.LayoutMonitor);
+            if (physical is null) return null;
+
+            // Восстанавливаем относительно рабочего area монитора (физические пиксели ~ DIPs на 100%).
+            // При смешанном DPI возможна погрешность; итог клампится по виртуальному экрану.
+            int x = physical.Value.Left + spec.LayoutX;
+            int y = physical.Value.Top + spec.LayoutY;
+            return (x, y);
+        }
+        catch { return null; }
+    }
+
+    private static Rect GetDefaultWorkAreaDip()
+    {
+        try
+        {
+            var island = IslandWindow.Current;
+            if (island is not null && island.IsLoaded)
+                return MonitorHelper.GetWorkAreaDip(island);
+        }
+        catch { }
+        return SystemParameters.WorkArea;
     }
 
     /// <summary>
@@ -231,6 +344,7 @@ public static class WidgetsManager
     /// <summary>Восстановить виджеты прошлого запуска (вызывается при старте шелла).</summary>
     public static void Restore()
     {
+        EnsureDisplayHook();
         foreach (var spec in Store.Items.ToList())
         {
             // Папка могла быть удалена/переименована — пропускаем без падения.
@@ -246,6 +360,41 @@ public static class WidgetsManager
             }
         }
     }
+
+    /// <summary>D1.1: сохранить текущую раскладку виджетов как именованный профиль.</summary>
+    public static void SaveLayoutProfile(string name)
+    {
+        // Сначала синхронизируем позиции/размеры открытых окон в store.
+        foreach (var w in Open.Values.ToList())
+        {
+            try { SaveLayout(w); } catch { }
+        }
+        WidgetLayoutProfiles.SaveProfile(name, Store.Snapshot());
+    }
+
+    /// <summary>D1.1: применить именованный профиль раскладки (закрывает текущие виджеты и восстанавливает из профиля).</summary>
+    public static bool ApplyLayoutProfile(string name)
+    {
+        var profile = WidgetLayoutProfiles.Get(name);
+        if (profile is null) return false;
+
+        // Закрыть открытые окна без очистки store (store заменим).
+        foreach (var window in Open.Values.ToList())
+        {
+            try { window.Close(); } catch { }
+        }
+        Open.Clear();
+
+        Store.ReplaceAll(profile.Items);
+        Restore();
+        Changed?.Invoke();
+        return true;
+    }
+
+    public static IReadOnlyList<string> ListLayoutProfiles() =>
+        WidgetLayoutProfiles.LoadAll().Select(p => p.Name).ToList();
+
+    public static bool DeleteLayoutProfile(string name) => WidgetLayoutProfiles.Delete(name);
 }
 
 

@@ -25,7 +25,7 @@ public sealed class TextPromptWindow : Window
         SizeToContent = SizeToContent.WidthAndHeight;
         Topmost = true;
         ShowInTaskbar = false;
-        WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        WindowStartupLocation = WindowStartupLocation.Manual;
 
         var root = new Border
         {
@@ -80,8 +80,25 @@ public sealed class TextPromptWindow : Window
 
         Loaded += (_, _) =>
         {
+            PositionOnAnchorMonitor();
             _input.Focus();
             _input.SelectAll();
         };
+    }
+
+    private void PositionOnAnchorMonitor()
+    {
+        try
+        {
+            var area = MonitorHelper.GetAnchorWorkAreaDip(this);
+            double w = ActualWidth > 0 ? ActualWidth : Width;
+            double h = ActualHeight > 0 ? ActualHeight : Height;
+            if (double.IsNaN(w) || w <= 0) w = 360;
+            if (double.IsNaN(h) || h <= 0) h = 140;
+            Left = area.Left + (area.Width - w) / 2;
+            Top = area.Top + (area.Height - h) / 2;
+            MonitorHelper.ClampToWorkArea(this, area);
+        }
+        catch { }
     }
 }

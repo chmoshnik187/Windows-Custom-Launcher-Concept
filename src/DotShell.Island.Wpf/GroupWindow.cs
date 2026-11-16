@@ -41,7 +41,7 @@ public sealed class GroupWindow : Window
         SizeToContent = SizeToContent.WidthAndHeight;
         Topmost = true;
         ShowInTaskbar = false;
-        WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        WindowStartupLocation = WindowStartupLocation.Manual;
         Title = $"DotShell — {group.Name}";
 
         var root = new Border
@@ -176,6 +176,8 @@ public sealed class GroupWindow : Window
         Closed += (_, _) => ShellServices.Instance.Pinned.Changed -= OnStoreChanged;
 
         Rebuild();
+
+        Loaded += (_, _) => PositionOnAnchorMonitor();
 
         // Точки «работает»: раз в 3 секунды. Запуск и выход программы
         // случаются вне нашего окна, событий нет — только опрос.
@@ -475,6 +477,22 @@ public sealed class GroupWindow : Window
         }
 
         if (added > 0) Rebuild();
+    }
+
+    private void PositionOnAnchorMonitor()
+    {
+        try
+        {
+            var area = MonitorHelper.GetAnchorWorkAreaDip(this);
+            double w = ActualWidth > 0 ? ActualWidth : Width;
+            double h = ActualHeight > 0 ? ActualHeight : Height;
+            if (double.IsNaN(w) || w <= 0) w = 560;
+            if (double.IsNaN(h) || h <= 0) h = 360;
+            Left = area.Left + (area.Width - w) / 2;
+            Top = area.Top + (area.Height - h) / 2;
+            MonitorHelper.ClampToWorkArea(this, area);
+        }
+        catch { }
     }
 
     private static BitmapSource? LoadIcon(string path)

@@ -112,10 +112,21 @@ foreach ($case in $cases) {
     Set-Content $store '[]' -Encoding UTF8
 
     $process = Start-Process $Exe -ArgumentList "--widget=$($case.Type)", "--widget-size=$($case.Size)" -PassThru
-    Start-Sleep -Seconds 9
 
-    $alive = $null -ne (Get-Process -Id $process.Id -ErrorAction SilentlyContinue)
-    $hwnd = if ($alive) { [WidgetProbe]::Find($process.Id, 'DotShell widget') } else { [IntPtr]::Zero }
+    $deadline = [DateTime]::UtcNow.AddSeconds(12)
+    $alive = $false
+    $hwnd = [IntPtr]::Zero
+    while ([DateTime]::UtcNow -lt $deadline) {
+        $alive = $null -ne (Get-Process -Id $process.Id -ErrorAction SilentlyContinue)
+        if (-not $alive) { break }
+        $hwnd = [WidgetProbe]::Find($process.Id, 'DotShell widget')
+        if ($hwnd -ne [IntPtr]::Zero) { break }
+        Start-Sleep -Milliseconds 300
+    }
+    if ($hwnd -ne [IntPtr]::Zero) {
+        # дать UI дорисовать содержимое перед UIA/скриншотом
+        Start-Sleep -Milliseconds 800
+    }
 
     $texts = 0
     $ink = 0

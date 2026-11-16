@@ -11,6 +11,7 @@ using DotShell.Core.Media;
 using DotShell.Core.Native;
 using DotShell.Core.Settings;
 using DotShell.Core.Theming;
+using DotShell.Core.Wallpaper;
 using DotShell.Core.Windowing;
 using DotShell.Core.Widgets;
 
@@ -46,6 +47,9 @@ public sealed class ShellServices : IAsyncDisposable
     public ReminderStore Reminders { get; }
     public SystemVolume Volume { get; }
     public PinnedStore Pinned { get; }
+
+    /// <summary>Обои по времени суток: таймер и применение слотов.</summary>
+    public WallpaperScheduleService WallpaperSchedule { get; }
 
     /// <summary>Задачи вкладки «Заметки».</summary>
     public DotShell.Core.Tasks.TaskStore Tasks { get; }
@@ -95,6 +99,8 @@ public sealed class ShellServices : IAsyncDisposable
         Pinned = new PinnedStore();
         Pinned.StartWatching();   // правки pinned.json подхватываются на лету
 
+        WallpaperSchedule = new WallpaperScheduleService(Theme, () => Settings.Current.AutoAccent);
+
         WindowsAccentSync.Attach(Settings, Theme);
 
         // Свои курсоры — если человек их включал.
@@ -123,6 +129,7 @@ public sealed class ShellServices : IAsyncDisposable
         Instance = services;
 
         await services.Media.StartAsync();
+        services.WallpaperSchedule.Start();
         services.AccentSampler.Start();
         services.Stats.Start();
         services.Spectrum.Start();
@@ -138,6 +145,7 @@ public sealed class ShellServices : IAsyncDisposable
         Volume.Dispose();
         Audio.Dispose();
         Reminders.Dispose();
+        WallpaperSchedule.Dispose();
         Spectrum.Dispose();
         AccentSampler.Dispose();
         Stats.Dispose();

@@ -11,7 +11,7 @@
         Background="Transparent"
         Topmost="True"
         ShowInTaskbar="False"
-        WindowStartupLocation="CenterScreen"
+        WindowStartupLocation="Manual"
         UseLayoutRounding="True">
 
     <Window.Resources>
