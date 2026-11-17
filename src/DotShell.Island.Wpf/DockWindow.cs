@@ -13,6 +13,7 @@ using System.Windows.Threading;
 using DotShell.Core;
 using DotShell.Core.Launcher;
 using DotShell.Core.Settings;
+using DotShell.Core.Native;
 using DotShell.Core.Windowing;
 using Microsoft.Win32;
 
@@ -522,6 +523,13 @@ public sealed class DockWindow : Window
                 Launch(app);
                 e.Handled = true;
             };
+
+            // Колесо по иконке — перебор открытых окон этой программы.
+            clickable.MouseWheel += (_, e) =>
+            {
+                if (WindowActions.CycleWindows(app.Target, e.Delta > 0 ? 1 : -1))
+                    e.Handled = true;
+            };
         }
 
         var itemMenu = new ContextMenu();
@@ -529,6 +537,9 @@ public sealed class DockWindow : Window
         var launch = new MenuItem { Header = "Запустить", IsEnabled = exists };
         launch.Click += (_, _) => Launch(app);
         itemMenu.Items.Add(launch);
+
+        var windowsItem = new MenuItem { Header = "Окна" };
+        itemMenu.Items.Add(windowsItem);
 
         var show = new MenuItem { Header = "Показать окно" };
         show.Click += (_, _) =>
@@ -572,11 +583,37 @@ public sealed class DockWindow : Window
 
         itemMenu.Opened += (_, _) =>
         {
-            var hwnd = WindowActions.FindWindow(app.Target);
+            var windows = WindowActions.GetWindows(app.Target);
+            var hwnd = windows.Count > 0 ? windows[0].Hwnd : WindowActions.FindWindow(app.Target);
             bool hasWindow = hwnd != IntPtr.Zero;
             show.IsEnabled = hasWindow;
             minimize.IsEnabled = hasWindow && !WindowActions.IsMinimized(hwnd);
             closeWindow.IsEnabled = hasWindow;
+
+            // Живой список окон программы: клик — показать конкретное окно.
+            windowsItem.Items.Clear();
+            windowsItem.IsEnabled = windows.Count > 0;
+            windowsItem.Header = windows.Count > 0 ? $"Окна ({windows.Count})" : "Окна";
+            foreach (var window in windows)
+            {
+                string title = string.IsNullOrWhiteSpace(window.Title) ? window.ProcessName : window.Title;
+                var item = new MenuItem
+                {
+                    Header = title.Length > 48 ? title[..45] + "…" : title,
+                    IsCheckable = true,
+                    IsChecked = window.Hwnd == Win32.GetForegroundWindow(),
+                };
+                item.Click += (_, _) => WindowActions.Activate(window.Hwnd);
+                windowsItem.Items.Add(item);
+            }
+
+            if (windows.Count > 1)
+            {
+                windowsItem.Items.Add(new Separator());
+                var cycle = new MenuItem { Header = "Следующее окно" };
+                cycle.Click += (_, _) => WindowActions.CycleWindows(app.Target, 1);
+                windowsItem.Items.Add(cycle);
+            }
         };
 
         clickable.ContextMenu = itemMenu;

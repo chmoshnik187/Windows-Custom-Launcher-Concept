@@ -305,6 +305,7 @@ public partial class IslandWindow
         if (_docked && !_peeked) PeekIn(); // раскрытие из дока сначала вытаскивает остров
 
         var (targetW, targetH) = TargetTabSize(_vm.ActiveTab);
+        UpdateGlassLayer();
         ExpandedLayer.Width = targetW - 20;
         _expandedH = targetH;
         ExpandedLayer.Height = targetH - 10;
@@ -352,6 +353,7 @@ _vm.Tick();
 
         Units.SetPaused(false);
         UpdateMiniEq();
+        if (GlassPanel is not null) GlassPanel.Visibility = System.Windows.Visibility.Collapsed;
         if (_docked && _peeked) PeekOut();
 
         // В режиме панели сворачивание закрывает «дверь» и возвращает капсулу

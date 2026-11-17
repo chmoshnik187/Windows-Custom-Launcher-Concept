@@ -1,4 +1,4 @@
-﻿<Window x:Class="DotShell.Island.Wpf.SettingsWindow"
+<Window x:Class="DotShell.Island.Wpf.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:DotShell.Island.Wpf.Controls"
@@ -329,10 +329,20 @@
                             <CheckBox Style="{StaticResource DsToggle}"
                                       Content="Виджеты на обоях (под окнами)"
                                       IsChecked="{Binding DesktopWidgets}" />
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Рябь по обоям при клике на стол"
+                                      IsChecked="{Binding DesktopRipple}"
+                                      Margin="0,8,0,0"
+                                      ToolTip="Кольца точек акцента расходятся от клика на пустом рабочем столе; окно живёт меньше секунды и не мешает кликам" />
                         </StackPanel>
 
                         <!-- ОСТРОВ -->
                         <StackPanel x:Name="PanelIsland" Visibility="Collapsed">
+
+                            <CheckBox Style="{StaticResource DsToggle}"
+                                      Content="Стеклянная панель (обои за панелью)"
+                                      IsChecked="{Binding IslandGlass}"
+                                      ToolTip="Раскрытая панель показывает размытые обои за собой; без него — плоский тёмный фон" />
 
                             <TextBlock Style="{StaticResource Section}" Text="КЛИК ПО КАПСУЛЕ" />
                             <ComboBox x:Name="ClickActionBox" Style="{StaticResource DsCombo}" />

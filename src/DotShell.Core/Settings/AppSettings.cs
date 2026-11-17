@@ -177,6 +177,20 @@ public sealed class AppSettings
     /// <summary>Рябь точками по обоям при клике на рабочий стол.</summary>
     public bool DesktopRipple { get; set; } = true;
 
+    /// <summary>Раскрытая панель острова с «жидким стеклом»: обои за панелью, мягкий blur.</summary>
+    public bool IslandGlass { get; set; }
+
+    /// <summary>Полка-«большая папка» на рабочем столе.</summary>
+    public bool ShelfEnabled { get; set; }
+
+    /// <summary>Путь папки, содержимое которой показывает полка.</summary>
+    public string ShelfFolder { get; set; } = string.Empty;
+
+    /// <summary>Позиция полки на экране (DIP). -32000 — не задана.</summary>
+    public double ShelfLeft { get; set; } = -32000;
+
+    public double ShelfTop { get; set; } = -32000;
+
     /// <summary>Показывать док при старте.</summary>
     public bool DockEnabled { get; set; }
 

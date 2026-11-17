@@ -1,4 +1,4 @@
-﻿namespace DotShell.Island.Wpf;
+namespace DotShell.Island.Wpf;
 using MouseEventArgs = System.Windows.Input.MouseEventArgs;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using DragEventArgs = System.Windows.DragEventArgs;
@@ -68,6 +68,33 @@ public partial class IslandWindow
         timer.Start();
     }
     private void OnMenuSettings(object sender, RoutedEventArgs e) => OpenSettings();
+
+    private void OnMenuShelf(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var dialog = new Microsoft.Win32.OpenFolderDialog
+            {
+                Title = "Выберите папку для полки",
+                Multiselect = false,
+            };
+            if (dialog.ShowDialog(this) != true) return;
+
+            string folder = dialog.FolderName;
+            if (string.IsNullOrWhiteSpace(folder)) return;
+
+            ShellServices.Instance.Settings.Update(s =>
+            {
+                s.ShelfFolder = folder;
+                s.ShelfEnabled = true;
+            });
+            FolderShelfWindow.Sync();
+        }
+        catch (Exception ex)
+        {
+            Log.Info($"shelf: выбор папки не удался: {ex.Message}");
+        }
+    }
 
     private void OnMenuOpenFolder(object sender, RoutedEventArgs e) => OpenSettingsFolder();
 

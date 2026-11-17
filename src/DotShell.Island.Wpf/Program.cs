@@ -479,6 +479,7 @@ public sealed class DotShellApp : Application
         MainWindow = window;
         window.Show();
         DesktopRipple.Start();
+        FolderShelfWindow.Sync();
         window.OpenStartupTab();
 
         // Ночной свет: если прошлый запуск упал с тёплой гаммой, сначала возвращаем
