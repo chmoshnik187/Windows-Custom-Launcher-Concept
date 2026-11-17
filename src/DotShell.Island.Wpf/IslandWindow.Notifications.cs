@@ -70,6 +70,11 @@ public partial class IslandWindow
     {
         PrepareTaskbarNotification();
 
+        // Встроенный остров: уведомление всегда показываем тост-капсулой над
+        // панелью, не трогая большое окно.
+        if (IsTaskbarEdge(ShellServices.Instance.Settings.Current) && _taskbarHosted && !_hiddenByFullscreen)
+            return ShowTaskbarNoticeFromPanel(title, text);
+
         // В режиме панели уведомление не улетает в карточку, даже если панель
         // острова раскрыта: показываем тост-капсулу над сегментом панели.
         if (IsTaskbarEdge(ShellServices.Instance.Settings.Current) && _isExpanded && !_hiddenByFullscreen)

@@ -41,6 +41,11 @@ public partial class IslandWindow
     private bool _taskbarFallback;
     private int _lastDesktopIndex = -1;
     private int _probeMisses;
+    private bool _modActive;
+    private TaskbarIslandHostWindow? _hostWindow;
+    private bool _taskbarHosted;
+    private bool _panelBusy;
+    private DispatcherTimer? _panelBusyTimer;
     private int _lastDesktopCount = -1;
     private bool _workspacesReady;
 
@@ -50,6 +55,14 @@ public partial class IslandWindow
     /// <summary>Точка отсчёта: центр пробега и низ окна (DIP).</summary>
     private (double CenterX, double AnchorBottom)? TaskbarAnchor()
     {
+        // Встроенный остров: большая панель открывается над панелью задач,
+        // по центру экрана — как меню Пуск.
+        if (_taskbarHosted)
+        {
+            var wa = SystemParameters.WorkArea;
+            return (SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth / 2, wa.Bottom);
+        }
+
         var snap = _taskbar ?? ProbeTaskbar();
         if (snap is null || snap.Gaps.Count == 0) return null;
         _taskbar = snap;
@@ -146,12 +159,24 @@ public partial class IslandWindow
         };
         _workspaceTimer.Start();
 
+        TaskbarIslandBridge.Start();
+        TaskbarIslandBridge.CommandReceived += action =>
+        {
+            try { Dispatcher.BeginInvoke(new Action(() => HandleTaskbarBridgeCommand(action))); }
+            catch { }
+        };
+
         _taskbarTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _taskbarTimer.Tick += (_, _) => TaskbarTick();
         SyncTaskbarMode();
+        StartHostedIsland();
 
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnTaskbarDisplayChanged;
-        Closed += (_, _) => Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnTaskbarDisplayChanged;
+        Closed += (_, _) =>
+        {
+            Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnTaskbarDisplayChanged;
+            StopHostedIsland();
+        };
     }
 
     private void OnTaskbarDisplayChanged(object? sender, EventArgs e)
@@ -170,6 +195,7 @@ public partial class IslandWindow
             _taskbar = null;
             _taskbarGap = null;
             _taskbarFallback = false;
+            StopHostedIsland();
             RestoreIslandChrome();
             if (!IsVisible) Show();
             return;
@@ -179,9 +205,55 @@ public partial class IslandWindow
         TaskbarTick(force: true);
     }
 
+    private void HandleTaskbarBridgeCommand(string action)
+    {
+        if (!IsTaskbarEdge(_services.Settings.Current)) return;
+
+        switch (action)
+        {
+            case "open-settings":
+                OpenSettings();
+                break;
+            default: // toggle-panel
+                if (_isExpanded) Collapse();
+                else
+                {
+                    if (!IsVisible) Show();
+                    Expand();
+                }
+                break;
+        }
+    }
+
+    /// <summary>Мод рисует остров внутри панели — наш оверлей тогда не нужен.</summary>
+    private bool ModDrawsIsland => IsTaskbarEdge(_services.Settings.Current) && _modActive;
+
     private void TaskbarTick(bool force = false)
     {
         if (!IsTaskbarEdge(_services.Settings.Current)) return;
+
+        _modActive = TaskbarIslandBridge.ModActive;
+
+        // Интегрированный режим: свёрнутый остров рисует мод внутри панели,
+        // поэтому наше окно прячем (иначе оно дублировало бы остров оверлеем).
+        if (_modActive)
+        {
+            StopHostedIsland();
+            if (!_isExpanded && IsVisible) Hide();
+            WriteBridgeState(expanded: _isExpanded);
+            return;
+        }
+
+        // Настоящая интеграция: остров встроен в панель задач через child HWND.
+        // Наше большое окно в свёрнутом состоянии прячем, оно нужно только для
+        // раскрытой панели и уведомлений.
+        if (_taskbarHosted)
+        {
+            if (!_isExpanded && !_panelBusy && IsVisible) Hide();
+            UpdateHostedIsland();
+            WriteBridgeState(expanded: _isExpanded);
+            return;
+        }
 
         var snap = ProbeTaskbar();
         if (snap is null || snap.Gaps.Count == 0)
@@ -218,10 +290,130 @@ public partial class IslandWindow
             ApplyIslandChrome();
         }
 
+        WriteBridgeState(expanded: _isExpanded);
+
         if (!IsVisible) Show();
         // Панель задач тоже topmost и при кликах поднимается над островом —
         // без частого reassert остров иногда «исчезал» при переключении вкладок.
         ReassertTopmost();
+    }
+
+    /// <summary>Запустить встроенный в панель остров (Deskband11Lib).</summary>
+    private void StartHostedIsland()
+    {
+        if (_hostWindow is not null || !IsTaskbarEdge(_services.Settings.Current)) return;
+        if (string.Equals(Environment.GetEnvironmentVariable("DOTSHELL_TASKBAR_HOST"), "0", StringComparison.Ordinal))
+        {
+            Log.Info("taskbar host: отключён переменной DOTSHELL_TASKBAR_HOST=0");
+            return;
+        }
+
+        // Один замер панели — для цвета уголков и темы.
+        var snap = ProbeTaskbar();
+        if (snap is not null && snap.Gaps.Count > 0)
+        {
+            _taskbar = snap;
+            _taskbarGap = ChooseGap(snap);
+        }
+
+        var window = new TaskbarIslandHostWindow(OpenFromHostedIsland, Log.Info);
+        window.RecreateRequested += () =>
+        {
+            try { Dispatcher.BeginInvoke(new Action(RecreateHostedIsland)); } catch { }
+        };
+        _hostWindow = window;
+        _ = AttachHostedIslandAsync(window);
+    }
+
+    private async Task AttachHostedIslandAsync(TaskbarIslandHostWindow window)
+    {
+        try
+        {
+            bool ok = await window.AttachAsync();
+            if (!ReferenceEquals(window, _hostWindow)) return;
+            if (!ok)
+            {
+                StopHostedIsland();
+                ShowFallbackIsland();
+                Log.Info("taskbar host: не удалось встроиться, остаёмся оверлеем");
+                return;
+            }
+
+            _taskbarHosted = true;
+            if (!_isExpanded && IsVisible) Hide();
+            UpdateHostedIsland();
+            Log.Info("taskbar host: остров в панели задач");
+        }
+        catch (Exception ex)
+        {
+            Log.Info($"taskbar host attach exception: {ex.Message}");
+            StopHostedIsland();
+        }
+    }
+
+    private void RecreateHostedIsland()
+    {
+        Log.Info("taskbar host: пересоздание после explorer/DPI/монитора");
+        StopHostedIsland();
+        _ = Task.Delay(1200).ContinueWith(
+            _ =>
+            {
+                try { Dispatcher.BeginInvoke(new Action(StartHostedIsland)); }
+                catch { }
+            },
+            TaskScheduler.Default);
+    }
+
+    private void StopHostedIsland()
+    {
+        bool wasHosted = _taskbarHosted;
+        _taskbarHosted = false;
+        var window = _hostWindow;
+        _hostWindow = null;
+        if (window is null) return;
+        try { window.Detach(); window.Close(); } catch { }
+        if (wasHosted && !_isExpanded) TaskbarTick(force: true);
+    }
+
+    private void OpenFromHostedIsland()
+    {
+        try
+        {
+            if (!IsTaskbarEdge(_services.Settings.Current)) return;
+            if (_isExpanded) return;
+            if (!IsVisible) Show();
+            Activate();
+            Expand();
+        }
+        catch (Exception ex) { Log.Info($"taskbar host click failed: {ex.Message}"); }
+    }
+
+    private void UpdateHostedIsland()
+    {
+        var window = _hostWindow;
+        if (window is null) return;
+
+        var accent = ColorPalette.Accent;
+        var panel = _taskbarGap?.Back ?? Color.FromRgb(0x0B, 0x0B, 0x0E);
+        bool light = _taskbarGap?.IsLight ?? false;
+        var (count, index) = VirtualDesktops.ReadState();
+        window.Update(_vm.TimeText, _vm.MediaLine ?? "", _vm.CpuText ?? "", _vm.HasMedia,
+            count, index, accent, panel, light);
+    }
+
+    private void MarkPanelBusy(int milliseconds)
+    {
+        if (!_taskbarHosted) return;
+        _panelBusy = true;
+        _panelBusyTimer?.Stop();
+        _panelBusyTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(milliseconds) };
+        _panelBusyTimer.Tick += (_, _) =>
+        {
+            _panelBusy = false;
+            _panelBusyTimer?.Stop();
+            if (_taskbarHosted && !_isExpanded && IsVisible) Hide();
+        };
+        _panelBusyTimer.Start();
     }
 
     private void ApplyTaskbarPlacement(double winW, double winH)
@@ -345,20 +537,10 @@ public partial class IslandWindow
             return;
         }
 
-        try
-        {
-            TaskbarTick(force: true);
-            var anim = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(120))
-            {
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-            };
-            BeginAnimation(OpacityProperty, anim);
-        }
-        catch (Exception ex)
-        {
-            Log.Info($"taskbar reveal failed: {ex.Message}");
-            Opacity = 1;
-        }
+        // В режиме панели свёрнутый остров — это отдельное child-окно внутри
+        // панели; большое окно не показываем, чтобы не было двойника.
+        Opacity = 1;
+        Hide();
     }
 
     /// <summary>
@@ -432,6 +614,31 @@ public partial class IslandWindow
             catch (Exception ex) { Log.Info($"taskbar close phase2 failed: {ex.Message}"); }
         };
         timer.Start();
+    }
+
+    private void WriteBridgeState(bool expanded)
+    {
+        var (count, index) = VirtualDesktops.ReadState();
+        var accent = ColorPalette.Accent;
+        var gap = _taskbarGap;
+
+        TaskbarIslandBridge.WriteState(w =>
+        {
+            w.WriteString("time", _vm.TimeText);
+            w.WriteBoolean("hasMedia", _vm.HasMedia);
+            w.WriteString("track", _vm.MediaLine);
+            w.WriteString("cpu", _vm.CpuText);
+            w.WriteNumber("workspaces", count);
+            w.WriteNumber("workspace", index);
+            w.WriteBoolean("expanded", expanded);
+            w.WriteString("accent", $"#{accent.R:X2}{accent.G:X2}{accent.B:X2}");
+            if (gap is not null)
+            {
+                w.WriteString("panelColor", $"#{gap.Back.R:X2}{gap.Back.G:X2}{gap.Back.B:X2}");
+                w.WriteBoolean("light", gap.IsLight);
+            }
+            w.WriteString("updated", DateTime.Now.ToString("O"));
+        });
     }
 
     /// <summary>Пересчитать состояние в свёрнутом виде (цвет, точки столов).</summary>

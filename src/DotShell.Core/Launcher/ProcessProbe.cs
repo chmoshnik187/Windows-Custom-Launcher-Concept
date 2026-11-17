@@ -74,6 +74,9 @@ public static class ProcessProbe
     }
 
     /// <summary>Имя процесса без расширения для цели плитки (учитывает .lnk).</summary>
+    public static string? ResolveProcessName(string target) => ResolveExe(target);
+
+    /// <summary>Имя процесса без расширения для цели плитки (учитывает .lnk).</summary>
     private static string? ResolveExe(string target)
     {
         try

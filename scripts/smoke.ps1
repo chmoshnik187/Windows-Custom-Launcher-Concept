@@ -49,7 +49,7 @@ if (-not $SkipBuild) {
     Write-Ok 'сборка чистая'
 }
 
-$exe = Join-Path $root "src/DotShell.Island.Wpf/bin/$Configuration/net8.0-windows10.0.22621.0/DotShell.exe"
+$exe = Join-Path $root "src/DotShell.Island.Wpf/bin/$Configuration/net10.0-windows10.0.26100.0/DotShell.exe"
 if (-not (Test-Path $exe)) { Write-Bad "нет exe: $exe"; exit 1 }
 
 # Отметка в логе: всё, что появится ниже этой строки, относится к этому прогону.
@@ -116,3 +116,4 @@ if ($failures.Count -gt 0) {
 
 Write-Host 'SMOKE PASS' -ForegroundColor Green
 exit 0
+

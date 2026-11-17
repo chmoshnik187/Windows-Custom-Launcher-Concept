@@ -107,6 +107,21 @@ public static class Win32
     public const int SW_SHOWMAXIMIZED = 3;
     public const int SW_HIDE = 0;
     public const int SW_SHOW = 5;
+    public const int SW_SHOWNOACTIVATE = 4;
+    public const int SW_MINIMIZE = 6;
+    public const int SW_RESTORE = 9;
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindowAsync(IntPtr hWnd, int cmdShow);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsIconic(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsHungAppWindow(IntPtr hWnd);
 
     // Поиск окон по классу/имени: нужен, чтобы добраться до списка иконок
     // рабочего стола (Progman -> SHELLDLL_DefView -> SysListView32).

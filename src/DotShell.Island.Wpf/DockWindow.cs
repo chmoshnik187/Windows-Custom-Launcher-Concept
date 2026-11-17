@@ -507,6 +507,18 @@ public sealed class DockWindow : Window
             clickable.MouseLeftButtonUp += (_, e) =>
             {
                 if (_dragMoved) return;
+
+                // Кнопка дока ведёт себя как кнопка панели задач: уже открытое
+                // приложение — показать/свернуть, закрытое — запустить.
+                if (!WindowActions.Toggle(app.Target))
+                    Launch(app);
+                e.Handled = true;
+            };
+
+            // Средняя кнопка — новое окно (как в Familiar Desktop).
+            clickable.MouseDown += (_, e) =>
+            {
+                if (e.ChangedButton != MouseButton.Middle) return;
                 Launch(app);
                 e.Handled = true;
             };
@@ -518,6 +530,36 @@ public sealed class DockWindow : Window
         launch.Click += (_, _) => Launch(app);
         itemMenu.Items.Add(launch);
 
+        var show = new MenuItem { Header = "Показать окно" };
+        show.Click += (_, _) =>
+        {
+            var hwnd = WindowActions.FindWindow(app.Target);
+            if (hwnd != IntPtr.Zero) WindowActions.Activate(hwnd);
+        };
+        itemMenu.Items.Add(show);
+
+        var minimize = new MenuItem { Header = "Свернуть окно" };
+        minimize.Click += (_, _) =>
+        {
+            var hwnd = WindowActions.FindWindow(app.Target);
+            if (hwnd != IntPtr.Zero) WindowActions.Minimize(hwnd);
+        };
+        itemMenu.Items.Add(minimize);
+
+        var closeWindow = new MenuItem { Header = "Закрыть окно" };
+        closeWindow.Click += (_, _) =>
+        {
+            var hwnd = WindowActions.FindWindow(app.Target);
+            if (hwnd != IntPtr.Zero) WindowActions.Close(hwnd);
+        };
+        itemMenu.Items.Add(closeWindow);
+
+        var newWindow = new MenuItem { Header = "Новое окно" };
+        newWindow.Click += (_, _) => Launch(app);
+        itemMenu.Items.Add(newWindow);
+
+        itemMenu.Items.Add(new Separator());
+
         var locate = new MenuItem { Header = "Показать в проводнике" };
         locate.Click += (_, _) => Locate(app);
         itemMenu.Items.Add(locate);
@@ -527,6 +569,15 @@ public sealed class DockWindow : Window
         var remove = new MenuItem { Header = "Убрать из дока" };
         remove.Click += (_, _) => ShellServices.Instance.Pinned.Remove(app);
         itemMenu.Items.Add(remove);
+
+        itemMenu.Opened += (_, _) =>
+        {
+            var hwnd = WindowActions.FindWindow(app.Target);
+            bool hasWindow = hwnd != IntPtr.Zero;
+            show.IsEnabled = hasWindow;
+            minimize.IsEnabled = hasWindow && !WindowActions.IsMinimized(hwnd);
+            closeWindow.IsEnabled = hasWindow;
+        };
 
         clickable.ContextMenu = itemMenu;
         return clickable;

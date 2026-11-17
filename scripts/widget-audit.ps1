@@ -24,7 +24,7 @@ $ErrorActionPreference = 'Continue'
 $root = Split-Path -Parent $PSScriptRoot
 
 if ([string]::IsNullOrWhiteSpace($Exe)) {
-    $Exe = Join-Path $root 'src\DotShell.Island.Wpf\bin\Debug\net8.0-windows10.0.22621.0\DotShell.exe'
+    $Exe = Join-Path $root 'src\DotShell.Island.Wpf\bin\Debug\net10.0-windows10.0.26100.0\DotShell.exe'
 }
 
 if (-not (Test-Path $Exe)) {
@@ -197,3 +197,4 @@ if ($failed -eq 0) {
 
 Write-Host "WIDGET AUDIT FAILED · $failed из $($cases.Count)" -ForegroundColor Red
 exit 1
+

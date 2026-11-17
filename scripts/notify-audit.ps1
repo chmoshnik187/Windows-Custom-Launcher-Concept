@@ -21,7 +21,7 @@ $ErrorActionPreference = 'Continue'
 $root = Split-Path -Parent $PSScriptRoot
 
 if ([string]::IsNullOrWhiteSpace($Exe)) {
-    $Exe = Join-Path $root 'src\DotShell.Island.Wpf\bin\Debug\net8.0-windows10.0.22621.0\DotShell.exe'
+    $Exe = Join-Path $root 'src\DotShell.Island.Wpf\bin\Debug\net10.0-windows10.0.26100.0\DotShell.exe'
 }
 
 if (-not (Test-Path $Exe)) {
@@ -120,11 +120,15 @@ foreach ($case in $cases) {
     $card = $wins | Where-Object { $_.Title -like '*уведомление*' } | Select-Object -First 1
 
     $islandWidth = if ($island) { $island.W } else { 0 }
+    # В режиме панели уведомление может рисоваться отдельной тост-капсулой
+    # над панелью задач (остров встроен в панель child-окном).
+    $notice = $wins | Where-Object { -not $_.Title -and $_.W -ge 300 -and $_.W -le 900 -and $_.H -le 120 } | Select-Object -First 1
+    $noticeFound = $null -ne $notice
     $islandHeight = if ($island) { $island.H } else { 0 }
     $cardFound = $null -ne $card
 
     $ok = switch ($case.Mode) {
-        'capsule' { $alive -and $cardFound -eq $false -and $islandWidth -gt 560 }
+        'capsule' { $alive -and $cardFound -eq $false -and ($islandWidth -gt 560 -or $noticeFound) }
         'card'    { $alive -and $cardFound }
         'toast'   { $alive -and -not $cardFound -and $islandWidth -le 560 }
         'dot'     { $alive -and -not $cardFound -and $islandWidth -le 560 }
@@ -158,3 +162,4 @@ if ($failed -eq 0) {
 
 Write-Host "NOTIFY AUDIT FAILED · $failed из $($cases.Count)" -ForegroundColor Red
 exit 1
+

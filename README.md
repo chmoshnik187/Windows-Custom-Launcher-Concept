@@ -8,7 +8,7 @@
 
 [![Release](https://img.shields.io/github/v/release/chmoshnik187/Windows-Custom-Launcher-Concept?style=flat-square&color=d71920&label=версия)](../../releases/latest)
 [![Windows](https://img.shields.io/badge/Windows-10%2F11%20x64-2b2b2b?style=flat-square)](#скачать-и-установить)
-[![.NET](https://img.shields.io/badge/.NET-8%20внутри-512bd4?style=flat-square)](#собрать-из-исходников)
+[![.NET](https://img.shields.io/badge/.NET-10%20внутри-512bd4?style=flat-square)](#собрать-из-исходников)
 [![smoke](https://github.com/chmoshnik187/Windows-Custom-Launcher-Concept/actions/workflows/smoke.yml/badge.svg)](../../actions/workflows/smoke.yml)
 [![License](https://img.shields.io/github/license/chmoshnik187/Windows-Custom-Launcher-Concept?style=flat-square&color=2b2b2b)](LICENSE)
 [![Код написан ИИ](https://img.shields.io/badge/код%20написан-Qwen%20%2B%20DeepSeek-d71920?style=flat-square)](#честно-о-том-кто-это-написал)
@@ -59,10 +59,11 @@ Wallpaper Engine — берётся из превью текущих обоев 
 флагом `--style=full` / `--style=island`. Всё обратимо: снял галочку — заголовки вернулись
 как были, ни один системный файл не патчится.
 
-## Что нового (1.0 → 1.15)
+## Что нового (1.0 → 1.16)
 
 | Версия | Что появилось |
 |---|---|
+| **1.16** | остров реально внутри панели задач (child HWND, без Windhawk): переживает смену положения/DPI/перезапуск explorer; уведомления капсулой над панелью; кликабельные цифры столов; док показывает/сворачивает/закрывает окна; рябь точками по обоям |
 | **1.15** | остров вписан в панель задач: сегмент в свободном пробеге, «дверь» из трёх плит, адаптивный тон панели; рабочие столы точками; точечный прогресс плеера |
 | **1.14** | движок тем: JSON-файл темы, хранилище `ThemeStore`, единый путь применения через `ThemeBus`; скины — мини-темы |
 | **1.13** | «Обои по времени суток»: расписание из четырёх слотов (утро/день/вечер/ночь), смена обоев, возврат исходных, акцент под картинку |

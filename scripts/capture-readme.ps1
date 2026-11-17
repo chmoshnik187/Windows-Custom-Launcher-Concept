@@ -20,7 +20,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $images = Join-Path $root 'images'
 
 if ([string]::IsNullOrWhiteSpace($Exe)) {
-    $Exe = Join-Path $root 'src\DotShell.Island.Wpf\bin\Debug\net8.0-windows10.0.22621.0\DotShell.exe'
+    $Exe = Join-Path $root 'src\DotShell.Island.Wpf\bin\Debug\net10.0-windows10.0.26100.0\DotShell.exe'
 }
 if (-not (Test-Path $Exe)) {
     Write-Host "нет exe: $Exe" -ForegroundColor Red
@@ -232,3 +232,4 @@ finally {
     }
     Write-Host "настройки восстановлены из $bak"
 }
+

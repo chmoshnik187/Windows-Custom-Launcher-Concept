@@ -2,8 +2,8 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows10.0.22621.0</TargetFramework>
-    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.26100.0</TargetPlatformMinVersion>
     <RootNamespace>DotShell.Island.Wpf</RootNamespace>
     <AssemblyName>DotShell</AssemblyName>
     <UseWPF>true</UseWPF>
@@ -43,6 +43,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DotShell.Core\DotShell.Core.csproj" />
+    <!-- Настоящая интеграция в панель задач: child-HWND внутри Shell_TrayWnd,
+         без инъекций в explorer. MIT, поддерживает позиции панели 26H2,
+         перезапуск explorer, DPI, несколько экземпляров. -->
+    <PackageReference Include="Deskband11Lib.Wpf" Version="1.5.1" />
   </ItemGroup>
 
 </Project>

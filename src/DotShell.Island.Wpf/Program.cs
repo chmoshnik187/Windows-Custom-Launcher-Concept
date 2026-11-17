@@ -478,6 +478,7 @@ public sealed class DotShellApp : Application
         var window = new IslandWindow();
         MainWindow = window;
         window.Show();
+        DesktopRipple.Start();
         window.OpenStartupTab();
 
         // Ночной свет: если прошлый запуск упал с тёплой гаммой, сначала возвращаем

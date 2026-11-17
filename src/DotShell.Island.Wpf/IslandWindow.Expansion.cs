@@ -292,6 +292,7 @@ public partial class IslandWindow
         if (_isExpanded) return;
         _isExpanded = true;
         _vm.IsExpanded = true;
+        MarkPanelBusy(900);
 
         // В режиме панели раскрытие начинается с «двери»: три металлические
         // плиты уходят вверх и открывают интерфейс полосами.
@@ -338,6 +339,7 @@ _vm.Tick();
         if (!_isExpanded) return;
         _isExpanded = false;
         _vm.IsExpanded = false;
+        MarkPanelBusy(900);
 
         CollapsedRow.Visibility = Visibility.Visible;
 

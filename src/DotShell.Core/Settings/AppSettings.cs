@@ -174,6 +174,9 @@ public sealed class AppSettings
     /// <summary>Кто живёт в свёрнутой капсуле: eyes (глазки) / goth (готка) / skeleton (скелетик).</summary>
     public string UnitStyle { get; set; } = "goth";
 
+    /// <summary>Рябь точками по обоям при клике на рабочий стол.</summary>
+    public bool DesktopRipple { get; set; } = true;
+
     /// <summary>Показывать док при старте.</summary>
     public bool DockEnabled { get; set; }
 
