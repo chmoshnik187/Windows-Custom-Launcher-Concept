@@ -1,6 +1,7 @@
 namespace DotShell.Island.Wpf;
 
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
@@ -379,6 +380,7 @@ public partial class IslandWindow
     {
         try
         {
+            Log.Info("taskbar host: клик по острову");
             if (!IsTaskbarEdge(_services.Settings.Current)) return;
             if (_isExpanded) return;
             if (!IsVisible) Show();
@@ -507,7 +509,7 @@ public partial class IslandWindow
             try
             {
                 timer.Stop();
-                if (IsTaskbarEdge(_services.Settings.Current)) ApplyTaskbarPlacement(Width, Height);
+                if (IsTaskbarEdge(_services.Settings.Current) && !_isExpanded) ApplyTaskbarPlacement(Width, Height);
             }
             catch { }
         };
@@ -548,23 +550,167 @@ public partial class IslandWindow
     /// панель (оставаясь в панели задач), потом из него выпадает панель вверх.
     /// Владелец жаловался, что ширина и высота едут одновременно и выходит рвано.
     /// </summary>
+    // ================================================================
+    //  Геометрия панели: раскрытие от реальной кромки панели задач
+    // ================================================================
+
+    private enum TaskbarPanelEdge { Bottom, Top, Left, Right }
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
+
+    /// <summary>Кромка, на которой реально стоит панель задач, и её прямоугольник (DIP).</summary>
+    private (TaskbarPanelEdge Edge, Rect Taskbar, Rect Screen)? TaskbarPanelGeometry()
+    {
+        var screen = new Rect(
+            SystemParameters.VirtualScreenLeft,
+            SystemParameters.VirtualScreenTop,
+            SystemParameters.VirtualScreenWidth,
+            SystemParameters.VirtualScreenHeight);
+
+        try
+        {
+            var hwnd = Win32.FindWindow("Shell_TrayWnd", null);
+            if (hwnd != IntPtr.Zero && Win32.GetWindowRect(hwnd, out var r) && r.Width > 8 && r.Height > 8)
+            {
+                uint dpi = GetDpiForWindow(hwnd);
+                double scale = (dpi > 0 ? dpi : 96) / 96.0;
+                var taskbar = new Rect(r.Left / scale, r.Top / scale, r.Width / scale, r.Height / scale);
+
+                TaskbarPanelEdge edge;
+                if (taskbar.Width >= taskbar.Height)
+                    edge = taskbar.Top <= screen.Top + 4 ? TaskbarPanelEdge.Top
+                        : taskbar.Bottom >= screen.Bottom - 4 ? TaskbarPanelEdge.Bottom
+                        : taskbar.Top < screen.Top + screen.Height / 2 ? TaskbarPanelEdge.Top : TaskbarPanelEdge.Bottom;
+                else
+                    edge = taskbar.Left <= screen.Left + 4 ? TaskbarPanelEdge.Left
+                        : taskbar.Right >= screen.Right - 4 ? TaskbarPanelEdge.Right
+                        : taskbar.Left < screen.Left + screen.Width / 2 ? TaskbarPanelEdge.Left : TaskbarPanelEdge.Right;
+
+                return (edge, taskbar, screen);
+            }
+        }
+        catch { }
+
+        // Фолбэк: рабочая область уже исключает панель — кромка читается по отступу.
+        var wa = SystemParameters.WorkArea;
+        if (wa.Bottom < screen.Bottom - 4)
+            return (TaskbarPanelEdge.Bottom, new Rect(screen.Left, wa.Bottom, screen.Width, screen.Bottom - wa.Bottom), screen);
+        if (wa.Top > screen.Top + 4)
+            return (TaskbarPanelEdge.Top, new Rect(screen.Left, screen.Top, screen.Width, wa.Top - screen.Top), screen);
+        if (wa.Left > screen.Left + 4)
+            return (TaskbarPanelEdge.Left, new Rect(screen.Left, screen.Top, wa.Left - screen.Left, screen.Height), screen);
+        if (wa.Right < screen.Right - 4)
+            return (TaskbarPanelEdge.Right, new Rect(wa.Right, screen.Top, screen.Right - wa.Right, screen.Height), screen);
+
+        return null;
+    }
+
+    private static Rect PanelBounds(TaskbarPanelEdge edge, Rect taskbar, Rect screen, double winW, double winH)
+    {
+        const double gap = 8;
+        double left, top;
+        switch (edge)
+        {
+            case TaskbarPanelEdge.Top:
+                left = screen.Left + (screen.Width - winW) / 2;
+                top = taskbar.Bottom + gap;
+                break;
+            case TaskbarPanelEdge.Left:
+                left = taskbar.Right + gap;
+                top = screen.Top + (screen.Height - winH) / 2;
+                break;
+            case TaskbarPanelEdge.Right:
+                left = taskbar.Left - gap - winW;
+                top = screen.Top + (screen.Height - winH) / 2;
+                break;
+            default:
+                left = screen.Left + (screen.Width - winW) / 2;
+                top = taskbar.Top - gap - winH;
+                break;
+        }
+
+        left = Math.Clamp(left, screen.Left + 4, screen.Right - winW - 4);
+        top = Math.Clamp(top, screen.Top + 4, screen.Bottom - winH - 4);
+        return new Rect(left, top, winW, winH);
+    }
+
+    private void ClearWindowAnimations()
+    {
+        BeginAnimation(WidthProperty, null);
+        BeginAnimation(HeightProperty, null);
+        BeginAnimation(LeftProperty, null);
+        BeginAnimation(TopProperty, null);
+    }
+
+    private void SetPanelStart(TaskbarPanelEdge edge, Rect taskbar, double minW, double minH)
+    {
+        ClearWindowAnimations();
+        double cx = taskbar.Left + taskbar.Width / 2;
+        double cy = taskbar.Top + taskbar.Height / 2;
+        switch (edge)
+        {
+            case TaskbarPanelEdge.Top: Left = cx - minW / 2; Top = taskbar.Bottom; break;
+            case TaskbarPanelEdge.Left: Left = taskbar.Right; Top = cy - minH / 2; break;
+            case TaskbarPanelEdge.Right: Left = taskbar.Left - minW; Top = cy - minH / 2; break;
+            default: Left = cx - minW / 2; Top = taskbar.Top - minH; break;
+        }
+        Width = minW;
+        Height = minH;
+        if (Pill is not null)
+        {
+            Pill.BeginAnimation(FrameworkElement.WidthProperty, null);
+            Pill.BeginAnimation(FrameworkElement.HeightProperty, null);
+            Pill.Width = CollapsedWidth;
+            Pill.Height = CollapsedHeight;
+        }
+        if (!IsVisible)
+        {
+            Opacity = 1;
+            Show();
+        }
+    }
+
+    /// <summary>
+    /// Раскрытие панели от реальной кромки панели задач: снизу — вверх, сверху —
+    /// вниз, слева/справа — вбок. Больше не «выезжает снизу» при панели сверху.
+    /// </summary>
     internal void AnimateTaskbarOpen(double targetW, double targetH)
     {
-        var anchor = TaskbarAnchor();
-        if (anchor is null)
+        var geo = TaskbarPanelGeometry();
+        if (geo is null)
         {
             AnimateShellTo(targetW, targetH);
             return;
         }
 
-        double winW = Math.Max(CollapsedWidth, targetW);
-        double winH = Math.Max(CollapsedHeight + 56, targetH + 12);
+        var (edge, taskbar, screen) = geo.Value;
+        Log.Info($"taskbar open: edge={edge} taskbar={taskbar}");
+        double winW = Math.Min(Math.Max(CollapsedWidth, targetW), screen.Width - 40);
+        double winH = Math.Min(Math.Max(CollapsedHeight + 56, targetH + 12), screen.Height - 40);
+        var bounds = PanelBounds(edge, taskbar, screen, winW, winH);
         var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
-        int phase1 = 120, phase2 = 260;
 
-        // Фаза 1 — ширина.
+        SetPanelStart(edge, taskbar, CollapsedWidth, CollapsedHeight + 56);
+
+        bool side = edge is TaskbarPanelEdge.Left or TaskbarPanelEdge.Right;
+        if (side)
+        {
+            _blinds?.Open();
+            AnimateTo(this, WidthProperty, bounds.Width, 320, ease);
+            AnimateTo(this, HeightProperty, bounds.Height, 320, ease);
+            AnimateTo(this, LeftProperty, bounds.Left, 320, ease);
+            AnimateTo(this, TopProperty, bounds.Top, 320, ease);
+            AnimateTo(Pill, WidthProperty, targetW, 320, ease);
+            AnimateTo(Pill, HeightProperty, targetH, 320, ease);
+            AnimateTo(ExpandedLayer, HeightProperty, targetH - 10, 320, ease);
+            ScheduleTaskbarReapply();
+            return;
+        }
+
+        int phase1 = 120, phase2 = 260;
         AnimateTo(this, WidthProperty, winW, phase1, ease);
-        AnimateTo(this, LeftProperty, anchor.Value.CenterX - winW / 2, phase1, ease);
+        AnimateTo(this, LeftProperty, bounds.Left, phase1, ease);
         AnimateTo(Pill, WidthProperty, targetW, phase1, ease);
 
         var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(phase1) };
@@ -573,10 +719,9 @@ public partial class IslandWindow
             try
             {
                 timer.Stop();
-                // Фаза 2 — высота вверх, «дверь» открывается.
                 _blinds?.Open();
                 AnimateTo(this, HeightProperty, winH, phase2, ease);
-                AnimateTo(this, TopProperty, anchor.Value.AnchorBottom - winH, phase2, ease);
+                AnimateTo(this, TopProperty, bounds.Top, phase2, ease);
                 AnimateTo(Pill, HeightProperty, targetH, phase2, ease);
                 AnimateTo(ExpandedLayer, HeightProperty, targetH - 10, phase2, ease);
                 ScheduleTaskbarReapply();
@@ -586,29 +731,60 @@ public partial class IslandWindow
         timer.Start();
     }
 
-    /// <summary>Сворачивание в обратном порядке: сначала высота, потом ширина.</summary>
+    /// <summary>Сворачивание обратно к реальной кромке панели задач.</summary>
     internal void AnimateTaskbarClose()
     {
+        var geo = TaskbarPanelGeometry();
+        if (geo is null)
+        {
+            AnimateShellTo(CollapsedWidth, CollapsedHeight);
+            return;
+        }
+
+        var (edge, taskbar, _) = geo.Value;
+        double minW = CollapsedWidth;
         double minH = CollapsedHeight + 56;
-        double centerX = Left + Width / 2;
+        double cx = taskbar.Left + taskbar.Width / 2;
+        double cy = taskbar.Top + taskbar.Height / 2;
         var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
-        int phase1 = 240, phase2 = 150;
-
         _blinds?.Close();
-        AnimateTo(this, HeightProperty, minH, phase1, ease);
-        AnimateTo(this, TopProperty, (TaskbarAnchor()?.AnchorBottom ?? Top + minH) - minH, phase1, ease);
-        AnimateTo(Pill, HeightProperty, CollapsedHeight, phase1, ease);
-        AnimateTo(ExpandedLayer, HeightProperty, CollapsedHeight - 10, phase1, ease);
 
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(phase1) };
+        bool side = edge is TaskbarPanelEdge.Left or TaskbarPanelEdge.Right;
+        if (side)
+        {
+            double left = edge == TaskbarPanelEdge.Left ? taskbar.Right : taskbar.Left - minW;
+            AnimateTo(this, WidthProperty, minW, 240, ease);
+            AnimateTo(this, HeightProperty, minH, 240, ease);
+            AnimateTo(this, LeftProperty, left, 240, ease);
+            AnimateTo(this, TopProperty, cy - minH / 2, 240, ease);
+            AnimateTo(Pill, WidthProperty, minW, 240, ease);
+            AnimateTo(Pill, HeightProperty, CollapsedHeight, 240, ease);
+            AnimateTo(ExpandedLayer, HeightProperty, CollapsedHeight - 10, 240, ease);
+
+            var sideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(260) };
+            sideTimer.Tick += (_, _) =>
+            {
+                try { sideTimer.Stop(); TaskbarTick(force: true); }
+                catch { }
+            };
+            sideTimer.Start();
+            return;
+        }
+
+        AnimateTo(this, HeightProperty, minH, 240, ease);
+        AnimateTo(this, TopProperty, edge == TaskbarPanelEdge.Top ? taskbar.Bottom : taskbar.Top - minH, 240, ease);
+        AnimateTo(Pill, HeightProperty, CollapsedHeight, 240, ease);
+        AnimateTo(ExpandedLayer, HeightProperty, CollapsedHeight - 10, 240, ease);
+
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(240) };
         timer.Tick += (_, _) =>
         {
             try
             {
                 timer.Stop();
-                AnimateTo(this, WidthProperty, CollapsedWidth, phase2, ease);
-                AnimateTo(this, LeftProperty, centerX - CollapsedWidth / 2, phase2, ease);
-                AnimateTo(Pill, WidthProperty, CollapsedWidth, phase2, ease);
+                AnimateTo(this, WidthProperty, minW, 150, ease);
+                AnimateTo(this, LeftProperty, cx - minW / 2, 150, ease);
+                AnimateTo(Pill, WidthProperty, minW, 150, ease);
                 TaskbarTick(force: true);
             }
             catch (Exception ex) { Log.Info($"taskbar close phase2 failed: {ex.Message}"); }

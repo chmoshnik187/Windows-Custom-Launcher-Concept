@@ -12,6 +12,16 @@ public partial class IslandWindow
     {
         if (GlassPanel is null || GlassWallpaper is null) return;
 
+        // В режиме панели под панелью острова видны чужие окна — им нужен
+        // плотный фон, иначе текст просвечивает.
+        if (ExpandedBackdrop is not null)
+        {
+            bool dense = _isExpanded && IsTaskbarEdge(ShellServices.Instance.Settings.Current);
+            ExpandedBackdrop.Visibility = dense
+                ? System.Windows.Visibility.Visible
+                : System.Windows.Visibility.Collapsed;
+        }
+
         bool wanted = _isExpanded && ShellServices.Instance.Settings.Current.IslandGlass;
         if (!wanted)
         {

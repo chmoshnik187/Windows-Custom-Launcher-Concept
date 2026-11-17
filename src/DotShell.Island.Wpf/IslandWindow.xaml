@@ -582,6 +582,13 @@
                       Margin="0,10,0,0"
                       Visibility="Collapsed" Opacity="0">
 
+                    <!-- Плотный фон раскрытой панели: в режиме панели задач за ней
+                         могут быть чужие окна, и текст сквозь них не читается. -->
+                    <Border x:Name="ExpandedBackdrop" CornerRadius="22"
+                            Background="#F70A0A0D" BorderThickness="1"
+                            BorderBrush="{DynamicResource DsAccentSoft}"
+                            Visibility="Collapsed" />
+
                     <!-- «Жидкое стекло»: обои за панелью, размытые и притемнённые.
                          Включается настройкой IslandGlass; по умолчанию панель плоская. -->
                     <Border x:Name="GlassPanel" CornerRadius="22" ClipToBounds="True"

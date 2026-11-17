@@ -209,6 +209,14 @@ public partial class IslandWindow
             ? size
             : (ExpandedWidth, ExpandedHeight);
 
+        // В режиме панели панель острова должна «вылезать» как меню Пуск:
+        // крупная, от кромки панели вверх, а не маленькая карточка посередине.
+        if (IsTaskbarEdge(ShellServices.Instance.Settings.Current))
+        {
+            width = Math.Max(width, 940);
+            height = Math.Max(height, 850);
+        }
+
         // Высокую вкладку не выпускаем за нижний край экрана.
             // Заметки растут под содержимое: добавка считается по фактическому
             // дефициту места в списке задач и напоминаний.
